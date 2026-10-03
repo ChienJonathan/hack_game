@@ -19,7 +19,9 @@ This document describes the initial structure for the command-driven RTS game. T
 
 ### Phaser scene
 
-`GameScene` extends `Phaser.Scene` and uses a 1920×1080 reference coordinate space. Phaser scales that complete scene proportionally to fit the browser viewport and centers it over a dark background when the viewport has a different aspect ratio. The scene creates the in-canvas command input and feedback views, wires them to a `GameSession`, and forwards Phaser's frame delta to the session. It does not contain command rules, process behavior, or world-state rules.
+`GameScene` extends `Phaser.Scene` and uses a 1920×1080 reference coordinate space. Phaser scales that complete scene proportionally to fit the browser viewport and centers it over a dark background when the viewport has a different aspect ratio. Its runtime responsibilities are to create the in-canvas input and feedback views, wire them to a `GameSession`, and forward Phaser's frame delta to the session. It does not contain command rules, process behavior, or world-state rules.
+
+The current scaffold mounts `PhaserCommandInputView` at the bottom center of `GameScene`. It accepts printable English ASCII, edits with the supported cursor keys, wraps at a fixed character count, and scrolls to keep the cursor visible. Enter submits the complete input string and clears the field. At this stage, `ConsoleEchoCommandParser` only logs the submitted string; the input is not yet connected to `GameSession` or the full command submission pipeline.
 
 ### Application session
 
@@ -128,6 +130,7 @@ src/
       CommandRequirementChecker.ts
       CommandExecutor.ts
       CommandSubmissionService.ts
+      ConsoleEchoCommandParser.ts
     simulation/
       SimulationClock.ts
       SimulationEngine.ts
@@ -138,11 +141,19 @@ src/
       WorldStateCodec.ts
     presentation/
       CommandInputView.ts
+      PhaserCommandInputView.ts
       FeedbackView.ts
       WorldObjectViewRegistry.ts
+  assets/
+    game/
+      fonts/
+        PressStart2P-Regular.ttf
+        OFL.txt
+      ui/
+        textbox.png
 ```
 
-The source files define architecture contracts and lightweight adapters. There are no concrete command handlers, room definitions, object subclasses, process behaviors, or visual assets in this scaffold.
+The source files define architecture contracts and lightweight adapters. The textbox PNG and Press Start 2P font are the initial presentation assets. There are no concrete command handlers, room definitions, object subclasses, or process behaviors in this scaffold.
 
 ## Framework references
 

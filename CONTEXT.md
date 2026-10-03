@@ -32,6 +32,10 @@ _Avoid_: File content (when referring to the rule itself)
 An implemented, allow-listed operation that a player submits to affect or inspect the game world.
 _Avoid_: Shell command (when referring to execution on the host computer)
 
+**Command Input**:
+A field where the player enters one command; long commands wrap at a fixed character count and are still submitted as one command.
+_Avoid_: Terminal (when referring to the input field)
+
 **Command History**:
 The raw command text the player has submitted.
 _Avoid_: Command result log
