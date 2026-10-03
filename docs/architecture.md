@@ -2,7 +2,7 @@
 
 ## Scope
 
-This document describes the initial structure for the command-driven RTS game. The repository starts with Vite, TypeScript, and Phaser 4.2.1. The architecture below establishes module boundaries and class relationships without defining level content, command behavior, object attributes, or process logic.
+This document describes the command-driven RTS game architecture and its first playable room. The repository uses Vite, TypeScript, and Phaser 4.2.1.
 
 ## Architectural decisions
 
@@ -10,18 +10,19 @@ This document describes the initial structure for the command-driven RTS game. T
 - The game uses a 1920×1080 scene size and Phaser `FIT` scaling, centered in the browser viewport. It preserves the full scene at every viewport ratio and fills any unused area with a dark background; it does not enter browser fullscreen mode.
 - The game world is a TypeScript domain model. Phaser objects render that model but are not the authoritative world state.
 - Directory and file terminology is a command-facing metaphor. A virtual path resolves to a `Room` or `WorldObject`; the game does not model entities as operating-system files and never invokes the host shell.
-- Only registered command handlers are executable. The initial grammar accepts one command per submitted line; pipes, chained commands, and player-written scripts are outside this foundation.
-- Submitting a command from the input's send-key event runs the command pipeline synchronously. There is no command queue in the initial architecture.
+- Only registered virtual command executors are executable. The grammar accepts one command per submitted line; pipes, chained commands, and player-written scripts are outside this foundation.
+- A submitted command runs synchronously and updates world state or object intent. Autonomous world behavior advances separately in fixed simulation ticks, while the input remains available.
 - `ProcessDefinition` and `ProcessInstance` are separate concepts. A world object can have zero or more running instances, and behavior rules can select a definition based on conditions.
+- `TickSimulationEngine` accumulates elapsed game time into 100 ms ticks, visits world objects in stable array order, and runs each matching behavior process once per tick.
 - Persistence is behind a repository interface and targets browser-local storage. A save snapshot includes world state and raw command history. The trigger and cadence for saving are outside this architecture decision.
 
 ## Runtime responsibilities
 
 ### Phaser scene
 
-`GameScene` extends `Phaser.Scene` and uses a 1920×1080 reference coordinate space. Phaser scales that complete scene proportionally to fit the browser viewport and centers it over a dark background when the viewport has a different aspect ratio. Its runtime responsibilities are to create the in-canvas input and feedback views, wire them to a `GameSession`, and forward Phaser's frame delta to the session. It does not contain command rules, process behavior, or world-state rules.
+`GameScene` extends `Phaser.Scene` and uses a 1920×1080 reference coordinate space. Phaser scales that complete scene proportionally to fit the browser viewport and centers it over a dark background when the viewport has a different aspect ratio. It creates the Room 1 world, session, room and object views, input, feedback, and outcome panels, then forwards Phaser's frame delta to the session. It does not contain command rules or world-object process logic. `createGame` starts with `GameScene`; a future start screen can become the first scene in the scene list.
 
-The current scaffold mounts `PhaserCommandInputView` at the bottom center of `GameScene`. It accepts printable English ASCII, edits with the supported cursor keys, wraps at a fixed character count, and scrolls to keep the cursor visible. Enter submits the complete input string and clears the field. At this stage, `ConsoleEchoCommandParser` only logs the submitted string; the input is not yet connected to `GameSession` or the full command submission pipeline.
+`PhaserCommandInputView` is mounted at the bottom center of `GameScene`. It accepts printable English ASCII, edits with the supported cursor keys, wraps at a fixed character count, and scrolls to keep the cursor visible. Enter submits the complete input string and clears the field. `PhaserRoomView` projects room and World Object state to Phaser images; `PhaserGameOutcomePanel` presents Game Over and Congratulations states.
 
 ### Application session
 
@@ -31,25 +32,31 @@ The current scaffold mounts `PhaserCommandInputView` at the bottom center of `Ga
 
 The synchronous submission pipeline is:
 
-1. `CommandParser` parses one input line into a command name, options, and arguments.
-2. `CommandRegistry` resolves the command name against the implemented allow-list.
+1. `VirtualCommandParser` parses one input line into a command name, options, and arguments.
+2. `RegisteredCommandRegistry` resolves the command name against the implemented allow-list.
 3. `CommandRequirementChecker` checks the selected command's requirements against the current command and world state.
-4. If the requirements pass, `CommandExecutor` invokes the command handler against the domain state.
+4. If the requirements pass, the registered command's `CommandExecutor` updates domain state.
 5. `CommandResult` returns success feedback or a failure reason to the in-game feedback view.
 
-Syntax parsing, allow-list lookup, requirement checking, and execution are separate responsibilities. Requirement failures are returned to the UI with their reason. Feedback uses a required variant: object-attached feedback has a target object ID; general feedback has no object target. The game event that creates feedback selects the variant.
+Syntax parsing, allow-list lookup, requirement checking, and execution are separate responsibilities. `ls` marks discoverable objects in the current Room as discovered; the view reveals them from world state. `cd <room>` resolves an Exit and sets the Player Character's action and destination. Requirement failures are returned to the UI with their reason. Feedback uses a required variant: object-attached feedback has a target object ID; general feedback has no object target. The game event that creates feedback selects the variant.
 
 ### World and process model
 
-`WorldState` is the source of truth for rooms, world objects, active process instances, the current room, and raw command history. `Room` is the game's independently enterable area. `WorldObject` is a domain entity with identity, room ownership, metadata, and runtime state. Its metadata can contain information that player commands do not reveal.
+`WorldState` is the source of truth for rooms, world objects, active process instances, the current room, simulation tick, game outcome, and raw command history. `Room` is the game's independently enterable area and owns its Exits. `WorldObject` is a domain entity with identity, room ownership, metadata, behavior rules, and runtime state. Its metadata can contain information that player commands do not reveal.
 
-`BehaviorRule` connects a world object to a condition and a `ProcessDefinition`. The definition describes reusable behavior. A `ProcessInstance` records one active execution and its owner object. The relationship is represented by IDs; neither processes nor world objects are represented as files.
+`BehaviorRule` connects a world object to a condition and a `ProcessDefinition`. On each simulation tick, `TickSimulationEngine` evaluates those rules and invokes the registered logic for each matching definition. A `ProcessInstance` stores runtime state for the owner object and process definition. The relationship is represented by IDs; neither processes nor world objects are represented as files.
 
-`WorldPathResolver` maps command-facing virtual paths to room or object IDs. It is an adapter over the world model, not a filesystem implementation.
+`VirtualWorldPathResolver` maps command-facing virtual paths to room or object IDs through the `WorldPathResolver` contract. It does not access the host filesystem.
 
 ### Simulation time
 
-`SimulationEngine` advances domain state using game-time delta from `SimulationClock`. Future commands that pause or change speed should control the clock through the command layer rather than reaching into Phaser's frame loop.
+`RealtimeSimulationClock` converts Phaser's frame delta into game delta. `TickSimulationEngine` accumulates that delta and runs fixed 100 ms ticks, so object behavior does not depend on the browser's render frame rate. Future commands that pause or change speed should control the clock through the command layer rather than reaching into Phaser's frame loop.
+
+### First room behavior
+
+Room 1 starts with the Player Character in the upper-left, a hidden Dagger in the lower-left, and a hidden Guard on the right. The room's right-side Exit leads to Room 2. `ls` discovers the dagger and guard. `cd room2` gives the Player Character a travel goal; its process chooses a direct route if the objects have not been discovered, or collects and equips the dagger before luring the guard if they have.
+
+The Guard process starts pursuit while the Player Character is in the room's right half and stops moving when the Player Character leaves it. An unarmed player caught by the guard ends the game. With the dagger equipped, the player can retreat, attack the guard from the left side, and then reach the exit. Entering Room 2 sets the Congratulations outcome.
 
 ### Persistence
 
@@ -63,6 +70,7 @@ classDiagram
   GameScene --> GameSession
   GameScene --> CommandInputView
   GameScene --> FeedbackView
+  GameScene --> PhaserRoomView
   GameScene --> WorldObjectViewRegistry
 
   GameSession --> WorldState
@@ -72,6 +80,7 @@ classDiagram
   GameSession --> SaveRepository
 
   WorldState *-- Room
+  Room *-- Exit
   WorldState *-- WorldObject
   WorldState *-- ProcessInstance
   WorldObject --> BehaviorRule
@@ -82,11 +91,11 @@ classDiagram
   CommandSubmissionService --> CommandParser
   CommandSubmissionService --> CommandRegistry
   CommandSubmissionService --> CommandRequirementChecker
-  CommandSubmissionService --> CommandExecutor
-  CommandExecutor --> CommandHandler
+  RegisteredCommand --> CommandExecutor
+  SimulationEngine --> WorldObjectProcess
 ```
 
-`PhaserScene` in the diagram means `Phaser.Scene`. `WorldObject` is the only planned domain inheritance base at this stage; concrete object subclasses are deliberately undefined until the game has specific object types. Services collaborate through composition and interfaces rather than a deep class tree.
+`PhaserScene` in the diagram means `Phaser.Scene`. Services collaborate through composition and interfaces rather than a deep class tree. World-object process logic operates on serializable domain state, not Phaser Game Objects.
 
 ## Source layout
 
@@ -98,21 +107,29 @@ docs/
     0001-phaser-independent-world-state.md
     0002-virtual-allowlisted-commands.md
     0003-fit-full-scene-to-viewport.md
+    0004-world-objects-act-on-simulation-ticks.md
 src/
   main.ts
   game/
     createGame.ts
     application/
       GameSession.ts
+    content/
+      createRoom1Session.ts
+      room1.ts
+      room1Commands.ts
     scenes/
       GameScene.ts
     domain/
+      BasicWorldObject.ts
       ids.ts
       JsonValue.ts
       Room.ts
       WorldObject.ts
+      WorldObjectState.ts
       WorldPath.ts
       WorldPathResolver.ts
+      VirtualWorldPathResolver.ts
       WorldState.ts
     processes/
       BehaviorRule.ts
@@ -123,26 +140,38 @@ src/
       CommandHistory.ts
       CommandFeedback.ts
       CommandResult.ts
-      CommandHandler.ts
       CommandRequirement.ts
       CommandParser.ts
       CommandRegistry.ts
       CommandRequirementChecker.ts
-      CommandExecutor.ts
+      EveryCommandRequirementChecker.ts
+      RegisteredCommandRegistry.ts
+      VirtualCommandParser.ts
       CommandSubmissionService.ts
-      ConsoleEchoCommandParser.ts
+      executors/
+        base.ts
+        cd.ts
+        ls.ts
     simulation/
       SimulationClock.ts
       SimulationEngine.ts
+      RealtimeSimulationClock.ts
+      TickSimulationEngine.ts
+      room1/
+        Room1Processes.ts
     persistence/
       SaveSnapshot.ts
       SaveRepository.ts
       LocalStorageSaveRepository.ts
       WorldStateCodec.ts
+      JsonWorldStateCodec.ts
     presentation/
       CommandInputView.ts
       PhaserCommandInputView.ts
       FeedbackView.ts
+      PhaserFeedbackView.ts
+      PhaserRoomView.ts
+      PhaserGameOutcomePanel.ts
       WorldObjectViewRegistry.ts
   assets/
     game/
@@ -151,9 +180,14 @@ src/
         OFL.txt
       ui/
         textbox.png
+      characters/
+        player/idle.png
+        guard/idle.png
+      items/
+        weapons/dagger.png
 ```
 
-The source files define architecture contracts and lightweight adapters. The textbox PNG and Press Start 2P font are the initial presentation assets. There are no concrete command handlers, room definitions, object subclasses, or process behaviors in this scaffold.
+The Press Start 2P font, distressed textbox frame, monochrome character art, and dagger image form the initial presentation assets.
 
 ## Framework references
 

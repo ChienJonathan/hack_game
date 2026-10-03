@@ -19,6 +19,8 @@ export interface WorldStateSnapshot {
   readonly processInstances: readonly ProcessInstance[]
   readonly currentRoomId: RoomId | null
   readonly commandHistory: readonly string[]
+  readonly simulationTick: number
+  readonly outcome: 'playing' | 'game-over' | 'congratulations'
 }
 
 export interface SaveSnapshot {

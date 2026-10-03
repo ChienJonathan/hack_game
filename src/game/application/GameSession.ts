@@ -28,6 +28,10 @@ export class GameSession {
     this.dependencies.simulationEngine.advance(this.dependencies.worldState, gameDeltaMs)
   }
 
+  getWorldState(): WorldState {
+    return this.dependencies.worldState
+  }
+
   submitCommand(rawText: string): CommandResult {
     this.dependencies.worldState.commandHistory.push(rawText)
     return this.dependencies.commandSubmission.submit(rawText, this.dependencies.worldState)

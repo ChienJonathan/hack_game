@@ -15,4 +15,8 @@ export class WorldObjectViewRegistry {
   unbind(id: WorldObjectId): void {
     this.views.delete(id)
   }
+
+  clear(): void {
+    this.views.clear()
+  }
 }

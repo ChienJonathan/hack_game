@@ -8,9 +8,33 @@ This context defines the language used to describe the command-driven game world
 A discrete game area that can be entered and revisited. It is represented through a directory-like command path.
 _Avoid_: Folder, level (when referring to the loaded area)
 
+**Exit**:
+A route from one Room to another Room.
+_Avoid_: Door (when referring to the room-to-room connection)
+
 **World Object**:
 An entity that exists in a room and has metadata and runtime state. It is not a literal file, and some of its metadata is not exposed through player commands.
 _Avoid_: File
+
+**Character**:
+An individual person depicted in the game world, such as a player figure or a guard. The term names the depicted person without specifying control, behavior, or how the game represents them internally.
+_Avoid_: Sprite (when referring to the person)
+
+**Player Character**:
+The Character controlled by the person playing the game.
+_Avoid_: Player (when referring to the in-world Character)
+
+**Guard**:
+A hostile Character that obstructs the player's progress through a Room.
+_Avoid_: Enemy sprite (when referring to the character)
+
+**Weapon**:
+A World Object that a Character can equip and use to defeat another Character.
+_Avoid_: Equipment (when referring specifically to an object used in combat)
+
+**Discovery**:
+The player's in-world knowledge that a World Object exists.
+_Avoid_: View visibility (when referring to the player's knowledge)
 
 **Virtual Path**:
 A command-facing address that resolves to a room or world object inside the game.
@@ -23,6 +47,10 @@ _Avoid_: Process (when referring to a reusable description)
 **Process Instance**:
 One runtime execution of a process definition, associated with a world object and having its own lifecycle.
 _Avoid_: Process definition
+
+**Simulation Tick**:
+A discrete step in which each active Behavior Rule runs its selected process logic for a World Object.
+_Avoid_: Frame (when referring to game logic rather than drawing)
 
 **Behavior Rule**:
 A condition associated with a world object that selects a process definition.

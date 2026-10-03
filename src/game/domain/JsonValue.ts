@@ -5,3 +5,11 @@ export type JsonValue =
   | null
   | readonly JsonValue[]
   | { readonly [key: string]: JsonValue }
+
+export type MutableJsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | MutableJsonValue[]
+  | { [key: string]: MutableJsonValue }

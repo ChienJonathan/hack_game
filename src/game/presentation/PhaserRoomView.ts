@@ -1,0 +1,192 @@
+import type Phaser from 'phaser'
+import guardImageUrl from '../../assets/game/characters/guard/idle.png'
+import playerImageUrl from '../../assets/game/characters/player/idle.png'
+import daggerImageUrl from '../../assets/game/items/weapons/dagger.png'
+import type { WorldObject } from '../domain/WorldObject.ts'
+import type { WorldState } from '../domain/WorldState.ts'
+import { WORLD_OBJECT_IDS, ROOM_IDS, ROOM_LAYOUT } from '../content/room1.ts'
+import { WorldObjectViewRegistry } from './WorldObjectViewRegistry.ts'
+
+export const PLAYER_TEXTURE_KEY = 'player-idle'
+export const GUARD_TEXTURE_KEY = 'guard-idle'
+export const DAGGER_TEXTURE_KEY = 'dagger'
+
+export const WORLD_OBJECT_TEXTURE_URLS = {
+  [PLAYER_TEXTURE_KEY]: playerImageUrl,
+  [GUARD_TEXTURE_KEY]: guardImageUrl,
+  [DAGGER_TEXTURE_KEY]: daggerImageUrl,
+} as const
+
+interface DisplayState {
+  x?: unknown
+  y?: unknown
+  discovered?: unknown
+  alive?: unknown
+  equippedBy?: unknown
+}
+
+const TEXT_COLOR = '#d6d6d6'
+
+function displayState(worldObject: WorldObject): DisplayState {
+  const state = worldObject.state
+  if (typeof state !== 'object' || state === null || Array.isArray(state)) {
+    return {}
+  }
+
+  return state
+}
+
+export class PhaserRoomView {
+  private readonly objectViews = new WorldObjectViewRegistry()
+  private readonly spriteById = new Map<string, Phaser.GameObjects.Image>()
+  private roomTitle: Phaser.GameObjects.Text | undefined
+  private roomFrame: Phaser.GameObjects.Graphics | undefined
+  private roomDivider: Phaser.GameObjects.Graphics | undefined
+  private doorFrame: Phaser.GameObjects.Graphics | undefined
+  private doorLabel: Phaser.GameObjects.Text | undefined
+
+  mount(scene: Phaser.Scene, state: WorldState): void {
+    this.destroy()
+
+    this.roomFrame = scene.add.graphics().setDepth(0)
+    this.roomFrame.lineStyle(4, 0x595959, 1).strokeRect(
+      ROOM_LAYOUT.left,
+      ROOM_LAYOUT.top,
+      ROOM_LAYOUT.right - ROOM_LAYOUT.left,
+      ROOM_LAYOUT.bottom - ROOM_LAYOUT.top,
+    )
+    this.roomFrame.lineStyle(2, 0x282828, 1)
+    for (let y = ROOM_LAYOUT.top + 36; y < ROOM_LAYOUT.bottom; y += 48) {
+      this.roomFrame.lineBetween(ROOM_LAYOUT.left + 4, y, ROOM_LAYOUT.right - 4, y)
+    }
+
+    this.roomDivider = scene.add.graphics().setDepth(0)
+    this.roomDivider.lineStyle(2, 0x3c3c3c, 0.8)
+    for (let y = ROOM_LAYOUT.top + 8; y < ROOM_LAYOUT.bottom; y += 24) {
+      this.roomDivider.lineBetween(
+        ROOM_LAYOUT.rightHalfStartX,
+        y,
+        ROOM_LAYOUT.rightHalfStartX,
+        Math.min(y + 10, ROOM_LAYOUT.bottom),
+      )
+    }
+
+    this.doorFrame = scene.add.graphics().setDepth(1)
+    this.doorFrame.fillStyle(0x101010, 1).fillRect(ROOM_LAYOUT.exit.x - 42, ROOM_LAYOUT.exit.y - 84, 84, 168)
+    this.doorFrame.lineStyle(4, 0x9a9a9a, 1).strokeRect(
+      ROOM_LAYOUT.exit.x - 42,
+      ROOM_LAYOUT.exit.y - 84,
+      84,
+      168,
+    )
+    this.doorLabel = scene.add
+      .text(ROOM_LAYOUT.exit.x, ROOM_LAYOUT.exit.y + 100, 'ROOM 2', {
+        fontFamily: '"Press Start 2P", monospace',
+        fontSize: 20,
+        color: TEXT_COLOR,
+      })
+      .setOrigin(0.5)
+      .setDepth(2)
+
+    this.roomTitle = scene.add
+      .text(ROOM_LAYOUT.left + 8, ROOM_LAYOUT.top - 38, '', {
+        fontFamily: '"Press Start 2P", monospace',
+        fontSize: 24,
+        color: TEXT_COLOR,
+      })
+      .setOrigin(0, 0.5)
+      .setDepth(2)
+
+    for (const worldObject of state.worldObjects) {
+      const textureKey = this.textureKeyFor(worldObject)
+      if (!textureKey) {
+        continue
+      }
+
+      const sprite = scene.add.image(0, 0, textureKey).setDepth(3)
+      if (worldObject.id === WORLD_OBJECT_IDS.dagger) {
+        sprite.setDisplaySize(72, 72)
+      } else {
+        sprite.setDisplaySize(176, 176)
+      }
+
+      this.objectViews.bind(worldObject.id, sprite)
+      this.spriteById.set(worldObject.id, sprite)
+    }
+
+    this.update(state)
+  }
+
+  update(state: WorldState): void {
+    const currentRoom = state.rooms.find((room) => room.id === state.currentRoomId)
+    this.roomTitle?.setText(currentRoom?.id.toUpperCase() ?? 'NO ROOM')
+    this.roomDivider?.setVisible(state.currentRoomId === ROOM_IDS.first)
+    this.doorFrame?.setVisible(state.currentRoomId === ROOM_IDS.first)
+    this.doorLabel?.setVisible(state.currentRoomId === ROOM_IDS.first)
+
+    for (const worldObject of state.worldObjects) {
+      const registeredView = this.objectViews.get(worldObject.id)
+      if (!registeredView) {
+        continue
+      }
+
+      const sprite = registeredView as Phaser.GameObjects.Image
+
+      const objectState = displayState(worldObject)
+      const inCurrentRoom = worldObject.roomId === state.currentRoomId
+      const isKnown = worldObject.id === WORLD_OBJECT_IDS.player || objectState.discovered === true
+      const alive = objectState.alive !== false
+      const equipped = objectState.equippedBy !== null && objectState.equippedBy !== undefined
+      const x = typeof objectState.x === 'number' ? objectState.x : 0
+      const y = typeof objectState.y === 'number' ? objectState.y : 0
+
+      sprite.setPosition(x, y)
+      sprite.setVisible(inCurrentRoom && isKnown && (alive || worldObject.id === WORLD_OBJECT_IDS.guard))
+
+      if (worldObject.id === WORLD_OBJECT_IDS.dagger && equipped) {
+        sprite.setDisplaySize(58, 58)
+      } else if (worldObject.id === WORLD_OBJECT_IDS.dagger) {
+        sprite.setDisplaySize(72, 72)
+      }
+
+      sprite.setAlpha(worldObject.id === WORLD_OBJECT_IDS.guard && !alive ? 0.5 : 1)
+      if (worldObject.id === WORLD_OBJECT_IDS.guard && !alive) {
+        sprite.setAngle(90)
+      } else {
+        sprite.setAngle(0)
+      }
+    }
+  }
+
+  destroy(): void {
+    for (const sprite of this.spriteById.values()) {
+      sprite.destroy()
+    }
+
+    this.spriteById.clear()
+    this.objectViews.clear()
+    this.roomTitle?.destroy()
+    this.roomFrame?.destroy()
+    this.roomDivider?.destroy()
+    this.doorFrame?.destroy()
+    this.doorLabel?.destroy()
+    this.roomTitle = undefined
+    this.roomFrame = undefined
+    this.roomDivider = undefined
+    this.doorFrame = undefined
+    this.doorLabel = undefined
+  }
+
+  private textureKeyFor(worldObject: WorldObject): string | undefined {
+    switch (worldObject.metadata.role) {
+      case 'player':
+        return PLAYER_TEXTURE_KEY
+      case 'guard':
+        return GUARD_TEXTURE_KEY
+      case 'weapon':
+        return DAGGER_TEXTURE_KEY
+      default:
+        return undefined
+    }
+  }
+}

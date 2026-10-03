@@ -10,4 +10,6 @@ export interface WorldState {
   processInstances: ProcessInstance[]
   currentRoomId: RoomId | null
   commandHistory: CommandHistory
+  simulationTick: number
+  outcome: 'playing' | 'game-over' | 'congratulations'
 }
