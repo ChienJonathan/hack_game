@@ -7,6 +7,7 @@ This document describes the initial structure for the command-driven RTS game. T
 ## Architectural decisions
 
 - One `GameScene` owns the Phaser runtime scene. The bottom command input and all game feedback are presented inside the game view.
+- The game uses a 1920×1080 scene size and Phaser `FIT` scaling, centered in the browser viewport. It preserves the full scene at every viewport ratio and fills any unused area with a dark background; it does not enter browser fullscreen mode.
 - The game world is a TypeScript domain model. Phaser objects render that model but are not the authoritative world state.
 - Directory and file terminology is a command-facing metaphor. A virtual path resolves to a `Room` or `WorldObject`; the game does not model entities as operating-system files and never invokes the host shell.
 - Only registered command handlers are executable. The initial grammar accepts one command per submitted line; pipes, chained commands, and player-written scripts are outside this foundation.
@@ -18,7 +19,7 @@ This document describes the initial structure for the command-driven RTS game. T
 
 ### Phaser scene
 
-`GameScene` extends `Phaser.Scene`. It creates the in-canvas command input and feedback views, wires them to a `GameSession`, and forwards Phaser's frame delta to the session. It does not contain command rules, process behavior, or world-state rules.
+`GameScene` extends `Phaser.Scene` and uses a 1920×1080 reference coordinate space. Phaser scales that complete scene proportionally to fit the browser viewport and centers it over a dark background when the viewport has a different aspect ratio. The scene creates the in-canvas command input and feedback views, wires them to a `GameSession`, and forwards Phaser's frame delta to the session. It does not contain command rules, process behavior, or world-state rules.
 
 ### Application session
 
@@ -94,6 +95,7 @@ docs/
   adr/
     0001-phaser-independent-world-state.md
     0002-virtual-allowlisted-commands.md
+    0003-fit-full-scene-to-viewport.md
 src/
   main.ts
   game/
