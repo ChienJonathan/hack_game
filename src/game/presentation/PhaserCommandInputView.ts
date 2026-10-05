@@ -27,6 +27,7 @@ export class PhaserCommandInputView implements CommandInputView {
   private cursorBlock: Phaser.GameObjects.Rectangle | undefined
   private cursorGlyph: Phaser.GameObjects.Text | undefined
   private cursorBlinkEvent: Phaser.Time.TimerEvent | undefined
+  private prompt = '~/room1$ '
   private value = ''
   private cursorIndex = 0
   private cursorVisible = true
@@ -111,6 +112,15 @@ export class PhaserCommandInputView implements CommandInputView {
       },
     })
 
+    this.render()
+  }
+
+  setPrompt(prompt: string): void {
+    if (this.prompt === prompt) {
+      return
+    }
+
+    this.prompt = prompt
     this.render()
   }
 
@@ -240,7 +250,10 @@ export class PhaserCommandInputView implements CommandInputView {
 
   private updateCursorVisibility(): void {
     this.cursorBlock?.setVisible(this.cursorVisible)
-    const hasCharacterUnderCursor = this.cursorIndex < Array.from(this.value).length
+    const displayCursorIndex = Array.from(this.prompt).length + this.cursorIndex
+    const hasCharacterUnderCursor =
+      displayCursorIndex < Array.from(`${this.prompt}${this.value}`).length ||
+      (this.value.length === 0 && this.cursorIndex < 'help'.length)
     this.cursorGlyph?.setVisible(this.cursorVisible && hasCharacterUnderCursor)
   }
 
@@ -250,7 +263,7 @@ export class PhaserCommandInputView implements CommandInputView {
     }
 
     this.placeholderText.setVisible(this.value.length === 0)
-    const characters = Array.from(this.value)
+    const characters = Array.from(`${this.prompt}${this.value}`)
     const lines: string[] = []
 
     for (let index = 0; index < characters.length; index += this.charactersPerLine) {
@@ -261,8 +274,9 @@ export class PhaserCommandInputView implements CommandInputView {
       lines.push('')
     }
 
-    const cursorRow = Math.floor(this.cursorIndex / this.charactersPerLine)
-    const cursorColumn = this.cursorIndex % this.charactersPerLine
+    const displayCursorIndex = Array.from(this.prompt).length + this.cursorIndex
+    const cursorRow = Math.floor(displayCursorIndex / this.charactersPerLine)
+    const cursorColumn = displayCursorIndex % this.charactersPerLine
 
     while (lines.length <= cursorRow) {
       lines.push('')
@@ -280,9 +294,12 @@ export class PhaserCommandInputView implements CommandInputView {
 
     const cursorX = this.textLeft + cursorColumn * this.characterWidth
     const cursorY = this.textTop + (cursorRow - firstVisibleRow) * LINE_HEIGHT
+    this.placeholderText.setPosition(cursorX, cursorY)
     this.cursorBlock.setPosition(cursorX, cursorY)
     this.cursorGlyph.setPosition(cursorX, cursorY)
-    this.cursorGlyph.setText(characters[this.cursorIndex] ?? '')
+    this.cursorGlyph.setText(
+      this.value.length === 0 ? 'help'[this.cursorIndex] ?? '' : characters[displayCursorIndex] ?? '',
+    )
     this.updateCursorVisibility()
   }
 

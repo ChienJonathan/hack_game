@@ -9,6 +9,11 @@ export const ROOM_IDS = {
   second: 'room2',
 } as const
 
+export const ROOM_NAMES: Readonly<Record<string, string>> = {
+  [ROOM_IDS.first]: 'room1',
+  [ROOM_IDS.second]: 'room2',
+}
+
 export const WORLD_OBJECT_IDS = {
   player: 'player',
   dagger: 'dagger',
@@ -56,14 +61,14 @@ export function createInitialWorldState(): WorldState {
     id: ROOM_IDS.first,
     objectIds: [WORLD_OBJECT_IDS.player, WORLD_OBJECT_IDS.dagger, WORLD_OBJECT_IDS.guard],
     exits: [{ targetRoomId: ROOM_IDS.second, label: ROOM_IDS.second, ...ROOM_LAYOUT.exit }],
-    state: { name: 'room1', width: ROOM_LAYOUT.width, height: ROOM_LAYOUT.height },
+    state: { name: ROOM_NAMES[ROOM_IDS.first], width: ROOM_LAYOUT.width, height: ROOM_LAYOUT.height },
   }
 
   const secondRoom: Room = {
     id: ROOM_IDS.second,
     objectIds: [],
     exits: [],
-    state: { name: 'room2', width: ROOM_LAYOUT.width, height: ROOM_LAYOUT.height },
+    state: { name: ROOM_NAMES[ROOM_IDS.second], width: ROOM_LAYOUT.width, height: ROOM_LAYOUT.height },
   }
 
   const worldObjects: WorldObject[] = [

@@ -4,7 +4,7 @@ import playerImageUrl from '../../assets/game/characters/player/idle.png'
 import daggerImageUrl from '../../assets/game/items/weapons/dagger.png'
 import type { WorldObject } from '../domain/WorldObject.ts'
 import type { WorldState } from '../domain/WorldState.ts'
-import { WORLD_OBJECT_IDS, ROOM_IDS, ROOM_LAYOUT } from '../content/room1.ts'
+import { WORLD_OBJECT_IDS, ROOM_IDS, ROOM_LAYOUT, ROOM_NAMES } from '../content/room1.ts'
 import { WorldObjectViewRegistry } from './WorldObjectViewRegistry.ts'
 
 export const PLAYER_TEXTURE_KEY = 'player-idle'
@@ -80,7 +80,7 @@ export class PhaserRoomView {
       168,
     )
     this.doorLabel = scene.add
-      .text(ROOM_LAYOUT.exit.x, ROOM_LAYOUT.exit.y + 100, 'ROOM 2', {
+      .text(ROOM_LAYOUT.exit.x, ROOM_LAYOUT.exit.y + 100, ROOM_NAMES[ROOM_IDS.second], {
         fontFamily: '"Press Start 2P", monospace',
         fontSize: 20,
         color: TEXT_COLOR,
@@ -119,7 +119,7 @@ export class PhaserRoomView {
 
   update(state: WorldState): void {
     const currentRoom = state.rooms.find((room) => room.id === state.currentRoomId)
-    this.roomTitle?.setText(currentRoom?.id.toUpperCase() ?? 'NO ROOM')
+    this.roomTitle?.setText(currentRoom ? ROOM_NAMES[currentRoom.id] ?? currentRoom.id : 'NO ROOM')
     this.roomDivider?.setVisible(state.currentRoomId === ROOM_IDS.first)
     this.doorFrame?.setVisible(state.currentRoomId === ROOM_IDS.first)
     this.doorLabel?.setVisible(state.currentRoomId === ROOM_IDS.first)

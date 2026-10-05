@@ -2,6 +2,7 @@ import Phaser from 'phaser'
 import textboxImageUrl from '../../assets/game/ui/textbox.png'
 import type { GameSession } from '../application/GameSession.ts'
 import { createRoom1Session } from '../content/createRoom1Session.ts'
+import { ROOM_IDS, ROOM_NAMES } from '../content/room1.ts'
 import { PhaserFeedbackView } from '../presentation/PhaserFeedbackView.ts'
 import { PhaserGameOutcomePanel } from '../presentation/PhaserGameOutcomePanel.ts'
 import { PhaserRoomView, WORLD_OBJECT_TEXTURE_URLS } from '../presentation/PhaserRoomView.ts'
@@ -34,6 +35,7 @@ export class GameScene extends Phaser.Scene {
 
     const commandInputView = new PhaserCommandInputView()
     this.commandInputView = commandInputView
+    commandInputView.setPrompt(this.promptForRoom(worldState.currentRoomId))
     commandInputView.mount(this, (rawText) => {
       const result = this.session.submitCommand(rawText)
       const feedback = result.status === 'success'
@@ -60,7 +62,22 @@ export class GameScene extends Phaser.Scene {
   update(_time: number, delta: number): void {
     this.session.update(delta)
     const worldState = this.session.getWorldState()
+    this.commandInputView?.setPrompt(this.promptForRoom(worldState.currentRoomId))
     this.roomView.update(worldState)
     this.outcomePanel?.update(worldState)
+  }
+
+  private promptForRoom(roomId: string | null): string {
+    if (!roomId) {
+      return '~$ '
+    }
+
+    const rootRoomName = ROOM_NAMES[ROOM_IDS.first]
+    const roomName = ROOM_NAMES[roomId] ?? roomId
+    const path = roomId === ROOM_IDS.first
+      ? `~/${rootRoomName}`
+      : `~/${rootRoomName}/${roomName}`
+
+    return `${path}$ `
   }
 }
