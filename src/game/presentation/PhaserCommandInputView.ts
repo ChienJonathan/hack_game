@@ -13,6 +13,7 @@ const FONT_SIZE = 64
 const LINE_SPACING = 8
 const LINE_HEIGHT = FONT_SIZE + LINE_SPACING
 const TEXT_COLOR = '#d6d6d6'
+const PLACEHOLDER_COLOR = '#777777'
 const CURSOR_COLOR = 0xd6d6d6
 const FIELD_COLOR = '#101010'
 const CURSOR_BLINK_MS = 500
@@ -22,6 +23,7 @@ export class PhaserCommandInputView implements CommandInputView {
   private onSubmit: ((rawText: string) => void) | undefined
   private background: Phaser.GameObjects.Image | undefined
   private commandText: Phaser.GameObjects.Text | undefined
+  private placeholderText: Phaser.GameObjects.Text | undefined
   private cursorBlock: Phaser.GameObjects.Rectangle | undefined
   private cursorGlyph: Phaser.GameObjects.Text | undefined
   private cursorBlinkEvent: Phaser.Time.TimerEvent | undefined
@@ -68,6 +70,17 @@ export class PhaserCommandInputView implements CommandInputView {
       .setOrigin(0, 0)
       .setDepth(11)
 
+    this.placeholderText = scene.add
+      .text(this.textLeft, this.textTop, 'help', {
+        fontFamily: FONT_FAMILY,
+        fontSize: FONT_SIZE,
+        fontStyle: 'italic',
+        color: PLACEHOLDER_COLOR,
+        lineSpacing: LINE_SPACING,
+      })
+      .setOrigin(0, 0)
+      .setDepth(11)
+
     this.cursorBlock = scene.add
       .rectangle(0, 0, this.characterWidth, FONT_SIZE, CURSOR_COLOR)
       .setOrigin(0, 0)
@@ -106,6 +119,7 @@ export class PhaserCommandInputView implements CommandInputView {
     this.cursorBlinkEvent?.remove()
     this.background?.destroy()
     this.commandText?.destroy()
+    this.placeholderText?.destroy()
     this.cursorBlock?.destroy()
     this.cursorGlyph?.destroy()
 
@@ -113,6 +127,7 @@ export class PhaserCommandInputView implements CommandInputView {
     this.onSubmit = undefined
     this.background = undefined
     this.commandText = undefined
+    this.placeholderText = undefined
     this.cursorBlock = undefined
     this.cursorGlyph = undefined
     this.cursorBlinkEvent = undefined
@@ -230,10 +245,11 @@ export class PhaserCommandInputView implements CommandInputView {
   }
 
   private render(): void {
-    if (!this.commandText || !this.cursorBlock || !this.cursorGlyph) {
+    if (!this.commandText || !this.placeholderText || !this.cursorBlock || !this.cursorGlyph) {
       return
     }
 
+    this.placeholderText.setVisible(this.value.length === 0)
     const characters = Array.from(this.value)
     const lines: string[] = []
 
