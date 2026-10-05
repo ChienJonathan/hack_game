@@ -38,6 +38,7 @@ export class PhaserCommandInputView implements CommandInputView {
   private cursorIndex = 0
   private cursorVisible = true
   private activeCursorVisible = true
+  private showActivePrompt = true
   private baseCharacterWidth = FONT_SIZE
   private characterWidth = FONT_SIZE
   private charactersPerLine = 1
@@ -166,6 +167,11 @@ export class PhaserCommandInputView implements CommandInputView {
     this.render()
   }
 
+  finishExecution(): void {
+    this.showActivePrompt = true
+    this.render()
+  }
+
   destroy(): void {
     this.scene?.input.keyboard?.off('keydown', this.handleKeyboardEvent)
     this.scene?.input.off('wheel', this.handleWheel)
@@ -194,12 +200,18 @@ export class PhaserCommandInputView implements CommandInputView {
     this.value = ''
     this.cursorIndex = 0
     this.transcript.length = 0
+    this.showActivePrompt = true
     this.scrollOffset = 0
     this.maxScrollOffset = 0
     this.isDraggingScrollbar = false
   }
 
   private readonly handleKeyboardEvent = (event: KeyboardEvent): void => {
+    if (!this.showActivePrompt) {
+      event.preventDefault()
+      return
+    }
+
     if (event.key === 'Enter') {
       event.preventDefault()
       this.submit()
@@ -291,8 +303,10 @@ export class PhaserCommandInputView implements CommandInputView {
     this.value = ''
     this.cursorIndex = 0
     this.scrollOffset = 0
+    this.showActivePrompt = false
     this.markCursorActive()
     this.render()
+
     this.onSubmit?.(submittedText)
   }
 
@@ -394,18 +408,20 @@ export class PhaserCommandInputView implements CommandInputView {
     this.characterWidth = characterWidth
     this.charactersPerLine = charactersPerLine
     this.visibleLineCount = VISIBLE_LINE_COUNT
-    const activeLine = `${this.prompt}${this.value}`
+    const activeLine = this.showActivePrompt ? `${this.prompt}${this.value}` : ''
     const allLines = [
       ...this.transcript.flatMap((entry) => this.wrapText(entry, this.charactersPerLine)),
       ...this.wrapText(activeLine, this.charactersPerLine),
     ]
 
-    const cursorPosition = Array.from(this.prompt).length + this.cursorIndex
     const transcriptLineCount = this.transcript.flatMap((entry) =>
       this.wrapText(entry, this.charactersPerLine),
     ).length
+    const cursorPosition = this.showActivePrompt
+      ? Array.from(this.prompt).length + this.cursorIndex
+      : 0
     const cursorRow = transcriptLineCount +
-      Math.floor(cursorPosition / this.charactersPerLine)
+      (this.showActivePrompt ? Math.floor(cursorPosition / this.charactersPerLine) : 0)
     while (allLines.length <= cursorRow) {
       allLines.push('')
     }
@@ -415,7 +431,9 @@ export class PhaserCommandInputView implements CommandInputView {
     const firstVisibleRow = this.maxScrollOffset - this.scrollOffset
     const visibleLines = allLines.slice(firstVisibleRow, firstVisibleRow + this.visibleLineCount)
     const lineSpacing = LINE_SPACING
-    const cursorVisible = cursorRow >= firstVisibleRow && cursorRow < firstVisibleRow + this.visibleLineCount
+    const cursorVisible = this.showActivePrompt &&
+      cursorRow >= firstVisibleRow &&
+      cursorRow < firstVisibleRow + this.visibleLineCount
     this.activeCursorVisible = cursorVisible
 
     this.commandText.setFontSize(fontSize)

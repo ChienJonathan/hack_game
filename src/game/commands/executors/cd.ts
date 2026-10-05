@@ -58,6 +58,7 @@ export class CdCommandExecutor implements CommandExecutor {
 
     return {
       status: 'success',
+      completion: 'deferred',
       feedback: [
         {
           kind: 'popup',
