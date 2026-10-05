@@ -8,10 +8,13 @@ const TEXTBOX_HEIGHT = 300
 const BOTTOM_MARGIN = 32
 const HORIZONTAL_PADDING = 60
 const VERTICAL_PADDING = 32
+const SCROLLBAR_WIDTH = 14
+const SCROLLBAR_GAP = 14
+const MIN_SCROLLBAR_THUMB_HEIGHT = 24
 const FONT_FAMILY = '"Press Start 2P", monospace'
-const FONT_SIZE = 64
-const LINE_SPACING = 8
-const LINE_HEIGHT = FONT_SIZE + LINE_SPACING
+const FONT_SIZE = 36
+const LINE_SPACING = 4
+const VISIBLE_LINE_COUNT = 6
 const TEXT_COLOR = '#d6d6d6'
 const PLACEHOLDER_COLOR = '#777777'
 const CURSOR_COLOR = 0xd6d6d6
@@ -26,16 +29,28 @@ export class PhaserCommandInputView implements CommandInputView {
   private placeholderText: Phaser.GameObjects.Text | undefined
   private cursorBlock: Phaser.GameObjects.Rectangle | undefined
   private cursorGlyph: Phaser.GameObjects.Text | undefined
+  private scrollbarTrack: Phaser.GameObjects.Rectangle | undefined
+  private scrollbarThumb: Phaser.GameObjects.Rectangle | undefined
   private cursorBlinkEvent: Phaser.Time.TimerEvent | undefined
   private prompt = '~/room1$ '
   private value = ''
+  private readonly transcript: string[] = []
   private cursorIndex = 0
   private cursorVisible = true
+  private activeCursorVisible = true
+  private baseCharacterWidth = FONT_SIZE
   private characterWidth = FONT_SIZE
   private charactersPerLine = 1
   private visibleLineCount = 1
   private textLeft = 0
   private textTop = 0
+  private scrollOffset = 0
+  private maxScrollOffset = 0
+  private scrollbarTrackTop = 0
+  private scrollbarTrackHeight = 0
+  private scrollbarThumbHeight = 0
+  private isDraggingScrollbar = false
+  private scrollbarDragOffset = 0
 
   mount(scene: Phaser.Scene, onSubmit: (rawText: string) => void): void {
     this.destroy()
@@ -47,19 +62,23 @@ export class PhaserCommandInputView implements CommandInputView {
     const top = camera.height - BOTTOM_MARGIN - TEXTBOX_HEIGHT
     const centerX = left + TEXTBOX_WIDTH / 2
     const centerY = top + TEXTBOX_HEIGHT / 2
-    const contentWidth = TEXTBOX_WIDTH - HORIZONTAL_PADDING * 2
+    const contentWidth = TEXTBOX_WIDTH - HORIZONTAL_PADDING * 2 - SCROLLBAR_WIDTH - SCROLLBAR_GAP
     const contentHeight = TEXTBOX_HEIGHT - VERTICAL_PADDING * 2
 
     this.textLeft = left + HORIZONTAL_PADDING
     this.textTop = top + VERTICAL_PADDING
-    this.characterWidth = this.measureCharacterWidth()
+    this.scrollbarTrackTop = this.textTop
+    this.scrollbarTrackHeight = contentHeight
+    this.baseCharacterWidth = this.measureCharacterWidth()
+    this.characterWidth = this.baseCharacterWidth
+    this.scrollOffset = 0
     this.charactersPerLine = Math.max(1, Math.floor(contentWidth / this.characterWidth))
-    this.visibleLineCount = Math.max(1, Math.floor(contentHeight / LINE_HEIGHT))
-
+    this.visibleLineCount = VISIBLE_LINE_COUNT
     this.background = scene.add
       .image(centerX, centerY, COMMAND_INPUT_TEXTURE_KEY)
       .setDisplaySize(TEXTBOX_WIDTH, TEXTBOX_HEIGHT)
       .setDepth(10)
+      .setInteractive()
 
     this.commandText = scene.add
       .text(this.textLeft, this.textTop, '', {
@@ -97,12 +116,30 @@ export class PhaserCommandInputView implements CommandInputView {
       .setOrigin(0, 0)
       .setDepth(13)
 
+    const scrollbarX = left + TEXTBOX_WIDTH - HORIZONTAL_PADDING - SCROLLBAR_WIDTH / 2
+    this.scrollbarTrack = scene.add
+      .rectangle(scrollbarX, this.scrollbarTrackTop, SCROLLBAR_WIDTH, this.scrollbarTrackHeight, 0x555555, 0.65)
+      .setOrigin(0.5, 0)
+      .setDepth(14)
+      .setInteractive()
+    this.scrollbarThumb = scene.add
+      .rectangle(scrollbarX, this.scrollbarTrackTop, SCROLLBAR_WIDTH, this.scrollbarTrackHeight, 0xd6d6d6, 0.9)
+      .setOrigin(0.5, 0)
+      .setDepth(15)
+      .setInteractive()
+    this.scrollbarThumb.on('pointerdown', this.handleScrollbarPointerDown)
+    this.scrollbarTrack.on('pointerdown', this.handleScrollbarTrackPointerDown)
+
     const keyboard = scene.input.keyboard
     if (!keyboard) {
       throw new Error('Phaser keyboard input is not enabled for the game scene.')
     }
 
     keyboard.on('keydown', this.handleKeyboardEvent)
+    scene.input.on('wheel', this.handleWheel)
+    scene.input.on('pointermove', this.handlePointerMove)
+    scene.input.on('pointerup', this.handlePointerUp)
+    scene.input.on('pointerupoutside', this.handlePointerUp)
     this.cursorBlinkEvent = scene.time.addEvent({
       delay: CURSOR_BLINK_MS,
       loop: true,
@@ -124,14 +161,25 @@ export class PhaserCommandInputView implements CommandInputView {
     this.render()
   }
 
+  appendOutput(text: string): void {
+    this.transcript.push(text)
+    this.render()
+  }
+
   destroy(): void {
     this.scene?.input.keyboard?.off('keydown', this.handleKeyboardEvent)
+    this.scene?.input.off('wheel', this.handleWheel)
+    this.scene?.input.off('pointermove', this.handlePointerMove)
+    this.scene?.input.off('pointerup', this.handlePointerUp)
+    this.scene?.input.off('pointerupoutside', this.handlePointerUp)
     this.cursorBlinkEvent?.remove()
     this.background?.destroy()
     this.commandText?.destroy()
     this.placeholderText?.destroy()
     this.cursorBlock?.destroy()
     this.cursorGlyph?.destroy()
+    this.scrollbarTrack?.destroy()
+    this.scrollbarThumb?.destroy()
 
     this.scene = undefined
     this.onSubmit = undefined
@@ -140,9 +188,15 @@ export class PhaserCommandInputView implements CommandInputView {
     this.placeholderText = undefined
     this.cursorBlock = undefined
     this.cursorGlyph = undefined
+    this.scrollbarTrack = undefined
+    this.scrollbarThumb = undefined
     this.cursorBlinkEvent = undefined
     this.value = ''
     this.cursorIndex = 0
+    this.transcript.length = 0
+    this.scrollOffset = 0
+    this.maxScrollOffset = 0
+    this.isDraggingScrollbar = false
   }
 
   private readonly handleKeyboardEvent = (event: KeyboardEvent): void => {
@@ -233,74 +287,196 @@ export class PhaserCommandInputView implements CommandInputView {
   private submit(): void {
     const submittedText = this.value
 
-    try {
-      this.onSubmit?.(submittedText)
-    } finally {
-      this.value = ''
-      this.cursorIndex = 0
-      this.markCursorActive()
-      this.render()
+    this.transcript.push(`${this.prompt}${submittedText}`)
+    this.value = ''
+    this.cursorIndex = 0
+    this.scrollOffset = 0
+    this.markCursorActive()
+    this.render()
+    this.onSubmit?.(submittedText)
+  }
+
+  private readonly handleWheel = (
+    pointer: Phaser.Input.Pointer,
+    _overObjects: Phaser.GameObjects.GameObject[],
+    _deltaX: number,
+    deltaY: number,
+  ): void => {
+    if (
+      pointer.x < this.textLeft - HORIZONTAL_PADDING ||
+      pointer.x > this.textLeft + TEXTBOX_WIDTH - HORIZONTAL_PADDING ||
+      pointer.y < this.textTop ||
+      pointer.y > this.textTop + this.scrollbarTrackHeight ||
+      this.maxScrollOffset === 0
+    ) {
+      return
     }
+
+    this.scrollOffset = Math.max(
+      0,
+      Math.min(this.maxScrollOffset, this.scrollOffset - Math.sign(deltaY) * 3),
+    )
+    this.render()
+  }
+
+  private readonly handleScrollbarPointerDown = (pointer: Phaser.Input.Pointer): void => {
+    this.isDraggingScrollbar = true
+    this.scrollbarDragOffset = pointer.y - (this.scrollbarThumb?.y ?? this.scrollbarTrackTop)
+  }
+
+  private readonly handleScrollbarTrackPointerDown = (pointer: Phaser.Input.Pointer): void => {
+    if (this.maxScrollOffset === 0) {
+      return
+    }
+
+    this.scrollbarDragOffset = this.scrollbarThumbHeight / 2
+    this.isDraggingScrollbar = true
+    this.updateScrollFromPointer(pointer.y)
+  }
+
+  private readonly handlePointerMove = (pointer: Phaser.Input.Pointer): void => {
+    if (this.isDraggingScrollbar) {
+      this.updateScrollFromPointer(pointer.y)
+    }
+  }
+
+  private readonly handlePointerUp = (): void => {
+    this.isDraggingScrollbar = false
+  }
+
+  private updateScrollFromPointer(pointerY: number): void {
+    const thumbTravel = this.scrollbarTrackHeight - this.scrollbarThumbHeight
+    if (thumbTravel <= 0) {
+      return
+    }
+
+    const thumbTop = Math.max(
+      this.scrollbarTrackTop,
+      Math.min(this.scrollbarTrackTop + thumbTravel, pointerY - this.scrollbarDragOffset),
+    )
+    const scrollRatio = (thumbTop - this.scrollbarTrackTop) / thumbTravel
+    this.scrollOffset = Math.round((1 - scrollRatio) * this.maxScrollOffset)
+    this.render()
   }
 
   private markCursorActive(): void {
     this.cursorVisible = true
+    this.scrollOffset = 0
     this.updateCursorVisibility()
   }
 
   private updateCursorVisibility(): void {
-    this.cursorBlock?.setVisible(this.cursorVisible)
+    this.cursorBlock?.setVisible(this.cursorVisible && this.activeCursorVisible)
     const displayCursorIndex = Array.from(this.prompt).length + this.cursorIndex
-    const hasCharacterUnderCursor =
-      displayCursorIndex < Array.from(`${this.prompt}${this.value}`).length ||
+    const hasCharacterUnderCursor = displayCursorIndex < Array.from(`${this.prompt}${this.value}`).length ||
       (this.value.length === 0 && this.cursorIndex < 'help'.length)
-    this.cursorGlyph?.setVisible(this.cursorVisible && hasCharacterUnderCursor)
+    this.cursorGlyph?.setVisible(
+      this.cursorVisible && this.activeCursorVisible && hasCharacterUnderCursor,
+    )
   }
 
   private render(): void {
-    if (!this.commandText || !this.placeholderText || !this.cursorBlock || !this.cursorGlyph) {
+    if (
+      !this.commandText ||
+      !this.placeholderText ||
+      !this.cursorBlock ||
+      !this.cursorGlyph ||
+      !this.scrollbarTrack ||
+      !this.scrollbarThumb
+    ) {
       return
     }
 
-    this.placeholderText.setVisible(this.value.length === 0)
-    const characters = Array.from(`${this.prompt}${this.value}`)
-    const lines: string[] = []
+    const contentWidth = TEXTBOX_WIDTH - HORIZONTAL_PADDING * 2 - SCROLLBAR_WIDTH - SCROLLBAR_GAP
+    const fontSize = FONT_SIZE
+    const characterWidth = this.baseCharacterWidth
+    const charactersPerLine = Math.max(1, Math.floor(contentWidth / characterWidth))
+    this.characterWidth = characterWidth
+    this.charactersPerLine = charactersPerLine
+    this.visibleLineCount = VISIBLE_LINE_COUNT
+    const activeLine = `${this.prompt}${this.value}`
+    const allLines = [
+      ...this.transcript.flatMap((entry) => this.wrapText(entry, this.charactersPerLine)),
+      ...this.wrapText(activeLine, this.charactersPerLine),
+    ]
 
-    for (let index = 0; index < characters.length; index += this.charactersPerLine) {
-      lines.push(characters.slice(index, index + this.charactersPerLine).join(''))
+    const cursorPosition = Array.from(this.prompt).length + this.cursorIndex
+    const transcriptLineCount = this.transcript.flatMap((entry) =>
+      this.wrapText(entry, this.charactersPerLine),
+    ).length
+    const cursorRow = transcriptLineCount +
+      Math.floor(cursorPosition / this.charactersPerLine)
+    while (allLines.length <= cursorRow) {
+      allLines.push('')
     }
+    const cursorColumn = cursorPosition % this.charactersPerLine
+    this.maxScrollOffset = Math.max(0, allLines.length - this.visibleLineCount)
+    this.scrollOffset = Math.max(0, Math.min(this.maxScrollOffset, this.scrollOffset))
+    const firstVisibleRow = this.maxScrollOffset - this.scrollOffset
+    const visibleLines = allLines.slice(firstVisibleRow, firstVisibleRow + this.visibleLineCount)
+    const lineSpacing = LINE_SPACING
+    const cursorVisible = cursorRow >= firstVisibleRow && cursorRow < firstVisibleRow + this.visibleLineCount
+    this.activeCursorVisible = cursorVisible
 
-    if (lines.length === 0) {
-      lines.push('')
-    }
-
-    const displayCursorIndex = Array.from(this.prompt).length + this.cursorIndex
-    const cursorRow = Math.floor(displayCursorIndex / this.charactersPerLine)
-    const cursorColumn = displayCursorIndex % this.charactersPerLine
-
-    while (lines.length <= cursorRow) {
-      lines.push('')
-    }
-
-    const lastScrollRow = Math.max(0, lines.length - this.visibleLineCount)
-    const firstVisibleRow = Math.min(
-      Math.max(0, cursorRow - this.visibleLineCount + 1),
-      lastScrollRow,
-    )
-
-    this.commandText.setText(
-      lines.slice(firstVisibleRow, firstVisibleRow + this.visibleLineCount).join('\n'),
-    )
+    this.commandText.setFontSize(fontSize)
+    this.commandText.setLineSpacing(lineSpacing)
+    this.placeholderText.setVisible(this.value.length === 0 && cursorVisible)
+    this.placeholderText.setFontSize(fontSize)
+    this.placeholderText.setLineSpacing(lineSpacing)
+    this.commandText.setText(visibleLines.join('\n'))
 
     const cursorX = this.textLeft + cursorColumn * this.characterWidth
-    const cursorY = this.textTop + (cursorRow - firstVisibleRow) * LINE_HEIGHT
+    const cursorY = this.textTop + (cursorRow - firstVisibleRow) * (fontSize + lineSpacing)
     this.placeholderText.setPosition(cursorX, cursorY)
-    this.cursorBlock.setPosition(cursorX, cursorY)
+    this.cursorBlock
+      .setPosition(cursorX, cursorY)
+      .setSize(this.characterWidth, fontSize)
+      .setVisible(cursorVisible && this.cursorVisible)
     this.cursorGlyph.setPosition(cursorX, cursorY)
+    this.cursorGlyph.setFontSize(fontSize)
+    this.cursorGlyph.setLineSpacing(lineSpacing)
     this.cursorGlyph.setText(
-      this.value.length === 0 ? 'help'[this.cursorIndex] ?? '' : characters[displayCursorIndex] ?? '',
+      this.value.length === 0 ? 'help'[this.cursorIndex] ?? '' : Array.from(this.value)[this.cursorIndex] ?? '',
     )
+    const trackX = this.textLeft + contentWidth + SCROLLBAR_GAP + SCROLLBAR_WIDTH / 2
+    this.scrollbarTrack
+      .setPosition(trackX, this.scrollbarTrackTop)
+      .setVisible(this.maxScrollOffset > 0)
+    this.scrollbarThumb
+      .setPosition(trackX, this.scrollbarTrackTop)
+      .setVisible(this.maxScrollOffset > 0)
+
+    if (this.maxScrollOffset > 0) {
+      this.scrollbarThumbHeight = Math.max(
+        MIN_SCROLLBAR_THUMB_HEIGHT,
+        this.scrollbarTrackHeight * this.visibleLineCount / allLines.length,
+      )
+      const thumbTravel = this.scrollbarTrackHeight - this.scrollbarThumbHeight
+      const thumbTop = this.scrollbarTrackTop +
+        (1 - this.scrollOffset / this.maxScrollOffset) * thumbTravel
+      this.scrollbarThumb
+        .setPosition(trackX, thumbTop)
+        .setSize(SCROLLBAR_WIDTH, this.scrollbarThumbHeight)
+    } else {
+      this.scrollbarThumbHeight = this.scrollbarTrackHeight
+      this.scrollbarThumb.setSize(SCROLLBAR_WIDTH, this.scrollbarTrackHeight)
+    }
+
     this.updateCursorVisibility()
+  }
+
+  private wrapText(text: string, charactersPerLine: number): string[] {
+    return text.split(/\r?\n/).flatMap((line) => {
+      if (line.length === 0) {
+        return ['']
+      }
+
+      const wrappedLines: string[] = []
+      for (let index = 0; index < line.length; index += charactersPerLine) {
+        wrappedLines.push(line.slice(index, index + charactersPerLine))
+      }
+      return wrappedLines
+    })
   }
 
   private measureCharacterWidth(): number {

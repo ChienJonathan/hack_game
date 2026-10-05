@@ -3,7 +3,6 @@ import textboxImageUrl from '../../assets/game/ui/textbox.png'
 import type { GameSession } from '../application/GameSession.ts'
 import { createRoom1Session } from '../content/createRoom1Session.ts'
 import { ROOM_IDS, ROOM_NAMES } from '../content/room1.ts'
-import { PhaserFeedbackView } from '../presentation/PhaserFeedbackView.ts'
 import { PhaserGameOutcomePanel } from '../presentation/PhaserGameOutcomePanel.ts'
 import { PhaserRoomView, WORLD_OBJECT_TEXTURE_URLS } from '../presentation/PhaserRoomView.ts'
 import { COMMAND_INPUT_TEXTURE_KEY, PhaserCommandInputView } from '../presentation/PhaserCommandInputView.ts'
@@ -12,7 +11,6 @@ export class GameScene extends Phaser.Scene {
   private session!: GameSession
   private commandInputView: PhaserCommandInputView | undefined
   private readonly roomView = new PhaserRoomView()
-  private readonly feedbackView = new PhaserFeedbackView()
   private outcomePanel: PhaserGameOutcomePanel | undefined
 
   constructor() {
@@ -30,7 +28,6 @@ export class GameScene extends Phaser.Scene {
     this.session = createRoom1Session()
     const worldState = this.session.getWorldState()
     this.roomView.mount(this, worldState)
-    this.feedbackView.mount(this)
     this.outcomePanel = new PhaserGameOutcomePanel(this)
 
     const commandInputView = new PhaserCommandInputView()
@@ -38,19 +35,18 @@ export class GameScene extends Phaser.Scene {
     commandInputView.setPrompt(this.promptForRoom(worldState.currentRoomId))
     commandInputView.mount(this, (rawText) => {
       const result = this.session.submitCommand(rawText)
-      const feedback = result.status === 'success'
-        ? result.feedback[result.feedback.length - 1]
-        : result.feedback
+      const feedbackList = result.status === 'success'
+        ? result.feedback
+        : [result.feedback]
 
-      if (feedback) {
-        this.feedbackView.present(feedback)
+      for (const feedback of feedbackList) {
+        this.commandInputView?.appendOutput(feedback.text)
       }
     })
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       commandInputView.destroy()
       this.roomView.destroy()
-      this.feedbackView.destroy()
       this.outcomePanel?.destroy()
       this.outcomePanel = undefined
       if (this.commandInputView === commandInputView) {
