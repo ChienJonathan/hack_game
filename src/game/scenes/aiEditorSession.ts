@@ -1,6 +1,6 @@
 import { GameSession } from '../application/GameSession.ts'
 import { InputModeController } from '../application/InputModeController.ts'
-import { WORLD_OBJECT_IDS, ROOM_LAYOUT } from '../content/room1Constants.ts'
+import { WORLD_OBJECT_IDS, ROOM_LAYOUT, PROCESS_IDS } from '../content/room1Constants.ts'
 import { createRoom1CommandSubmissionService } from '../content/room1Commands.ts'
 import { createInitialWorldState } from '../content/room1WorldState.ts'
 import { ROOM1_OBJECTS, type RoomObjectConfig } from '../content/room1.ts'
@@ -8,6 +8,7 @@ import { BasicWorldObject } from '../domain/BasicWorldObject.ts'
 import { CombatService } from '../domain/CombatService.ts'
 import { PickUpService } from '../domain/PickUpService.ts'
 import type { WorldState } from '../domain/WorldState.ts'
+import type { MutableJsonValue } from '../domain/JsonValue.ts'
 import { JsonWorldStateCodec } from '../persistence/JsonWorldStateCodec.ts'
 import { LocalStorageSaveRepository } from '../persistence/LocalStorageSaveRepository.ts'
 import { INPUT_BINDINGS } from '../presentation/InputBindings.ts'
@@ -31,6 +32,7 @@ export interface AiEditorSessionBundle {
   worldState: WorldState
   btProcess: BehaviorTreeProcess
   targetGuardId: string
+  setTargetGuard: (guardId: string) => boolean
   setTree: (tree: BehaviorTreeDef) => void
   getTree: () => BehaviorTreeDef
   getNodeStatuses: () => ReadonlyMap<string, BehaviorTreeStatus>
@@ -152,27 +154,77 @@ export function createAiEditorSession(options?: {
       pState.alive = true
     }
 
-    // Reset target guard
-    const guardObj = worldState.worldObjects.find((o) => o.id === targetGuardId)
-    const initialGuardCfg = sourceObjects.find((o) => o.id === targetGuardId)
-    if (guardObj) {
-      const gState = guardObj.state as Record<string, unknown>
-      gState.x = initialGuardCfg?.x ?? ROOM_LAYOUT.guardStart.x
-      gState.y = initialGuardCfg?.y ?? ROOM_LAYOUT.guardStart.y
-      const maxHp = options?.bossMaxHealth ?? initialGuardCfg?.maxHealth ?? 100
-      gState.health = maxHp
-      gState.maxHealth = maxHp
-      gState.alive = true
-      gState.alerted = false
-      gState.chasing = false
-      gState.attacking = false
-      gState.attackCooldownMs = 0
-      gState.behaviorTree = btProcess.getTree()
+    // Reset all guards
+    for (const guardObj of worldState.worldObjects) {
+      if (guardObj.metadata.role === 'guard') {
+        const initialGuardCfg = sourceObjects.find((o) => o.id === guardObj.id)
+        const gState = guardObj.state as Record<string, unknown>
+        gState.x = initialGuardCfg?.x ?? ROOM_LAYOUT.guardStart.x
+        gState.y = initialGuardCfg?.y ?? ROOM_LAYOUT.guardStart.y
+        const maxHp = options?.bossMaxHealth ?? initialGuardCfg?.maxHealth ?? 100
+        gState.health = maxHp
+        gState.maxHealth = maxHp
+        gState.alive = true
+        gState.alerted = false
+        gState.chasing = false
+        gState.attacking = false
+        gState.attackCooldownMs = 0
+        if (guardObj.id === currentTargetGuardId) {
+          gState.behaviorTree = btProcess.getTree()
+        }
+      }
     }
   }
 
+  let currentTargetGuardId = targetGuardId
+
+  const setTargetGuard = (newGuardId: string): boolean => {
+    const newGuard = worldState.worldObjects.find((o) => o.id === newGuardId)
+    if (!newGuard || newGuard.metadata.role !== 'guard') {
+      return false
+    }
+
+    const prevId = currentTargetGuardId
+    worldState.worldObjects = worldState.worldObjects.map((obj) => {
+      if (obj.id === prevId) {
+        const oldState = obj.state as Record<string, unknown>
+        delete oldState.behaviorTree
+        oldState.chasing = false
+        oldState.attacking = false
+        oldState.alerted = false
+        return new BasicWorldObject(
+          obj.id,
+          obj.roomId,
+          obj.metadata,
+          [{ condition: { kind: 'always' }, processDefinitionId: PROCESS_IDS.guard }],
+          oldState as unknown as MutableJsonValue,
+        )
+      }
+      if (obj.id === newGuardId) {
+        const newState = obj.state as Record<string, unknown>
+        newState.behaviorTree = btProcess.getTree()
+        return new BasicWorldObject(
+          obj.id,
+          obj.roomId,
+          obj.metadata,
+          [{ condition: { kind: 'always' }, processDefinitionId: BEHAVIOR_TREE_PROCESS_ID }],
+          newState as unknown as MutableJsonValue,
+        )
+      }
+      return obj
+    })
+
+    // Remove old guard's behavior tree process instance so blackboard state does not leak
+    worldState.processInstances = worldState.processInstances.filter(
+      (inst) => inst.ownerObjectId !== prevId || inst.definitionId !== BEHAVIOR_TREE_PROCESS_ID,
+    )
+
+    currentTargetGuardId = newGuardId
+    return true
+  }
+
   const damageBoss = (amount: number) => {
-    const guardObj = worldState.worldObjects.find((o) => o.id === targetGuardId)
+    const guardObj = worldState.worldObjects.find((o) => o.id === currentTargetGuardId)
     if (guardObj) {
       const gState = guardObj.state as { health: number; maxHealth: number; alive: boolean }
       gState.health = Math.max(1, gState.health - amount)
@@ -180,7 +232,7 @@ export function createAiEditorSession(options?: {
   }
 
   const healBoss = (amount: number) => {
-    const guardObj = worldState.worldObjects.find((o) => o.id === targetGuardId)
+    const guardObj = worldState.worldObjects.find((o) => o.id === currentTargetGuardId)
     if (guardObj) {
       const gState = guardObj.state as { health: number; maxHealth: number; alive: boolean }
       gState.health = Math.min(gState.maxHealth, gState.health + amount)
@@ -196,10 +248,13 @@ export function createAiEditorSession(options?: {
     session,
     worldState,
     btProcess,
-    targetGuardId,
+    get targetGuardId() {
+      return currentTargetGuardId
+    },
+    setTargetGuard,
     setTree: (tree: BehaviorTreeDef) => {
       btProcess.setTree(tree)
-      const guardObj = worldState.worldObjects.find((o) => o.id === targetGuardId)
+      const guardObj = worldState.worldObjects.find((o) => o.id === currentTargetGuardId)
       if (guardObj) {
         ;(guardObj.state as Record<string, unknown>).behaviorTree = tree
       }

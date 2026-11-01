@@ -31,6 +31,7 @@ import { createAiEditorSession, type AiEditorSessionBundle } from './aiEditorSes
 import { ROOM1_OBJECTS } from '../content/room1.ts'
 import { generateRoom1Source } from '../content/room1Serializer.ts'
 import type { WorldState } from '../domain/WorldState.ts'
+import type { WorldObject } from '../domain/WorldObject.ts'
 
 const FONT_FAMILY = '"Press Start 2P", monospace'
 const TEXT_COLOR = '#d6d6d6'
@@ -167,7 +168,7 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
     this.setupInputHandlers()
     this.refreshTreeVisuals()
     this.refreshInspector()
-    this.showStatus('AI Chamber active · Select a node to inspect or edit.')
+    this.showStatus('Room 1 AI Chamber loaded. Arrows: Move player · Click enemy to preview AI · P: Toggle Panel.')
   }
 
   update(_time: number, delta: number): void {
@@ -340,6 +341,25 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
     const renderPos = this.sessionBundle.session.getRenderPosition(targetGuard.id) ?? { x: gState.x, y: gState.y }
     const pRenderPos = this.sessionBundle.session.getRenderPosition(player.id) ?? { x: pState.x, y: pState.y }
 
+    // Active preview enemy highlight ring (yellow)
+    this.roomOverlayGraphics.lineStyle(2, 0xffea00, 0.75)
+    this.roomOverlayGraphics.strokeCircle(renderPos.x, renderPos.y, 48)
+
+    // Other non-target enemies: show subtle clickable preview ring
+    for (const obj of this.worldState.worldObjects) {
+      if (obj.metadata.role === 'guard' && obj.id !== targetGuard.id) {
+        const oState = obj.state as Record<string, unknown>
+        if (oState.alive !== false) {
+          const pos = this.sessionBundle.session.getRenderPosition(obj.id) ?? {
+            x: typeof oState.x === 'number' ? oState.x : 0,
+            y: typeof oState.y === 'number' ? oState.y : 0,
+          }
+          this.roomOverlayGraphics.lineStyle(1, 0x78909c, 0.4)
+          this.roomOverlayGraphics.strokeCircle(pos.x, pos.y, 36)
+        }
+      }
+    }
+
     // Detection range ring (cyan)
     this.roomOverlayGraphics.lineStyle(2, 0x00bcd4, 0.35)
     this.roomOverlayGraphics.strokeCircle(renderPos.x, renderPos.y, 380)
@@ -363,7 +383,7 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
     } else if (gState.alerted) {
       actionLabel = '[ALERTED]'
     }
-    this.overheadActionTag.setText(actionLabel)
+    this.overheadActionTag.setText(`[${targetGuard.id.toUpperCase()}] ${actionLabel}`)
     this.overheadActionTag.setPosition(renderPos.x, renderPos.y - 78)
 
     // Update inspector telemetry text
@@ -729,7 +749,7 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
       .text(
         960,
         1048,
-        'Arrows: Move player · Click Room: Teleport player · Drag canvas: Pan tree',
+        'Arrows: Move player · Click enemy: Preview AI · Drag canvas: Pan tree',
         {
           fontFamily: FONT_FAMILY,
           fontSize: 13,
@@ -1210,7 +1230,7 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown', this.handleKeyDown)
     this.input.keyboard?.on('keyup', this.handleKeyUp)
 
-    // Click anywhere in Room 1 (y: 80..700, x: 96..1824) to reposition player
+    // Click in Room 1 area (y: 80..700, x: 96..1824) to preview AI with the clicked enemy
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (
         pointer.y >= ROOM_LAYOUT.top &&
@@ -1218,13 +1238,9 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
         pointer.x >= ROOM_LAYOUT.left &&
         pointer.x <= ROOM_LAYOUT.right
       ) {
-        const playerObj = this.worldState.worldObjects.find((o) => o.id === WORLD_OBJECT_IDS.player)
-        if (playerObj) {
-          const pState = playerObj.state as { x: number; y: number; vx: number; vy: number }
-          pState.x = pointer.x
-          pState.y = pointer.y
-          pState.vx = 0
-          pState.vy = 0
+        const clickedEnemy = this.findEnemyAtPointer(pointer.x, pointer.y)
+        if (clickedEnemy) {
+          this.previewAiWithEnemy(clickedEnemy.id)
         }
       }
     })
@@ -1241,6 +1257,58 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
       this.nodeViews.clear()
       this.presetButtons = []
     })
+  }
+
+  private findEnemyAtPointer(x: number, y: number): WorldObject | undefined {
+    let closestEnemy: WorldObject | undefined
+    let minDistance = Infinity
+
+    for (const obj of this.worldState.worldObjects) {
+      if (obj.metadata.role !== 'guard' && !obj.id.startsWith('guard')) {
+        continue
+      }
+      const gState = obj.state as Record<string, unknown>
+      if (gState.alive === false) {
+        continue
+      }
+      const renderPos = this.sessionBundle.session.getRenderPosition(obj.id)
+      const gx = renderPos?.x ?? (typeof gState.x === 'number' ? gState.x : 0)
+      const gy = renderPos?.y ?? (typeof gState.y === 'number' ? gState.y : 0)
+
+      const dw = typeof gState.displayWidth === 'number' ? gState.displayWidth : 176
+      const dh = typeof gState.displayHeight === 'number' ? gState.displayHeight : 176
+      const halfW = Math.max(35, dw / 2)
+      const halfH = Math.max(35, dh / 2)
+      const hitPadding = 25
+
+      const isInside =
+        x >= gx - halfW - hitPadding &&
+        x <= gx + halfW + hitPadding &&
+        y >= gy - halfH - hitPadding &&
+        y <= gy + halfH + hitPadding
+
+      const dist = Math.hypot(x - gx, y - gy)
+      if (isInside || dist <= Math.max(halfW, halfH, 60)) {
+        if (dist < minDistance) {
+          minDistance = dist
+          closestEnemy = obj
+        }
+      }
+    }
+
+    return closestEnemy
+  }
+
+  private previewAiWithEnemy(guardId: string): void {
+    if (this.sessionBundle.targetGuardId === guardId) {
+      this.showStatus(`Already previewing AI with ${guardId}.`)
+      return
+    }
+    const switched = this.sessionBundle.setTargetGuard(guardId)
+    if (switched) {
+      this.updateRoomOverlayVisuals()
+      this.showStatus(`Previewing AI with ${guardId}!`)
+    }
   }
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {

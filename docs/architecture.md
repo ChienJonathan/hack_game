@@ -242,9 +242,9 @@ Each node evaluates to one of three statuses per simulation tick:
 
 1. **Upper Live Room Chamber (`y = 80..700`)**:
    - Reuses Room 1 layout and `PhaserRoomView` directly, running domain physics and combat in real-time inside `GameSession`.
-   - Control player with Arrow keys or click anywhere in the room view to reposition the player for situational testing.
-   - Live visual detection radius (cyan ring, 380px) and attack reach (red ring, 60px) rendered around the boss/guard in room coordinates.
-   - Overhead action tags (`[CHASING]`, `[ENRAGED CHASE]`, `[ALERTED]`, `[IDLE]`) floating above the boss entity.
+   - Control player with Arrow keys. Click any enemy in the room (`guard`, `guard-2`, `guard-3`) to preview the AI Behavior Tree with that clicked enemy.
+   - Live visual detection radius (cyan ring, 380px), attack reach (red ring, 60px), and active target ring rendered around the selected enemy in room coordinates.
+   - Overhead action tags (`[GUARD] [CHASING]`, `[ALERTED]`, etc.) floating above the previewed enemy entity.
    - All standard Room 1 entities and obstacles rendered with full interpolation.
 
 2. **Top Navigation & Simulation Toolbar (`y = 14..62`)**:
@@ -264,7 +264,8 @@ Each node evaluates to one of three statuses per simulation tick:
 | **Open AI Editor** | **F4** (from Level Editor or Speed Editor) or **AI EDITOR (F4)** button |
 | **Return to Level Editor** | **F4** or **Escape** |
 | **Open Speed Editor** | **F3** |
-| **Move Player in Room** | **Arrow keys** or click inside room chamber to reposition |
+| **Move Player in Room** | **Arrow keys** |
+| **Preview AI with Enemy** | Click enemy in room chamber |
 | **Toggle Bottom Panel** | **P** key |
 | **Play / Pause Sim** | **Space** or `PAUSE (SPC)` button |
 | **Step Sim (+33ms)** | **T** or `STEP (T)` button |
