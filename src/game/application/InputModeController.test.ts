@@ -48,6 +48,29 @@ describe('mode switching', () => {
 
     expect(input.mode).toBe('command')
   })
+
+  it('enters command mode explicitly and idempotently', () => {
+    const input = controller()
+
+    input.enterCommandMode()
+    expect(input.mode).toBe('command')
+    expect(input.timeScale).toBe(COMMAND_MODE_TIME_SCALE)
+
+    input.enterCommandMode()
+    expect(input.mode).toBe('command')
+  })
+
+  it('enters movement mode explicitly and idempotently', () => {
+    const input = controller()
+    input.enterCommandMode()
+
+    input.enterMovementMode()
+    expect(input.mode).toBe('movement')
+    expect(input.timeScale).toBe(1)
+
+    input.enterMovementMode()
+    expect(input.mode).toBe('movement')
+  })
 })
 
 describe('movement vector', () => {

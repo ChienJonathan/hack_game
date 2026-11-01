@@ -29,12 +29,12 @@ Architecture specification for the command-driven RTS game and initial room (Vit
 
 | Mode | Time Scale | Player Control | Combat & Actions |
 |---|:---:|---|---|
-| **Movement** | 1.00 | WASD / Arrows (responsive physics) | J / Left-click: attack (auto-pickup on contact) |
+| **Movement** | 1.00 | Arrows (responsive physics) | Space / Left-click: attack (auto-pickup on contact) |
 | **Command** | 0.25 | Disabled (or latched direction) | Ignored |
 
-- **Toggle**: Enter toggles between Movement and Command Mode.
+- **Toggle & Shell Entry**: Enter toggles between Movement and Command Mode. Typing any alphabet key (`[a-zA-Z]`) while in Movement Mode directly enters Command Mode and begins typing the command.
 - **Submission**: Commands switch back to Movement Mode (unless `inputAfter` overrides).
-- **Latched Movement**: Pressing Enter while holding movement keys latches velocity until collision, room exit, or Enter; latched keys are suppressed from typing input.
+- **Latched Movement**: Pressing Enter or typing an alphabet while holding movement keys latches velocity until collision, room exit, or Enter; latched keys are suppressed from typing input.
 - **Prompt**: Displays active room path.
 
 ### Command Input Behavior
@@ -84,7 +84,7 @@ Room 1 initializes with Player Character (upper-left, named `hacker`), Dagger (l
 - Undiscovered world objects display a `?` overhead label at the top of their sprite; the player character displays `hacker` and is never `?`.
 - `ls` discovers objects in the room and reveals their `?` labels to their respective names; direct player interaction (picking up an item or attacking a guard) also marks the target object discovered, while guard movement/pursuit and guard attacks do not discover the guard.
 - `mv <label1> <label2>` throws `<label1>` towards `<label2>` (an object or room exit) with a speed (`DEFAULT_THROW_SPEED` 300 px/s), unequipping it if equipped. If `<label2>` does not exist in the room, it renames `<label1>` to `<label2>` and marks it discovered.
-- The player walks with WASD, automatically picks up the Dagger (and any items) on contact/reach, and attacks with J or left click.
+- The player walks with Arrows, automatically picks up the Dagger (and any items) on contact/reach, and attacks with Space or left click. Typing any alphabet key directly switches to Command Mode and begins entering a command.
 - Guard pursues player when player enters room's right half; attacks within Reach.
 - Player reaching 0 Health triggers `game-over`. Defeating guard stops pursuit. Reaching exit triggers `congratulations`.
 
@@ -190,7 +190,7 @@ Editable configurations export directly to `room1.ts` (`ROOM1_OBJECTS`). Objects
 
 ### Features & Runtime Behavior
 
-- **Live Tuning While Moving**: Keyboard movement runs continuously during mouse interaction, giving immediate tactile feedback on physics changes.
+- **Live Tuning While Moving**: Keyboard movement (Arrows) runs continuously during mouse interaction, giving immediate tactile feedback on physics changes.
 - **Step & Direct Input**: Parameter buttons (`+` / `−` with step sizes, Shift: 5x multiplier) or click value for exact number prompt. Clamped to minimum safe values.
 - **Live Telemetry**: Displays real-time speed (`px/s`), velocity vectors (`vx`, `vy`), input direction (`moveX`, `moveY`), and dynamic visual speedometer gauge.
 - **Reset Position**: **R** or `RESET POS (R)` snaps player to start coordinates with zero velocity for standstill acceleration trials.

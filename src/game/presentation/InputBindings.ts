@@ -16,11 +16,26 @@ export interface InputBindings {
 // Keys are lowercase `KeyboardEvent.key` values.
 export const INPUT_BINDINGS: InputBindings = {
   movement: {
-    up: ['w', 'arrowup'],
-    down: ['s', 'arrowdown'],
-    left: ['a', 'arrowleft'],
-    right: ['d', 'arrowright'],
+    up: ['arrowup'],
+    down: ['arrowdown'],
+    left: ['arrowleft'],
+    right: ['arrowright'],
   },
   toggleMode: ['enter'],
-  attack: { keys: ['j'], mouseButtons: ['left'] },
+  attack: { keys: [' ', 'space'], mouseButtons: ['left'] },
+}
+
+export function isAlphabetKey(event: {
+  key: string
+  ctrlKey?: boolean
+  altKey?: boolean
+  metaKey?: boolean
+}): boolean {
+  return (
+    event.key.length === 1 &&
+    /^[a-zA-Z]$/.test(event.key) &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    !event.metaKey
+  )
 }

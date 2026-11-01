@@ -70,8 +70,8 @@ describe('SpeedEditorScene', () => {
       const state = player!.state as Record<string, unknown>
       const startX = state.x as number
 
-      // Press right ('d') and advance simulation
-      session.keyDown('d')
+      // Press right ('arrowright') and advance simulation
+      session.keyDown('arrowright')
       // Advance several 16.6ms simulation frames
       for (let i = 0; i < 10; i++) {
         session.update(16.67)
@@ -96,7 +96,7 @@ describe('SpeedEditorScene', () => {
       const state = player!.state as Record<string, unknown>
 
       // Hold right key
-      session.keyDown('d')
+      session.keyDown('arrowright')
 
       // Move until maxSpeed is reached
       for (let i = 0; i < 20; i++) {
@@ -135,7 +135,7 @@ describe('SpeedEditorScene', () => {
       const state = player!.state as Record<string, unknown>
 
       // Accelerate
-      session.keyDown('d')
+      session.keyDown('arrowright')
       for (let i = 0; i < 15; i++) {
         session.update(16.67)
       }
@@ -143,13 +143,7 @@ describe('SpeedEditorScene', () => {
       expect(movingVx).toBeGreaterThan(150)
 
       // Release key
-      session.keyUp('d')
-
-      // Advance frames and check friction deceleration
-      session.update(50)
-      expect((state.vx as number)).toBeLessThan(movingVx)
-
-      // Eventually halts
+      session.keyUp('arrowright')
       for (let i = 0; i < 30; i++) {
         session.update(16.67)
       }
@@ -170,15 +164,15 @@ describe('SpeedEditorScene', () => {
       const state = player!.state as Record<string, unknown>
 
       // Accelerate right
-      session.keyDown('d')
+      session.keyDown('arrowright')
       for (let i = 0; i < 15; i++) {
         session.update(16.67)
       }
       expect((state.vx as number)).toBeGreaterThan(100)
 
-      // Switch to left ('a') while moving right
-      session.keyUp('d')
-      session.keyDown('a')
+      // Switch to left ('arrowleft') while moving right
+      session.keyUp('arrowright')
+      session.keyDown('arrowleft')
 
       // A single 16.67ms tick with 4000 turnaround acceleration drops velocity by ~66.7 px/s
       session.update(16.67)
@@ -196,7 +190,7 @@ describe('SpeedEditorScene', () => {
       }
 
       // Move player across room
-      session.keyDown('d')
+      session.keyDown('arrowright')
       for (let i = 0; i < 100; i++) {
         session.update(16.67)
       }

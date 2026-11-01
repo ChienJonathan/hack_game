@@ -3,7 +3,7 @@ import textboxImageUrl from '../../assets/game/ui/textbox.png'
 import type { GameSession } from '../application/GameSession.ts'
 import { createRoom1Session } from '../content/createRoom1Session.ts'
 import { ROOM_IDS, ROOM_NAMES } from '../content/room1Constants.ts'
-import { INPUT_BINDINGS } from '../presentation/InputBindings.ts'
+import { INPUT_BINDINGS, isAlphabetKey } from '../presentation/InputBindings.ts'
 import { PhaserGameOutcomePanel } from '../presentation/PhaserGameOutcomePanel.ts'
 import { PhaserRoomView, WORLD_OBJECT_TEXTURE_URLS } from '../presentation/PhaserRoomView.ts'
 import { COMMAND_INPUT_TEXTURE_KEY, PhaserCommandInputView } from '../presentation/PhaserCommandInputView.ts'
@@ -94,25 +94,39 @@ export class GameScene extends Phaser.Scene {
     }
 
     const key = event.key.toLowerCase()
-    const { typeable } = this.session.keyDown(key)
 
-    if (this.session.inputMode === 'command') {
-      return typeable
-    }
+    if (this.session.inputMode === 'movement') {
+      if (INPUT_BINDINGS.toggleMode.includes(key)) {
+        event.preventDefault()
+        if (!event.repeat) {
+          this.session.toggleInputMode()
+          this.commandInputView?.setInputEnabled(true)
+        }
+        return false
+      }
 
-    event.preventDefault()
-    if (event.repeat) {
+      if (INPUT_BINDINGS.attack.keys.includes(key)) {
+        event.preventDefault()
+        if (!event.repeat) {
+          this.session.attack()
+        }
+        return false
+      }
+
+      if (isAlphabetKey(event)) {
+        this.session.enterCommandMode()
+        this.commandInputView?.setInputEnabled(true)
+        const { typeable } = this.session.keyDown(key)
+        return typeable
+      }
+
+      this.session.keyDown(key)
+      event.preventDefault()
       return false
     }
 
-    if (INPUT_BINDINGS.toggleMode.includes(key)) {
-      this.session.toggleInputMode()
-      this.commandInputView?.setInputEnabled(true)
-    } else if (INPUT_BINDINGS.attack.keys.includes(key)) {
-      this.session.attack()
-    }
-
-    return false
+    const { typeable } = this.session.keyDown(key)
+    return typeable
   }
 
   private readonly handleKeyUp = (event: KeyboardEvent): void => {

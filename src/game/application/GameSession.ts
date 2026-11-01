@@ -40,6 +40,16 @@ export class GameSession {
     this.syncTimeScale()
   }
 
+  enterCommandMode(): void {
+    this.dependencies.inputMode.enterCommandMode()
+    this.syncTimeScale()
+  }
+
+  enterMovementMode(): void {
+    this.dependencies.inputMode.enterMovementMode()
+    this.syncTimeScale()
+  }
+
   keyDown(key: string): { typeable: boolean } {
     return this.dependencies.inputMode.keyDown(key)
   }

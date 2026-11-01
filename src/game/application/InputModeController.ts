@@ -39,6 +39,24 @@ export class InputModeController {
     }
   }
 
+  enterCommandMode(): void {
+    if (this.currentMode === 'command') {
+      return
+    }
+    this.latchedVector = this.heldVector()
+    this.suppressedKeys = new Set(this.heldKeys)
+    this.currentMode = 'command'
+  }
+
+  enterMovementMode(): void {
+    if (this.currentMode === 'movement') {
+      return
+    }
+    this.latchedVector = STILL
+    this.suppressedKeys.clear()
+    this.currentMode = 'movement'
+  }
+
   finishCommand(inputAfter: InputMode = 'movement'): void {
     if (inputAfter === 'movement' && this.currentMode === 'command') {
       this.enterMovementMode()
@@ -62,18 +80,6 @@ export class InputModeController {
 
   moveVector(): MoveVector {
     return this.currentMode === 'command' ? this.latchedVector : this.heldVector()
-  }
-
-  private enterCommandMode(): void {
-    this.latchedVector = this.heldVector()
-    this.suppressedKeys = new Set(this.heldKeys)
-    this.currentMode = 'command'
-  }
-
-  private enterMovementMode(): void {
-    this.latchedVector = STILL
-    this.suppressedKeys.clear()
-    this.currentMode = 'movement'
   }
 
   private heldVector(): MoveVector {

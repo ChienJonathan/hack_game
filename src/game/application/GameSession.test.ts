@@ -3,6 +3,7 @@ import { createRoom1Session } from '../content/createRoom1Session.ts'
 import { ROOM_IDS, ROOM_LAYOUT, WORLD_OBJECT_IDS } from '../content/room1Constants.ts'
 import type { CharacterState } from '../domain/CharacterState.ts'
 import { getMutableWorldObjectState } from '../domain/WorldObjectState.ts'
+import { INPUT_BINDINGS } from '../presentation/InputBindings.ts'
 import { SIMULATION_TICK_MS } from '../simulation/TickSimulationEngine.ts'
 import type { GameSession } from './GameSession.ts'
 
@@ -406,5 +407,41 @@ describe('render position', () => {
     expect(renderPos).toBeDefined()
     expect(renderPos!).toBeGreaterThan(startX)
     expect(renderPos!).toBeLessThan(player.x)
+  })
+})
+
+describe('input bindings and mode switching', () => {
+  it('INPUT_BINDINGS movement only includes arrow keys and no WASD', () => {
+    expect(INPUT_BINDINGS.movement.up).toEqual(['arrowup'])
+    expect(INPUT_BINDINGS.movement.down).toEqual(['arrowdown'])
+    expect(INPUT_BINDINGS.movement.left).toEqual(['arrowleft'])
+    expect(INPUT_BINDINGS.movement.right).toEqual(['arrowright'])
+
+    const allMovementKeys = [
+      ...INPUT_BINDINGS.movement.up,
+      ...INPUT_BINDINGS.movement.down,
+      ...INPUT_BINDINGS.movement.left,
+      ...INPUT_BINDINGS.movement.right,
+    ]
+    expect(allMovementKeys).not.toContain('w')
+    expect(allMovementKeys).not.toContain('a')
+    expect(allMovementKeys).not.toContain('s')
+    expect(allMovementKeys).not.toContain('d')
+  })
+
+  it('INPUT_BINDINGS attack includes space and left mouse button', () => {
+    expect(INPUT_BINDINGS.attack.keys).toContain(' ')
+    expect(INPUT_BINDINGS.attack.mouseButtons).toContain('left')
+  })
+
+  it('GameSession can enter and exit command mode explicitly', () => {
+    const session = newSession()
+    expect(session.inputMode).toBe('movement')
+
+    session.enterCommandMode()
+    expect(session.inputMode).toBe('command')
+
+    session.enterMovementMode()
+    expect(session.inputMode).toBe('movement')
   })
 })

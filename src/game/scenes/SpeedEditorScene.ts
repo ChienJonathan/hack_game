@@ -109,7 +109,7 @@ export class SpeedEditorScene extends Phaser.Scene {
       .text(
         960,
         1048,
-        'WASD / Arrows: Move player · Test physics while tuning · Click +/- to adjust · Click number for exact input · R: Reset position',
+        'Arrows: Move player · Test physics while tuning · Click +/- to adjust · Click number for exact input · R: Reset position',
         {
           fontFamily: FONT_FAMILY,
           fontSize: 13,
