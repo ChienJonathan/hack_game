@@ -57,7 +57,7 @@ export class PhaserRoomView {
   private doorLabel: Phaser.GameObjects.Text | undefined
   private healthBars: Phaser.GameObjects.Graphics | undefined
 
-  mount(scene: Phaser.Scene, state: WorldState): void {
+  mount(scene: Phaser.Scene, state: WorldState, showRoomTitle = (scene.scene?.key === 'game')): void {
     this.destroy()
 
     this.roomFrame = scene.add.graphics().setDepth(0)
@@ -101,14 +101,16 @@ export class PhaserRoomView {
       .setOrigin(0.5)
       .setDepth(2)
 
-    this.roomTitle = scene.add
-      .text(ROOM_LAYOUT.left + 8, ROOM_LAYOUT.top - 38, '', {
-        fontFamily: '"Press Start 2P", monospace',
-        fontSize: 24,
-        color: TEXT_COLOR,
-      })
-      .setOrigin(0, 0.5)
-      .setDepth(2)
+    if (showRoomTitle) {
+      this.roomTitle = scene.add
+        .text(ROOM_LAYOUT.left + 8, ROOM_LAYOUT.top - 38, '', {
+          fontFamily: '"Press Start 2P", monospace',
+          fontSize: 24,
+          color: TEXT_COLOR,
+        })
+        .setOrigin(0, 0.5)
+        .setDepth(2)
+    }
 
     for (const worldObject of state.worldObjects) {
       const textureKey = this.textureKeyFor(worldObject)

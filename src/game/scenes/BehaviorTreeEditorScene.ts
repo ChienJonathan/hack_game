@@ -66,6 +66,7 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
   private readonly roomView = new PhaserRoomView()
   private currentTree: BehaviorTreeDef = cloneBehaviorTree(BOSS_CYBER_ENFORCER_TREE)
   private selectedNodeId: string | null = null
+  private presetButtons: { bg: Phaser.GameObjects.Rectangle; id: string }[] = []
 
   // Simulation controls
   private isSimRunning = true
@@ -129,6 +130,7 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.presetButtons = []
     this.selectedNodeId = this.currentTree.root.id
     this.isSimRunning = true
     this.isPanelVisible = true
@@ -165,7 +167,7 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
     this.setupInputHandlers()
     this.refreshTreeVisuals()
     this.refreshInspector()
-    this.showStatus('Room 1 AI Chamber loaded. Arrows: Move player · Click Room to teleport player · P: Toggle Panel.')
+    this.showStatus('AI Chamber active · Select a node to inspect or edit.')
   }
 
   update(_time: number, delta: number): void {
@@ -187,31 +189,60 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
   // ─────────────────────────────────────────────────────────────
 
   private buildTopNavigationBar(): void {
+    // Row 1: Title (left) & Navigation Hints (right)
     this.headerText = this.add
-      .text(40, 20, 'AI BEHAVIOR TREE EDITOR — Room 1 Live Environment', {
+      .text(40, 14, 'AI BEHAVIOR TREE EDITOR — Room 1 Live Environment', {
         fontFamily: FONT_FAMILY,
-        fontSize: 15,
+        fontSize: 14,
         color: ACCENT_COLOR,
       })
       .setOrigin(0, 0)
       .setDepth(50)
 
-    // Preset selector buttons
-    const presetStartX = 690
-    const presetWidth = 135
+    this.add
+      .text(1880, 14, 'P: Panel · F3: Speed · F4 / ESC: Level · F2: Game', {
+        fontFamily: FONT_FAMILY,
+        fontSize: 12,
+        color: DIM_COLOR,
+      })
+      .setOrigin(1, 0)
+      .setDepth(50)
+
+    // Row 2: Preset selector buttons (left) & Sim playback controls (right)
+    this.add
+      .text(40, 48, 'PRESETS:', {
+        fontFamily: FONT_FAMILY,
+        fontSize: 10,
+        color: DIM_COLOR,
+      })
+      .setOrigin(0, 0.5)
+      .setDepth(50)
+
+    const presetNames: Record<string, string> = {
+      'standard-guard': 'STD GUARD',
+      'patrol-guard': 'PATROL GUARD',
+      'boss-cyber-enforcer': 'CYBER BOSS',
+      'hit-and-run': 'HIT & RUN',
+      'tank-boss': 'TANK BOSS',
+    }
+
+    const presetStartX = 175
+    const presetWidth = 125
     PRESET_BEHAVIOR_TREES.forEach((preset, index) => {
       const btnX = presetStartX + index * (presetWidth + 8)
       const isSelected = preset.id === this.currentTree.id
 
       const btnBg = this.add
-        .rectangle(btnX, 28, presetWidth, 30, isSelected ? 0x00838f : 0x263238, 1)
+        .rectangle(btnX, 48, presetWidth, 26, isSelected ? 0x00838f : 0x263238, 1)
         .setStrokeStyle(1, isSelected ? 0x00e5ff : 0x455a64, 1)
         .setInteractive({ useHandCursor: true })
         .setDepth(50)
 
-      const shortName = preset.name.replace(' (2-Phase)', '').replace(' (Shield & Recovery)', '')
+      this.presetButtons.push({ bg: btnBg, id: preset.id })
+
+      const displayName = presetNames[preset.id] ?? preset.name.substring(0, 10).toUpperCase()
       this.add
-        .text(btnX, 28, shortName.length > 13 ? shortName.substring(0, 12) + '…' : shortName, {
+        .text(btnX, 48, displayName, {
           fontFamily: FONT_FAMILY,
           fontSize: 9,
           color: '#ffffff',
@@ -224,18 +255,18 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
       })
     })
 
-    // Sim control buttons
-    const simStartX = 1440
+    // Sim control buttons placed on the right of Row 2
+    const simStartX = 1555
 
     // Play / Pause
     const playPauseBg = this.add
-      .rectangle(simStartX, 28, 110, 30, 0x1b5e20, 1)
+      .rectangle(simStartX, 48, 108, 26, 0x1b5e20, 1)
       .setStrokeStyle(1, 0x00e676, 1)
       .setInteractive({ useHandCursor: true })
       .setDepth(50)
 
     this.playPauseButtonText = this.add
-      .text(simStartX, 28, 'PAUSE (SPC)', {
+      .text(simStartX, 48, 'PAUSE (SPC)', {
         fontFamily: FONT_FAMILY,
         fontSize: 9,
         color: '#ffffff',
@@ -247,13 +278,13 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
 
     // Step button
     const stepBg = this.add
-      .rectangle(simStartX + 95, 28, 70, 30, 0x37474f, 1)
+      .rectangle(simStartX + 95, 48, 68, 26, 0x37474f, 1)
       .setStrokeStyle(1, 0x78909c, 1)
       .setInteractive({ useHandCursor: true })
       .setDepth(50)
 
     this.add
-      .text(simStartX + 95, 28, 'STEP (T)', {
+      .text(simStartX + 95, 48, 'STEP (T)', {
         fontFamily: FONT_FAMILY,
         fontSize: 9,
         color: '#eceff1',
@@ -265,13 +296,13 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
 
     // Reset Sim button
     const resetBg = this.add
-      .rectangle(simStartX + 175, 28, 80, 30, 0xb71c1c, 1)
+      .rectangle(simStartX + 175, 48, 78, 26, 0xb71c1c, 1)
       .setStrokeStyle(1, 0xff5252, 1)
       .setInteractive({ useHandCursor: true })
       .setDepth(50)
 
     this.add
-      .text(simStartX + 175, 28, 'RESET (R)', {
+      .text(simStartX + 175, 48, 'RESET (R)', {
         fontFamily: FONT_FAMILY,
         fontSize: 9,
         color: '#ffffff',
@@ -280,16 +311,6 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
       .setDepth(51)
 
     resetBg.on('pointerdown', () => this.resetPositions())
-
-    // Top Right Navigation Hints
-    this.add
-      .text(1880, 20, 'P: Panel · R: Reset · F2: Game · F3: Speed · F4 / ESC: Level', {
-        fontFamily: FONT_FAMILY,
-        fontSize: 12,
-        color: DIM_COLOR,
-      })
-      .setOrigin(1, 0)
-      .setDepth(50)
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -405,6 +426,9 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
     this.treeContainer = this.add.container(20, 42)
     this.treeGraphics = this.add.graphics()
     this.treeContainer.add(this.treeGraphics)
+    const treeMaskGraphics = this.make.graphics({})
+    treeMaskGraphics.fillRect(PANEL_X + 10, PANEL_Y + 38, 610, PANEL_HEIGHT - 48)
+    this.treeContainer.setMask(treeMaskGraphics.createGeometryMask())
     items.push(this.treeContainer)
 
     // Pan zone for tree graph
@@ -600,6 +624,7 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
         fontFamily: FONT_FAMILY,
         fontSize: 10,
         color: VALUE_COLOR,
+        wordWrap: { width: 540 },
       })
     items.push(this.statusBannerText)
 
@@ -613,24 +638,24 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
     items.push(col3Title)
 
     this.inspectorTitleText = this.add
-      .text(1230, 42, 'No node selected', {
+      .text(1230, 38, 'No node selected', {
         fontFamily: FONT_FAMILY,
-        fontSize: 12,
+        fontSize: 11,
         color: VALUE_COLOR,
       })
     items.push(this.inspectorTitleText)
 
     this.inspectorDetailsText = this.add
-      .text(1230, 66, '', {
+      .text(1230, 58, '', {
         fontFamily: FONT_FAMILY,
         fontSize: 9,
         color: DIM_COLOR,
-        lineSpacing: 3,
+        lineSpacing: 2,
       })
     items.push(this.inspectorDetailsText)
 
     this.inspectorStatusText = this.add
-      .text(1230, 102, '', {
+      .text(1230, 82, '', {
         fontFamily: FONT_FAMILY,
         fontSize: 10,
         color: TEXT_COLOR,
@@ -638,18 +663,18 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
     items.push(this.inspectorStatusText)
 
     this.inspectorTelemetryText = this.add
-      .text(1230, 126, '', {
+      .text(1230, 106, '', {
         fontFamily: FONT_FAMILY,
-        fontSize: 10,
+        fontSize: 9.5,
         color: ACCENT_COLOR,
-        lineSpacing: 4,
+        lineSpacing: 3,
       })
     items.push(this.inspectorTelemetryText)
 
     // Testing and action buttons
     const dmgBtn = this.createButton(
       1295,
-      194,
+      196,
       'DMG BOSS (-25)',
       '#c62828',
       '#ffffff',
@@ -662,7 +687,7 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
     )
     const healBtn = this.createButton(
       1435,
-      194,
+      196,
       'HEAL BOSS (+25)',
       '#2e7d32',
       '#ffffff',
@@ -675,7 +700,7 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
     )
     const saveBtn = this.createButton(
       1590,
-      194,
+      196,
       '💾 SAVE TO GAME',
       '#00695c',
       '#ffffff',
@@ -685,7 +710,7 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
     )
     const copyJsonBtn = this.createButton(
       1440,
-      236,
+      240,
       '📋 COPY TREE JSON',
       '#37474f',
       '#eceff1',
@@ -704,7 +729,7 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
       .text(
         960,
         1048,
-        'Arrows: Move player · Click Room to teleport player · P: Toggle Panel · Space: Play/Pause · T: Step · R: Reset',
+        'Arrows: Move player · Click Room: Teleport player · Drag canvas: Pan tree',
         {
           fontFamily: FONT_FAMILY,
           fontSize: 13,
@@ -872,7 +897,7 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
 
   private buildParameterAdjusters(node: BehaviorTreeNodeDef): void {
     const startX = 1230
-    const startY = 160
+    const startY = 152
 
     if (node.type === 'is_player_in_range') {
       const curRange = node.params?.range ?? 350
@@ -884,7 +909,7 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
         })
 
       const decBtn = this.createButton(
-        startX + 180,
+        startX + 220,
         startY + 4,
         '-50',
         '#263238',
@@ -894,12 +919,12 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
           this.sessionBundle.setTree(this.currentTree)
           this.refreshInspector()
         },
-        45,
+        48,
         22,
       )
 
       const incBtn = this.createButton(
-        startX + 235,
+        startX + 280,
         startY + 4,
         '+50',
         '#263238',
@@ -909,7 +934,7 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
           this.sessionBundle.setTree(this.currentTree)
           this.refreshInspector()
         },
-        45,
+        48,
         22,
       )
 
@@ -918,14 +943,14 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
     } else if (node.type === 'is_health_below') {
       const curThresh = node.params?.thresholdPercent ?? 50
       const label = this.add
-        .text(startX, startY, `Threshold: ${curThresh}% HP`, {
+        .text(startX, startY, `Threshold: ${curThresh}%`, {
           fontFamily: FONT_FAMILY,
           fontSize: 10,
           color: VALUE_COLOR,
         })
 
       const decBtn = this.createButton(
-        startX + 180,
+        startX + 220,
         startY + 4,
         '-10%',
         '#263238',
@@ -935,12 +960,12 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
           this.sessionBundle.setTree(this.currentTree)
           this.refreshInspector()
         },
-        45,
+        48,
         22,
       )
 
       const incBtn = this.createButton(
-        startX + 235,
+        startX + 280,
         startY + 4,
         '+10%',
         '#263238',
@@ -950,7 +975,7 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
           this.sessionBundle.setTree(this.currentTree)
           this.refreshInspector()
         },
-        45,
+        48,
         22,
       )
 
@@ -966,7 +991,7 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
         })
 
       const decBtn = this.createButton(
-        startX + 180,
+        startX + 220,
         startY + 4,
         '-0.5s',
         '#263238',
@@ -981,7 +1006,7 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
       )
 
       const incBtn = this.createButton(
-        startX + 240,
+        startX + 280,
         startY + 4,
         '+0.5s',
         '#263238',
@@ -1007,7 +1032,7 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
         })
 
       const decBtn = this.createButton(
-        startX + 180,
+        startX + 220,
         startY + 4,
         '-0.2x',
         '#263238',
@@ -1022,7 +1047,7 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
       )
 
       const incBtn = this.createButton(
-        startX + 240,
+        startX + 280,
         startY + 4,
         '+0.2x',
         '#263238',
@@ -1109,6 +1134,11 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
     this.resetPositions()
     this.refreshTreeVisuals()
     this.refreshInspector()
+    this.presetButtons.forEach(({ bg, id }) => {
+      const isSelected = id === preset.id
+      bg.setFillStyle(isSelected ? 0x00838f : 0x263238, 1)
+      bg.setStrokeStyle(1, isSelected ? 0x00e5ff : 0x455a64, 1)
+    })
     this.showStatus(`Loaded preset: ${preset.name}`)
   }
 
@@ -1209,6 +1239,7 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
       this.instructionText?.destroy()
       this.panelContainer?.destroy(true)
       this.nodeViews.clear()
+      this.presetButtons = []
     })
   }
 

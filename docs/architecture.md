@@ -201,7 +201,7 @@ Editable configurations export directly to `room1.ts` (`ROOM1_OBJECTS`). Objects
 - **Live Tuning While Moving**: Keyboard movement (Arrows) runs continuously during mouse interaction, giving immediate tactile feedback on physics changes.
 - **Step & Direct Input**: Parameter buttons (`+` / `−` with step sizes, Shift: 5x multiplier) or click value for exact number prompt. Clamped to minimum safe values.
 - **Live Telemetry**: Displays real-time speed (`px/s`), velocity vectors (`vx`, `vy`), input direction (`moveX`, `moveY`), and dynamic visual speedometer gauge.
-- **Reset Position**: **R** or `RESET POS (R)` snaps player to start coordinates with zero velocity for standstill acceleration trials.
+- **Reset Position**: **R** snaps player to start coordinates with zero velocity for standstill acceleration trials.
 - **Reset Defaults**: Restores default physics values.
 - **Save**: Writes updated speed directly to `src/game/content/room1.ts` via `/api/save-room1` and updates `ROOM1_OBJECTS`.
 - **Navigation**: Accessed from Level Editor via `OPEN SPEED EDITOR (F3)` or **F3**, or from AI Editor via **F3**; **Escape** returns to Level Editor, **F2** returns to gameplay, **F4** opens AI Editor.
@@ -247,10 +247,10 @@ Each node evaluates to one of three statuses per simulation tick:
    - Overhead action tags (`[CHASING]`, `[ENRAGED CHASE]`, `[ALERTED]`, `[IDLE]`) floating above the boss entity.
    - All standard Room 1 entities and obstacles rendered with full interpolation.
 
-2. **Top Navigation & Simulation Toolbar (`y = 20..58`)**:
-   - Quick preset selector buttons for instant switching between preset trees (`Standard Guard`, `Patrol Guard`, `Boss: Cyber Enforcer`, `Hit & Run`, `Tank Boss`).
-   - Playback controls: `PAUSE (SPC)` / `PLAY`, single-step forward `STEP (T)`, and position reset `RESET (R)`.
-   - Navigation hotkey hints (**P** for panel toggle, **F2** for gameplay, **F3** for Speed Editor, **F4** / **ESC** for Level Editor).
+2. **Top Navigation & Simulation Toolbar (`y = 14..62`)**:
+   - Organized in a dual-row header preventing UI overlaps:
+     - Row 1 (`y = 14`): Scene title and clean navigation hotkey hints (**P** for panel toggle, **F3** for Speed Editor, **F4** / **ESC** for Level Editor, **F2** for gameplay).
+     - Row 2 (`y = 48`): Preset selector buttons (`STD GUARD`, `PATROL GUARD`, `CYBER BOSS`, `HIT & RUN`, `TANK BOSS`) with active selection highlights on the left; playback controls on the right (`PAUSE (SPC)` / `RESUME (SPC)`, `STEP (T)`, `RESET (R)`).
 
 3. **Bottom Dock Panel (`y = 720..1015`, toggleable with P key)**:
    - **Column 1: Behavior Tree Graph Canvas**: Dynamic 2D tree layout with parent-child connection lines, execution halo glow reflecting `SUCCESS`, `FAILURE`, and `RUNNING` statuses each tick, interactive panning via drag, and `[CENTER]` button.

@@ -76,7 +76,6 @@ export class LevelEditorScene extends Phaser.Scene {
   private playerStatsElements: Phaser.GameObjects.Text[] = []
   private naStatsText: Phaser.GameObjects.Text | undefined
   private headerText: Phaser.GameObjects.Text | undefined
-  private coordsText!: Phaser.GameObjects.Text
   private isDraggingObject = false
   private isDraggingScaleHandle = false
   private history = new EditorHistory()
@@ -121,12 +120,12 @@ export class LevelEditorScene extends Phaser.Scene {
 
     // Title
     this.headerText = this.add
-      .text(960, 28, 'LEVEL EDITOR — room1', {
+      .text(ROOM_LAYOUT.left, 24, 'LEVEL EDITOR — room1', {
         fontFamily: FONT_FAMILY,
-        fontSize: 28,
+        fontSize: 20,
         color: ACCENT_COLOR,
       })
-      .setOrigin(0.5, 0)
+      .setOrigin(0, 0)
       .setDepth(50)
 
     // Draw room frame (same as PhaserRoomView)
@@ -187,22 +186,12 @@ export class LevelEditorScene extends Phaser.Scene {
 
     // Instructions
     this.instructionText = this.add
-      .text(960, 1045, 'Click to select · Drag to move · F3: Speed · F4: AI Editor · Ctrl+Z: Undo · Del: Remove · P: Panel', {
+      .text(960, 1045, 'Click to select · Drag to move · Shift+Drag: Scale · Arrows: Nudge · Ctrl+Z: Undo · Del: Remove', {
         fontFamily: FONT_FAMILY,
         fontSize: 14,
         color: DIM_COLOR,
       })
       .setOrigin(0.5, 0.5)
-      .setDepth(50)
-
-    // Coordinates display
-    this.coordsText = this.add
-      .text(ROOM_LAYOUT.right, ROOM_LAYOUT.top - 10, '', {
-        fontFamily: FONT_FAMILY,
-        fontSize: 16,
-        color: DIM_COLOR,
-      })
-      .setOrigin(1, 1)
       .setDepth(50)
 
     // Input handlers
@@ -213,9 +202,9 @@ export class LevelEditorScene extends Phaser.Scene {
 
     // Back-to-game key hint
     this.add
-      .text(1820, 28, 'P: Panel · F3: Speed · F4: AI Editor · F2 / ESC: Game', {
+      .text(ROOM_LAYOUT.right, 26, 'P: Panel · F3: Speed · F4: AI Editor · F2 / ESC: Game', {
         fontFamily: FONT_FAMILY,
-        fontSize: 16,
+        fontSize: 12,
         color: DIM_COLOR,
       })
       .setOrigin(1, 0)
@@ -253,16 +242,7 @@ export class LevelEditorScene extends Phaser.Scene {
   }
 
   update(): void {
-    // Update the coordinate readout for the selected object
-    const selected = this.getSelected()
-    if (selected) {
-      this.coordsText.setText(
-        `x:${Math.round(selected.x)} y:${Math.round(selected.y)} ` +
-        `w:${Math.round(selected.displayWidth)} h:${Math.round(selected.displayHeight)}`,
-      )
-    } else {
-      this.coordsText.setText('')
-    }
+    // Selected object transform is displayed in Property Panel (Transform section)
   }
 
   private createEditorObject(worldObject: WorldObject): void {
@@ -434,26 +414,9 @@ export class LevelEditorScene extends Phaser.Scene {
     })
     items.push(spawnDaggerBtn)
 
-    // Launch Speed Editor button
-    const speedEditorBtn = this.add
-      .text(140, 214, 'SPEED EDITOR (F3)', {
-        fontFamily: FONT_FAMILY,
-        fontSize: 11,
-        color: '#ffffff',
-        backgroundColor: '#00695c',
-        padding: { x: 8, y: 4 },
-      })
-      .setOrigin(0.5, 0)
-      .setInteractive({ useHandCursor: true })
-    speedEditorBtn.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      pointer.event?.stopPropagation?.()
-      this.openSpeedEditor()
-    })
-    items.push(speedEditorBtn)
-
     // Remove selected object button
     this.deleteButton = this.add
-      .text(140, 252, 'REMOVE SELECTED', {
+      .text(140, 248, 'REMOVE SELECTED', {
         fontFamily: FONT_FAMILY,
         fontSize: 11,
         color: '#ffcdd2',
@@ -617,7 +580,7 @@ export class LevelEditorScene extends Phaser.Scene {
     })
 
     const guardAiHint = this.add
-      .text(890, 184, 'Edit enemy / boss behavior\ntree in AI Editor (F4)', {
+      .text(890, 184, 'Edit & simulate behavior tree', {
         fontFamily: FONT_FAMILY,
         fontSize: 11,
         color: DIM_COLOR,
@@ -662,7 +625,7 @@ export class LevelEditorScene extends Phaser.Scene {
     })
 
     const playerSpeedHint = this.add
-      .text(890, 184, 'Test & tune physics while\nmoving in Speed Editor', {
+      .text(890, 184, 'Tune physics & test live movement', {
         fontFamily: FONT_FAMILY,
         fontSize: 11,
         color: DIM_COLOR,
@@ -712,7 +675,6 @@ export class LevelEditorScene extends Phaser.Scene {
     const hints = [
       'Nudge: Arrow keys',
       'Shift: 10px step',
-      'Undo: Ctrl+Z',
     ]
     for (let i = 0; i < hints.length; i++) {
       const hint = this.add
@@ -1688,7 +1650,7 @@ export class LevelEditorScene extends Phaser.Scene {
     this.objectListButtons = []
 
     const count = this.editorObjects.length
-    const twoColumns = count > 5
+    const twoColumns = count > 4
     const startY = 74
     const rowHeight = twoColumns ? 26 : 28
 

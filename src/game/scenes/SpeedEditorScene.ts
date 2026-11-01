@@ -83,19 +83,19 @@ export class SpeedEditorScene extends Phaser.Scene {
 
     // Header Title
     this.headerText = this.add
-      .text(960, 24, 'SPEED EDITOR — Player Movement & Physics Tuning', {
+      .text(ROOM_LAYOUT.left, 24, 'SPEED EDITOR — Player Movement & Physics Tuning', {
         fontFamily: FONT_FAMILY,
-        fontSize: 24,
+        fontSize: 18,
         color: ACCENT_COLOR,
       })
-      .setOrigin(0.5, 0)
+      .setOrigin(0, 0)
       .setDepth(50)
 
     // Top Right Navigation Hints
     this.add
-      .text(1824, 26, 'R: Reset Pos · ESC: Level · F2: Game · F4: AI Editor', {
+      .text(ROOM_LAYOUT.right, 26, 'ESC: Level · F4: AI Editor · F2: Game', {
         fontFamily: FONT_FAMILY,
-        fontSize: 14,
+        fontSize: 12,
         color: DIM_COLOR,
       })
       .setOrigin(1, 0)
@@ -109,7 +109,7 @@ export class SpeedEditorScene extends Phaser.Scene {
       .text(
         960,
         1048,
-        'Arrows: Move player · Test physics while tuning · Click +/- to adjust · Click number for exact input · R: Reset position',
+        'Arrows: Move player · R: Reset position · Click +/-: Adjust · Click value: Exact input',
         {
           fontFamily: FONT_FAMILY,
           fontSize: 13,
@@ -254,30 +254,9 @@ export class SpeedEditorScene extends Phaser.Scene {
       this.speedGaugeGraphics,
     )
 
-    // Reset position button in telemetry column
-    const resetPosBtn = this.createButton(
-      1240,
-      210,
-      'RESET POS (R)',
-      '#263238',
-      '#90a4ae',
-      () => this.resetPlayerPosition(),
-    )
-    items.push(resetPosBtn)
-
-    const posHint = this.add
-      .text(1240, 260, 'Press R while moving\nto snap back to start', {
-        fontFamily: FONT_FAMILY,
-        fontSize: 11,
-        color: DIM_COLOR,
-        align: 'center',
-      })
-      .setOrigin(0.5, 0)
-    items.push(posHint)
-
-    // ─── Column 3: Actions & Navigation ───
+    // ─── Column 3: Actions ───
     const col3Title = this.add
-      .text(1574, 16, 'ACTIONS', {
+      .text(1574, 20, 'ACTIONS', {
         fontFamily: FONT_FAMILY,
         fontSize: 14,
         color: ACCENT_COLOR,
@@ -286,13 +265,13 @@ export class SpeedEditorScene extends Phaser.Scene {
     items.push(col3Title)
 
     // Save button
-    const saveBtn = this.createSaveButton(1574, 60)
+    const saveBtn = this.createSaveButton(1574, 85)
     items.push(saveBtn)
 
     // Reset defaults button
     const resetDefaultBtn = this.createButton(
       1574,
-      124,
+      155,
       'RESET DEFAULTS',
       '#37474f',
       '#eceff1',
@@ -301,32 +280,6 @@ export class SpeedEditorScene extends Phaser.Scene {
       38,
     )
     items.push(resetDefaultBtn)
-
-    // Back to Level Editor button
-    const backToEditorBtn = this.createButton(
-      1574,
-      180,
-      '< LEVEL EDITOR (ESC)',
-      '#0d47a1',
-      '#ffffff',
-      () => this.returnToLevelEditor(),
-      250,
-      42,
-    )
-    items.push(backToEditorBtn)
-
-    // Back to Game button
-    const backToGameBtn = this.createButton(
-      1574,
-      236,
-      'GAMEPLAY (F2)',
-      '#263238',
-      '#b0bec5',
-      () => this.returnToGame(),
-      250,
-      38,
-    )
-    items.push(backToGameBtn)
 
     this.panelContainer = this.add.container(PANEL_X, PANEL_Y, items).setDepth(40)
     this.refreshSpeedPanelFields()
