@@ -127,7 +127,7 @@ export function createAiEditorSession(options?: {
     commandSubmission: createRoom1CommandSubmissionService(),
     simulationClock: new RealtimeSimulationClock(),
     simulationEngine,
-    saveRepository: new LocalStorageSaveRepository(getStorage(options?.storage)),
+    saveRepository: new LocalStorageSaveRepository(getStorage(options?.storage), 'hack-game.editor-save'),
     worldStateCodec: new JsonWorldStateCodec(),
     inputMode: new InputModeController(INPUT_BINDINGS.movement),
     combat: new CombatService(),

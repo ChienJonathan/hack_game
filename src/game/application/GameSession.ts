@@ -11,6 +11,8 @@ import { getMutableWorldObjectState } from '../domain/WorldObjectState.ts'
 import type { WorldState } from '../domain/WorldState.ts'
 import type { InputMode, InputModeController } from './InputModeController.ts'
 
+const SAVE_SCHEMA_VERSION = 1
+
 export interface GameSessionDependencies {
   worldState: WorldState
   commandSubmission: CommandSubmissionService
@@ -107,10 +109,41 @@ export class GameSession {
   saveCurrentState(): void {
     this.dependencies.saveRepository.save(
       {
-        schemaVersion: 1,
+        schemaVersion: SAVE_SCHEMA_VERSION,
         worldState: this.dependencies.worldStateCodec.serialize(this.dependencies.worldState),
       } satisfies SaveSnapshot,
     )
+  }
+
+  hasSavedState(): boolean {
+    return this.readSavedSnapshot() !== null
+  }
+
+  // Replaces the current world state with the saved one in place. Returns false (leaving
+  // the world untouched) when there is no usable save. Always resumes in Movement Mode.
+  loadSavedState(): boolean {
+    const snapshot = this.readSavedSnapshot()
+    if (!snapshot) {
+      return false
+    }
+
+    const restored = this.dependencies.worldStateCodec.hydrate(snapshot.worldState)
+    restored.outcome = 'playing'
+    Object.assign(this.dependencies.worldState, restored)
+    this.dependencies.inputMode.releaseAll()
+    this.enterMovementMode()
+    return true
+  }
+
+  private readSavedSnapshot(): SaveSnapshot | null {
+    try {
+      const snapshot = this.dependencies.saveRepository.load()
+      return snapshot !== null && snapshot.schemaVersion === SAVE_SCHEMA_VERSION && snapshot.worldState
+        ? snapshot
+        : null
+    } catch {
+      return null
+    }
   }
 
   private canAct(): boolean {
