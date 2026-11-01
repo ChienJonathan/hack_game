@@ -93,6 +93,12 @@ export class GameScene extends Phaser.Scene {
       return false
     }
 
+    if (event.key === 'F3') {
+      event.preventDefault()
+      this.scene.start('speed-editor')
+      return false
+    }
+
     const key = event.key.toLowerCase()
 
     if (this.session.inputMode === 'movement') {

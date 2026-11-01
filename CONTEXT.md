@@ -68,6 +68,10 @@ _Avoid_: Frame (when referring to game logic rather than drawing)
 A condition associated with a world object that selects a process definition.
 _Avoid_: File content (when referring to the rule itself)
 
+**Behavior Tree**:
+A hierarchical decision tree of composite, decorator, condition, and action nodes that evaluates during a Simulation Tick to select Character behaviors.
+_Avoid_: Script, state machine (when referring to the hierarchical behavior tree)
+
 **Command**:
 An implemented, allow-listed operation that a player submits to affect or inspect the game world.
 _Avoid_: Shell command (when referring to execution on the host computer)

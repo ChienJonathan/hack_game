@@ -99,6 +99,7 @@ classDiagram
   PhaserScene <|-- GameScene
   PhaserScene <|-- LevelEditorScene
   PhaserScene <|-- SpeedEditorScene
+  PhaserScene <|-- BehaviorTreeEditorScene
 
   GameScene --> GameSession
   GameScene --> CommandInputView
@@ -131,9 +132,13 @@ classDiagram
   LevelEditorScene --> EditorHistory : manages undo stack
   LevelEditorScene ..> room1Serializer : serializes RoomObjectConfig[]
   LevelEditorScene ..> SpeedEditorScene : opens via F3 or UI button
+  LevelEditorScene ..> BehaviorTreeEditorScene : opens via F4 or UI button
   SpeedEditorScene ..> room1 : reads & overwrites ROOM1_OBJECTS
   SpeedEditorScene ..> speedEditorSession : wraps GameSession & TickSimulationEngine
   speedEditorSession --> PlayerMovementProcess : reuses main movement physics
+  BehaviorTreeEditorScene ..> aiEditorSession : wraps GameSession & TickSimulationEngine
+  aiEditorSession --> BehaviorTreeProcess : runs behavior tree per tick
+  BehaviorTreeProcess --> BehaviorTreeEvaluator : evaluates tree hierarchy
   room1WorldState ..> room1 : constructs WorldState from ROOM1_OBJECTS
 ```
 
@@ -143,8 +148,9 @@ classDiagram
 src/
   main.ts, createGame.ts
   application/  GameSession.ts, InputModeController.ts
+  ai/           behaviorTree/{BehaviorTreeTypes.ts, BehaviorTreeEvaluator.ts, BehaviorTreePresets.ts, BehaviorTreeProcess.ts, BehaviorTreeModel.ts}
   content/      room1.ts, room1Constants.ts, room1Commands.ts, room1Serializer.ts, room1WorldState.ts, createRoom1Session.ts
-  scenes/       GameScene.ts, LevelEditorScene.ts, levelEditorHistory.ts, SpeedEditorScene.ts, speedEditorSession.ts
+  scenes/       GameScene.ts, LevelEditorScene.ts, levelEditorHistory.ts, SpeedEditorScene.ts, speedEditorSession.ts, BehaviorTreeEditorScene.ts, aiEditorSession.ts
   domain/       WorldState.ts, Room.ts, WorldObject.ts, BasicWorldObject.ts, CharacterState.ts, CollisionWorld.ts, CombatService.ts, PickUpService.ts, WeaponDefinition.ts, ids.ts, JsonValue.ts, WorldPath.ts, WorldPathResolver.ts, VirtualWorldPathResolver.ts
   processes/    BehaviorRule.ts, ProcessDefinition.ts, ProcessInstance.ts
   commands/     CommandSubmissionService.ts, CommandRegistry.ts, RegisteredCommandRegistry.ts, CommandParser.ts, VirtualCommandParser.ts, CommandRequirement.ts, CommandRequirementChecker.ts, EveryCommandRequirementChecker.ts, ParsedCommand.ts, CommandHistory.ts, CommandFeedback.ts, CommandResult.ts, executors/{base.ts, help.ts, ls.ts, mv.ts}
@@ -197,6 +203,76 @@ Editable configurations export directly to `room1.ts` (`ROOM1_OBJECTS`). Objects
 - **Reset Defaults**: Restores default physics values.
 - **Save**: Writes updated speed directly to `src/game/content/room1.ts` via `/api/save-room1` and updates `ROOM1_OBJECTS`.
 - **Navigation**: Accessed from Level Editor via `OPEN SPEED EDITOR (F3)` or **F3**; **Escape** returns to Level Editor, **F2** returns to gameplay.
+
+## Behavior Tree & AI System
+
+The Behavior Tree subsystem provides hierarchical AI decision-making for guards and bosses, executing inside `TickSimulationEngine` through `BehaviorTreeProcess`.
+
+### Node Taxonomy
+
+| Category | Node Types | Purpose |
+|---|---|---|
+| **Composite** | `selector`, `sequence` | Control flow branch evaluation (`selector` falls back until success, `sequence` steps until failure) |
+| **Decorator** | `cooldown`, `inverter` | Modifies or rate-limits child execution (e.g. boss charge attack every 3.5s) |
+| **Condition** | `is_player_in_range`, `is_player_in_zone`, `is_health_below` | Queries world state, distance, or health ratios |
+| **Action** | `chase_player`, `melee_attack`, `charge_attack`, `patrol`, `flee`, `wait`, `heal` | Mutates entity position, attacks target, activates boss abilities, or patrols |
+
+### Node Statuses & Telemetry
+
+Each node evaluates to one of three statuses per simulation tick:
+- `SUCCESS`: Node completed its objective (e.g. strike hit, reached target range, condition true). Glows green (`#00e676`).
+- `FAILURE`: Node failed or condition false (e.g. out of reach, on cooldown). Outlines red (`#ff1744`).
+- `RUNNING`: Node is performing an ongoing action (e.g. chasing, dashing, waiting). Glows yellow (`#ffea00`).
+
+### Presets
+
+1. **Standard Guard AI** (`standard-guard`): Classic room guard that triggers when the player enters the right half of the room, pursuing and attacking.
+2. **Patrol & Ambush Guard** (`patrol-guard`): Loops between waypoints until the player enters detection radius, then intercepts.
+3. **Boss: Cyber Enforcer (2-Phase)** (`boss-cyber-enforcer`): Multi-phase boss with Phase 1 stalker tactics, transitioning at `<50% HP` into Phase 2 Berserk with high-speed charge dashes and 1.4x pursuit speed.
+4. **Hit & Run Skirmisher** (`hit-and-run`): High-mobility skirmisher that approaches, strikes, retreats to safe distance to reset, and flees when low on health.
+5. **Tank Boss** (`tank-boss`): Heavy armored boss with area patrol, high-damage melee smash, and active chassis repair when the player retreats.
+
+## AI Behavior Tree Editor
+
+`BehaviorTreeEditorScene` (`'behavior-tree-editor'`) provides an interactive visual editor and live simulation sandbox for boss and enemy behavior trees. Accessed exclusively from Level Editor via **F4** or the **AI EDITOR (F4)** button in Level Editor's Character Stats panel.
+
+### Editor Layout & Capabilities
+
+1. **Upper Live Room Chamber (`y = 80..700`)**:
+   - Reuses Room 1 layout and `PhaserRoomView` directly, running domain physics and combat in real-time inside `GameSession`.
+   - Control player with Arrow keys or click anywhere in the room view to reposition the player for situational testing.
+   - Live visual detection radius (cyan ring, 380px) and attack reach (red ring, 60px) rendered around the boss/guard in room coordinates.
+   - Overhead action tags (`[CHASING]`, `[ENRAGED CHASE]`, `[ALERTED]`, `[IDLE]`) floating above the boss entity.
+   - All standard Room 1 entities and obstacles rendered with full interpolation.
+
+2. **Top Navigation & Simulation Toolbar (`y = 20..58`)**:
+   - Quick preset selector buttons for instant switching between preset trees (`Standard Guard`, `Patrol Guard`, `Boss: Cyber Enforcer`, `Hit & Run`, `Tank Boss`).
+   - Playback controls: `PAUSE (SPC)` / `PLAY`, single-step forward `STEP (T)`, and position reset `RESET (R)`.
+   - Navigation hotkey hints (**P** for panel toggle, **F2** for gameplay, **F4** / **ESC** for Level Editor).
+
+3. **Bottom Dock Panel (`y = 720..1015`, toggleable with P key)**:
+   - **Column 1: Behavior Tree Graph Canvas**: Dynamic 2D tree layout with parent-child connection lines, execution halo glow reflecting `SUCCESS`, `FAILURE`, and `RUNNING` statuses each tick, interactive panning via drag, and `[CENTER]` button.
+   - **Column 2: Tree Editing**: Palette of child node insertion buttons color-coded by category (Purple for Composites, Orange for Decorators, Blue for Conditions, Green for Actions), sibling reordering with `◄ MOVE NODE` and `MOVE NODE ►`, and `DELETE (DEL)` button (root protected).
+   - **Column 3: Node Inspector & Telemetry & Actions**: Real-time telemetry (Boss HP, Phase 1 vs Phase 2, distance to player), interactive phase testing buttons (`DMG BOSS (-25)` / `HEAL BOSS (+25)`), parameter tuning buttons for selected node, `SAVE TO GAME` (writes tree into `room1.ts`), and `COPY JSON`.
+
+### Controls & Shortcuts
+
+| Action | Control |
+|---|---|
+| **Open AI Editor** | **F4** or **AI EDITOR (F4)** button (from Level Editor only) |
+| **Return to Level Editor** | **F4** or **Escape** |
+| **Move Player in Room** | **Arrow keys** or click inside room chamber to reposition |
+| **Toggle Bottom Panel** | **P** key |
+| **Play / Pause Sim** | **Space** or `PAUSE (SPC)` button |
+| **Step Sim (+33ms)** | **T** or `STEP (T)` button |
+| **Reset Positions** | **R** or `RESET (R)` button |
+| **Pan Tree Canvas** | Drag mouse inside Behavior Tree Graph area |
+| **Center Tree Canvas** | Click `[CENTER]` button |
+| **Select Node** | Click node card in graph |
+| **Delete Node** | `Delete` / `Backspace` or `DELETE (DEL)` button |
+| **Damage Boss (-25 HP)** | `DMG BOSS (-25)` button |
+| **Heal Boss (+25 HP)** | `HEAL BOSS (+25)` button |
+| **Return to Game** | **F2** |
 
 ## Framework References
 

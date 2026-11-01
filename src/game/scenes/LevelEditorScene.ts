@@ -187,7 +187,7 @@ export class LevelEditorScene extends Phaser.Scene {
 
     // Instructions
     this.instructionText = this.add
-      .text(960, 1045, 'Click to select · Drag to move · F3: Speed Editor · Ctrl+Z: Undo · Del: Remove · P: Panel', {
+      .text(960, 1045, 'Click to select · Drag to move · F3: Speed · F4: AI Editor · Ctrl+Z: Undo · Del: Remove · P: Panel', {
         fontFamily: FONT_FAMILY,
         fontSize: 14,
         color: DIM_COLOR,
@@ -213,7 +213,7 @@ export class LevelEditorScene extends Phaser.Scene {
 
     // Back-to-game key hint
     this.add
-      .text(1820, 28, 'P: Panel · F3: Speed Editor · F2 / ESC: Back to game', {
+      .text(1820, 28, 'P: Panel · F3: Speed · F4: AI Editor · F2 / ESC: Game', {
         fontFamily: FONT_FAMILY,
         fontSize: 16,
         color: DIM_COLOR,
@@ -600,6 +600,33 @@ export class LevelEditorScene extends Phaser.Scene {
 
     createStatRow('max_health', 'maxHealth', 'maxHealth', 50, this.statsElements)
     createStatRow('speed', 'speed', 'speed', 86, this.guardStatsElements)
+
+    const openAiEditorBtn = this.add
+      .text(890, 134, 'AI EDITOR (F4)', {
+        fontFamily: FONT_FAMILY,
+        fontSize: 12,
+        color: '#ffffff',
+        backgroundColor: '#4a148c',
+        padding: { x: 14, y: 8 },
+      })
+      .setOrigin(0.5, 0)
+      .setInteractive({ useHandCursor: true })
+    openAiEditorBtn.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      pointer.event?.stopPropagation?.()
+      this.openAiEditor()
+    })
+
+    const guardAiHint = this.add
+      .text(890, 184, 'Edit enemy / boss behavior\ntree in AI Editor (F4)', {
+        fontFamily: FONT_FAMILY,
+        fontSize: 11,
+        color: DIM_COLOR,
+        align: 'center',
+      })
+      .setOrigin(0.5, 0)
+
+    this.guardStatsElements.push(openAiEditorBtn, guardAiHint)
+    items.push(openAiEditorBtn, guardAiHint)
 
     // Player speed summary & Speed Editor launcher (speed adjust panel moved to SpeedEditor)
     const playerSpeedLabel = this.add
@@ -1223,6 +1250,12 @@ export class LevelEditorScene extends Phaser.Scene {
       return
     }
 
+    if (event.key === 'F4') {
+      event.preventDefault()
+      this.openAiEditor()
+      return
+    }
+
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z' && !event.shiftKey) {
       event.preventDefault()
       this.undo()
@@ -1395,6 +1428,11 @@ export class LevelEditorScene extends Phaser.Scene {
   public openSpeedEditor(): void {
     this.syncToRoom1Objects()
     this.scene.start('speed-editor')
+  }
+
+  public openAiEditor(): void {
+    this.syncToRoom1Objects()
+    this.scene.start('behavior-tree-editor')
   }
 
   public async saveLayout(): Promise<boolean> {
