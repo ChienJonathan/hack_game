@@ -30,6 +30,10 @@ describe('INPUT_BINDINGS', () => {
   it('binds escape to exit command mode', () => {
     expect(INPUT_BINDINGS.exitCommandMode).toContain('escape')
   })
+
+  it('does not bind enter to enter or toggle shell mode', () => {
+    expect('toggleMode' in INPUT_BINDINGS).toBe(false)
+  })
 })
 
 describe('isAlphabetKey', () => {

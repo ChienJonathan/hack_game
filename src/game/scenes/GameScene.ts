@@ -96,15 +96,6 @@ export class GameScene extends Phaser.Scene {
     const key = event.key.toLowerCase()
 
     if (this.session.inputMode === 'movement') {
-      if (INPUT_BINDINGS.toggleMode.includes(key)) {
-        event.preventDefault()
-        if (!event.repeat) {
-          this.session.toggleInputMode()
-          this.commandInputView?.setInputEnabled(true)
-        }
-        return false
-      }
-
       if (INPUT_BINDINGS.attack.keys.includes(key)) {
         event.preventDefault()
         if (!event.repeat) {

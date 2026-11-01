@@ -25,7 +25,7 @@ const CURSOR_COLOR = 0xd6d6d6
 const FIELD_COLOR = '#101010'
 const CURSOR_BLINK_MS = 500
 const DISABLED_ALPHA = 0.45
-const ENABLE_HINT = 'Type a command or press Enter'
+const ENABLE_HINT = 'Type a command'
 const COMPLETION_HINT = 'help'
 
 export class PhaserCommandInputView implements CommandInputView {

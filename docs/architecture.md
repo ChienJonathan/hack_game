@@ -32,9 +32,9 @@ Architecture specification for the command-driven RTS game and initial room (Vit
 | **Movement** | 1.00 | Arrows (responsive physics) | Space / Left-click: attack (auto-pickup on contact) |
 | **Command** | 0.25 | Disabled (or latched direction) | Ignored |
 
-- **Toggle & Shell Entry/Exit**: Enter toggles between Movement and Command Mode. Typing any alphabet key (`[a-zA-Z]`) while in Movement Mode directly enters Command Mode and begins typing the command. Pressing Escape in Command Mode immediately exits Command Mode, clears any unsubmitted command draft, and returns to Movement Mode at full Time Scale.
-- **Submission**: Commands switch back to Movement Mode (unless `inputAfter` overrides).
-- **Latched Movement**: Pressing Enter or typing an alphabet while holding movement keys latches velocity until collision, room exit, or Enter; latched keys are suppressed from typing input.
+- **Shell Entry & Exit**: Typing any alphabet key (`[a-zA-Z]`) while in Movement Mode directly enters Command Mode and begins typing the command. Pressing Escape in Command Mode immediately exits Command Mode and clears any unsubmitted command draft.
+- **Submission**: Commands submitted with Enter execute and switch back to Movement Mode (unless `inputAfter` overrides).
+- **Latched Movement**: Typing an alphabet while holding movement keys latches velocity until collision, room exit, or Escape/submission; latched keys are suppressed from typing input.
 - **Prompt**: Displays active room path.
 
 ### Command Input Behavior
