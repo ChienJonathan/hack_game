@@ -305,6 +305,92 @@ describe('commands', () => {
     expect(guard2.discovered).toBe(true)
     expect(guard3.discovered).toBe(true)
   })
+
+  it('lists mv in help output', () => {
+    const session = newSession()
+    const result = session.submitCommand('help')
+    expect(result.status).toBe('success')
+    if (result.status === 'success') {
+      expect(result.feedback[0].text).toContain('mv')
+    }
+  })
+
+  it('renames an object when target does not exist and reflects the new name in ls and autocomplete', () => {
+    const session = newSession()
+    const daggerObj = session.getWorldState().worldObjects.find((o) => o.id === 'dagger')!
+
+    const renameResult = session.submitCommand('mv dagger sword')
+    expect(renameResult.status).toBe('success')
+    expect(renameResult.feedback).toEqual([{ kind: 'popup', text: 'Renamed dagger to sword.' }])
+    expect(daggerObj.metadata.name).toBe('sword')
+
+    const lsResult = session.submitCommand('ls')
+    expect(lsResult.status).toBe('success')
+    if (lsResult.status === 'success') {
+      expect(lsResult.feedback[0].text).toContain('sword')
+      expect(lsResult.feedback[0].text).not.toContain('dagger')
+    }
+
+    const candidates = session.getCommandCompletionCandidates('sw', 2)
+    expect(candidates).toContain('sword')
+  })
+
+  it('throws an object towards target with speed across simulation ticks until arrival', () => {
+    const session = newSession()
+    const dagger = stateOf(session, 'dagger')
+    const guard = stateOf(session, 'guard')
+    const startX = dagger.x
+
+    const result = session.submitCommand('mv dagger guard')
+    expect(result.status).toBe('success')
+    expect(result.feedback).toEqual([{ kind: 'popup', text: 'Threw dagger to guard.' }])
+
+    // Run for 1000ms: at default speed 300 px/s, dagger should move ~300 px towards guard
+    runFor(session, 1000)
+    expect(dagger.x).toBeGreaterThan(startX + 200)
+    expect((dagger as unknown as Record<string, unknown>).thrown).toBeDefined()
+
+    // Run until arrival at guard
+    runFor(session, 5000)
+    expect(dagger.x).toBe(guard.x)
+    expect(dagger.y).toBe(guard.y)
+    expect((dagger as unknown as Record<string, unknown>).thrown).toBeNull()
+    expect(guard.discovered).toBe(true)
+  })
+
+  it('unequips weapon when thrown and allows pickup when in reach', () => {
+    const session = newSession()
+    const player = stateOf(session, 'player')
+    const dagger = stateOf(session, 'dagger')
+
+    // Start with player at dagger position and equipped
+    player.x = dagger.x
+    player.y = dagger.y
+    player.weaponId = 'dagger'
+    dagger.equippedBy = 'player'
+
+    // Throw dagger to guard
+    const result = session.submitCommand('mv dagger guard')
+    expect(result.status).toBe('success')
+    expect(player.weaponId).toBeNull()
+    expect((dagger as unknown as Record<string, unknown>).equippedBy).toBeNull()
+
+    // Since player is unarmed and within reach of the unequipped dagger, auto-pickup picks it up
+    session.update(SIMULATION_TICK_MS)
+    expect(player.weaponId).toBe('dagger')
+    expect((dagger as unknown as Record<string, unknown>).equippedBy).toBe('player')
+  })
+
+  it('throws player to exit zone and triggers congratulations upon reaching exit', () => {
+    const session = newSession()
+    const result = session.submitCommand('mv hacker room2')
+    expect(result.status).toBe('success')
+
+    // Run until player reaches room2 exit
+    runFor(session, 6000)
+    expect(session.getWorldState().currentRoomId).toBe(ROOM_IDS.second)
+    expect(session.getWorldState().outcome).toBe('congratulations')
+  })
 })
 
 describe('render position', () => {

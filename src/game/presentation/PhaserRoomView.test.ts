@@ -215,4 +215,21 @@ describe('PhaserRoomView', () => {
     // Total text width is ITEM_LABEL_WIDTH_RATIO * sprite.displayWidth
     expect(daggerText?.displayWidth).toBeCloseTo(58 * ITEM_LABEL_WIDTH_RATIO, 1)
   })
+
+  it('updates overhead label when object is renamed', () => {
+    const view = new PhaserRoomView()
+    const { mockScene, texts } = createMockScene()
+    const worldState = createInitialWorldState()
+
+    view.mount(mockScene, worldState)
+
+    const dagger = worldState.worldObjects.find((o) => o.id === 'dagger')!
+    dagger.rename('sword')
+    ;(dagger.state as Record<string, unknown>).discovered = true
+
+    view.update(worldState)
+
+    expect(texts.some((t) => t.text === 'sword')).toBe(true)
+    expect(texts.some((t) => t.text === 'dagger')).toBe(false)
+  })
 })

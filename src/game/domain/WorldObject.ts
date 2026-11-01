@@ -2,12 +2,12 @@ import type { BehaviorRule } from '../processes/BehaviorRule.ts'
 import type { JsonValue, MutableJsonValue } from './JsonValue.ts'
 import type { RoomId, WorldObjectId } from './ids.ts'
 
-export type WorldObjectMetadata = Readonly<Record<string, JsonValue>>
+export type WorldObjectMetadata = Record<string, JsonValue>
 
 export abstract class WorldObject {
   readonly id: WorldObjectId
   readonly roomId: RoomId
-  readonly metadata: WorldObjectMetadata
+  metadata: WorldObjectMetadata
   readonly behaviorRules: readonly BehaviorRule[]
   public state: MutableJsonValue
 
@@ -23,5 +23,12 @@ export abstract class WorldObject {
     this.metadata = metadata
     this.behaviorRules = behaviorRules
     this.state = state
+  }
+
+  rename(newName: string): void {
+    this.metadata = {
+      ...this.metadata,
+      name: newName,
+    }
   }
 }
