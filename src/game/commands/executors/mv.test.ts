@@ -129,4 +129,38 @@ describe('MvCommandExecutor', () => {
     expect(daggerState.equippedBy).toBeNull()
     expect(playerState.weaponId).toBeNull()
   })
+
+  it('uses custom mv_speed configuration when provided statically or dynamically', () => {
+    let dynamicSpeed = 450
+    const customExecutor = new MvCommandExecutor(() => dynamicSpeed)
+
+    const state = createInitialWorldState()
+    const daggerObj = state.worldObjects.find((o) => o.id === WORLD_OBJECT_IDS.dagger)!
+    const daggerState = getMutableWorldObjectState<MutableWorldObjectState>(daggerObj)
+
+    customExecutor.execute({ name: 'mv', arguments: ['dagger', 'guard'], options: [] }, state)
+    expect(daggerState.thrown).toMatchObject({
+      speed: 450,
+    })
+
+    // Modify dynamic speed source as object with mv_speed
+    const dynamicConfig = { mv_speed: 600 }
+    const customExecutor2 = new MvCommandExecutor(() => dynamicConfig)
+    customExecutor2.execute({ name: 'mv', arguments: ['dagger', 'guard'], options: [] }, state)
+    expect(daggerState.thrown).toMatchObject({
+      speed: 600,
+    })
+  })
+
+  it('uses default decoupled mv_speed across rooms without room1 dependency', () => {
+    const defaultExecutor = new MvCommandExecutor()
+    const state = createInitialWorldState()
+    const daggerObj = state.worldObjects.find((o) => o.id === WORLD_OBJECT_IDS.dagger)!
+    const daggerState = getMutableWorldObjectState<MutableWorldObjectState>(daggerObj)
+
+    defaultExecutor.execute({ name: 'mv', arguments: ['dagger', 'guard'], options: [] }, state)
+    expect(daggerState.thrown).toMatchObject({
+      speed: 300,
+    })
+  })
 })

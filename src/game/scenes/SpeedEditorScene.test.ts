@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest'
 import {
   createSpeedEditorSession,
   DEFAULT_SPEED_CONFIG,
+  DEFAULT_MV_SPEED,
   getPlayerSpeedFromObjects,
+  getMvSpeedConfig,
 } from './speedEditorSession.ts'
 import { WORLD_OBJECT_IDS } from '../content/room1Constants.ts'
 import { generateRoom1Source } from '../content/room1Serializer.ts'
+import { generateMvConstantsSource } from '../commands/mvSerializer.ts'
 import type { RoomObjectConfig } from '../content/room1.ts'
 
 describe('SpeedEditorScene', () => {
@@ -51,6 +54,18 @@ describe('SpeedEditorScene', () => {
 
       const speed = getPlayerSpeedFromObjects(objects)
       expect(speed).toEqual(DEFAULT_SPEED_CONFIG)
+    })
+  })
+
+  describe('getMvSpeedConfig', () => {
+    it('returns default mv speed config when no override is given', () => {
+      const config = getMvSpeedConfig()
+      expect(config).toEqual({ mv_speed: DEFAULT_MV_SPEED })
+    })
+
+    it('handles numeric and object overrides', () => {
+      expect(getMvSpeedConfig(450)).toEqual({ mv_speed: 450 })
+      expect(getMvSpeedConfig({ mv_speed: 500 })).toEqual({ mv_speed: 500 })
     })
   })
 
@@ -197,6 +212,36 @@ describe('SpeedEditorScene', () => {
 
       expect(worldState.outcome).toBe('playing')
     })
+
+    it('simulates mv throw physics with configured mv_speed for dagger', () => {
+      let currentMvSpeed = 200
+      const { session, worldState } = createSpeedEditorSession({
+        mvSpeed: () => currentMvSpeed,
+      })
+
+      const dagger = worldState.worldObjects.find((o) => o.id === WORLD_OBJECT_IDS.dagger)!
+      const state = dagger.state as Record<string, unknown>
+      const startX = state.x as number
+
+      // Execute mv command to throw dagger to guard
+      const result = session.submitCommand('mv dagger guard')
+      expect(result.status).toBe('success')
+
+      const thrown = state.thrown as { speed: number }
+      expect(thrown).toBeDefined()
+      expect(thrown.speed).toBe(200)
+      expect(Math.hypot(state.vx as number, state.vy as number)).toBeCloseTo(200, 1)
+
+      // Advance one tick
+      session.update(16.67)
+      expect((state.x as number)).toBeGreaterThan(startX)
+
+      // Modify dynamic mvSpeed
+      currentMvSpeed = 500
+      session.submitCommand('mv dagger hacker')
+      const thrown2 = state.thrown as { speed: number }
+      expect(thrown2.speed).toBe(500)
+    })
   })
 
   describe('source code serialization with updated speed', () => {
@@ -226,6 +271,24 @@ describe('SpeedEditorScene', () => {
       expect(source).toContain('frictionAcceleration: 3100,')
       expect(source).toContain('turnaroundAcceleration: 1700,')
       expect(source).toContain('maxSpeed: 320,')
+    })
+
+    it('does not couple mv speed to room1 serialization', () => {
+      const objects: RoomObjectConfig[] = []
+      const source = generateRoom1Source(objects)
+
+      expect(source).not.toContain('ROOM1_MV_SPEED')
+      expect(source).not.toContain('MvSpeedConfig')
+    })
+
+    it('serializes mv speed to mv constants without DEFAULT_THROW_SPEED', () => {
+      const source = generateMvConstantsSource(420)
+
+      expect(source).toContain('export const DEFAULT_MV_SPEED = 420')
+      expect(source).toContain('export interface MvSpeedConfig')
+      expect(source).toContain('export const GAME_MV_SPEED: MvSpeedConfig = {')
+      expect(source).toContain('mv_speed: DEFAULT_MV_SPEED,')
+      expect(source).not.toContain('DEFAULT_THROW_SPEED')
     })
   })
 })

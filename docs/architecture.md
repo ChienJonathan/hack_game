@@ -83,7 +83,7 @@ Attacks damage nearest character within Reach (bounding-box gap). Items (includi
 Room 1 initializes with Player Character (upper-left, named `hacker`), Dagger (lower-left), and Guard (right). All World Object sprites are shown by default. Exiting right leads to Room 2:
 - Undiscovered world objects display a `?` overhead label at the top of their sprite; the player character displays `hacker` and is never `?`.
 - `ls` discovers objects in the room and reveals their `?` labels to their respective names; direct player interaction (picking up an item or attacking a guard) also marks the target object discovered, while guard movement/pursuit and guard attacks do not discover the guard.
-- `mv <label1> <label2>` throws `<label1>` towards `<label2>` (an object or room exit) with a speed (`DEFAULT_THROW_SPEED` 300 px/s), unequipping it if equipped. If `<label2>` does not exist in the room, it renames `<label1>` to `<label2>` and marks it discovered.
+- `mv <label1> <label2>` throws `<label1>` towards `<label2>` (an object or room exit) with speed `mv_speed` (`DEFAULT_MV_SPEED` 300 px/s in `src/game/commands/mvConstants.ts`, constant across all rooms), unequipping it if equipped. If `<label2>` does not exist in the room, it renames `<label1>` to `<label2>` and marks it discovered.
 - The player walks with Arrows, automatically picks up the Dagger (and any items) on contact/reach, and attacks with Space or left click. Typing any alphabet key directly switches to Command Mode and begins entering a command.
 - Guard pursues player when player enters room's right half; attacks within Reach.
 - Player reaching 0 Health triggers `game-over`. Defeating guard stops pursuit. Reaching exit triggers `congratulations`.
@@ -185,9 +185,11 @@ Editable configurations export directly to `room1.ts` (`ROOM1_OBJECTS`). Objects
 
 ## Speed Editor
 
-`SpeedEditorScene` (`'speed-editor'`) tunes player movement physics in real time. It directly reuses main game simulation (`GameSession`, `InputModeController`, `TickSimulationEngine`, `PlayerMovementProcess`).
+`SpeedEditorScene` (`'speed-editor'`) tunes player movement and `mv` throw physics in real time. It directly reuses main game simulation (`GameSession`, `InputModeController`, `TickSimulationEngine`, `PlayerMovementProcess`, `DaggerPickupProcess`).
 
 ### Physics Parameters
+
+#### Player Movement Physics
 
 | Parameter | Default | Unit | Description |
 |---|:---:|:---:|---|
@@ -196,14 +198,21 @@ Editable configurations export directly to `room1.ts` (`ROOM1_OBJECTS`). Objects
 | `frictionAcceleration` | 3000 | px/s² | Braking deceleration when movement input stops |
 | `turnaroundAcceleration` | 1600 | px/s² | Snappy reversal acceleration opposing velocity |
 
+#### MV Command Speed
+
+| Parameter | Default | Unit | Description |
+|---|:---:|:---:|---|
+| `mv_speed` | 300 | px/s | Velocity for thrown objects (`mv` command, constant across all rooms in `mvConstants.ts`) |
+
 ### Features & Runtime Behavior
 
 - **Live Tuning While Moving**: Keyboard movement (Arrows) runs continuously during mouse interaction, giving immediate tactile feedback on physics changes.
+- **MV Command Tuning & Testing**: Dedicated parameter control for `mv_speed`, paired with an interactive `TEST MV (THROW DAGGER)` button to test thrown object velocity in real time.
 - **Step & Direct Input**: Parameter buttons (`+` / `−` with step sizes, Shift: 5x multiplier) or click value for exact number prompt. Clamped to minimum safe values.
-- **Live Telemetry**: Displays real-time speed (`px/s`), velocity vectors (`vx`, `vy`), input direction (`moveX`, `moveY`), and dynamic visual speedometer gauge.
-- **Reset Position**: **R** snaps player to start coordinates with zero velocity for standstill acceleration trials.
-- **Reset Defaults**: Restores default physics values.
-- **Save**: Writes updated speed directly to `src/game/content/room1.ts` via `/api/save-room1` and updates `ROOM1_OBJECTS`.
+- **Live Telemetry**: Displays real-time player speed (`px/s`), velocity vectors (`vx`, `vy`), input direction (`moveX`, `moveY`), dynamic visual speedometer gauge, and active `mv` thrown entity telemetry.
+- **Reset Position**: **R** (or `RESET POSITIONS (R)` button) snaps player and dagger back to start coordinates with zero velocity for clean trials.
+- **Reset Defaults**: Restores default physics values for both player and `mv_speed`.
+- **Save Changes**: `SAVE CHANGES` button writes updated player speed directly to `src/game/content/room1.ts` via `/api/save-room1` (`ROOM1_OBJECTS`) and saves `mv_speed` to `src/game/commands/mvConstants.ts` via `/api/save-mv`, syncing global runtime `GAME_MV_SPEED`.
 - **Navigation**: Accessed from Level Editor via `OPEN SPEED EDITOR (F3)` or **F3**, or from AI Editor via **F3**; **Escape** returns to Level Editor, **F2** returns to gameplay, **F4** opens AI Editor.
 
 ## Behavior Tree & AI System

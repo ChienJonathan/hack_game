@@ -4,7 +4,29 @@ import type { WorldState } from '../../domain/WorldState.ts'
 import type { CommandExecutor } from './base.ts'
 import { getMutableWorldObjectState, type MutableWorldObjectState } from '../../domain/WorldObjectState.ts'
 import type { WorldObject } from '../../domain/WorldObject.ts'
-import { DEFAULT_THROW_SPEED } from '../../content/room1Constants.ts'
+import {
+  DEFAULT_MV_SPEED,
+  GAME_MV_SPEED,
+  type MvSpeedConfig,
+} from '../mvConstants.ts'
+
+export type MvSpeedSource = number | MvSpeedConfig | (() => number | MvSpeedConfig)
+
+export function resolveMvSpeed(source?: MvSpeedSource): number {
+  if (typeof source === 'function') {
+    return resolveMvSpeed(source())
+  }
+  if (typeof source === 'number') {
+    return source
+  }
+  if (typeof source === 'object' && source !== null) {
+    if (typeof source.mv_speed === 'number') return source.mv_speed
+    if (typeof (source as Record<string, unknown>).mvSpeed === 'number') {
+      return (source as Record<string, unknown>).mvSpeed as number
+    }
+  }
+  return GAME_MV_SPEED.mv_speed ?? DEFAULT_MV_SPEED
+}
 
 export function findObjectInRoom(state: WorldState, label: string): WorldObject | undefined {
   const currentRoom = state.rooms.find((room) => room.id === state.currentRoomId)
@@ -44,6 +66,12 @@ export function findObjectInRoom(state: WorldState, label: string): WorldObject 
 }
 
 export class MvCommandExecutor implements CommandExecutor {
+  private readonly speedSource?: MvSpeedSource
+
+  constructor(speedSource?: MvSpeedSource) {
+    this.speedSource = speedSource
+  }
+
   execute(command: ParsedCommand, state: WorldState): CommandResult {
     if (state.outcome !== 'playing') {
       return { status: 'rejected', feedback: { kind: 'popup', text: 'This game has ended.' } }
@@ -96,7 +124,7 @@ export class MvCommandExecutor implements CommandExecutor {
       }
     }
 
-    const speed = DEFAULT_THROW_SPEED
+    const speed = resolveMvSpeed(this.speedSource)
     const sourceState = getMutableWorldObjectState<MutableWorldObjectState>(sourceObject)
 
     // Unequip if currently equipped

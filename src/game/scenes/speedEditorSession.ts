@@ -6,6 +6,12 @@ import {
   type PlayerSpeedConfig,
   type RoomObjectConfig,
 } from '../content/room1.ts'
+import {
+  DEFAULT_MV_SPEED,
+  GAME_MV_SPEED,
+  type MvSpeedConfig,
+} from '../commands/mvConstants.ts'
+import type { MvSpeedSource } from '../commands/executors/mv.ts'
 import { createInitialWorldState } from '../content/room1WorldState.ts'
 import { createRoom1CommandSubmissionService } from '../content/room1Commands.ts'
 import { GameSession } from '../application/GameSession.ts'
@@ -13,7 +19,7 @@ import { InputModeController } from '../application/InputModeController.ts'
 import { INPUT_BINDINGS } from '../presentation/InputBindings.ts'
 import { RealtimeSimulationClock } from '../simulation/RealtimeSimulationClock.ts'
 import { TickSimulationEngine } from '../simulation/TickSimulationEngine.ts'
-import { PlayerMovementProcess } from '../simulation/room1/Room1Processes.ts'
+import { PlayerMovementProcess, DaggerPickupProcess } from '../simulation/room1/Room1Processes.ts'
 import { BasicWorldObject } from '../domain/BasicWorldObject.ts'
 import { CombatService } from '../domain/CombatService.ts'
 import { PickUpService } from '../domain/PickUpService.ts'
@@ -26,6 +32,17 @@ export const DEFAULT_SPEED_CONFIG: PlayerSpeedConfig = {
   frictionAcceleration: 3000,
   turnaroundAcceleration: 1600,
   maxSpeed: 300,
+}
+
+export { DEFAULT_MV_SPEED, GAME_MV_SPEED, type MvSpeedConfig }
+
+export function getMvSpeedConfig(speed?: number | Partial<MvSpeedConfig>): MvSpeedConfig {
+  if (typeof speed === 'number') {
+    return { mv_speed: speed }
+  }
+  return {
+    mv_speed: speed?.mv_speed ?? GAME_MV_SPEED.mv_speed ?? DEFAULT_MV_SPEED,
+  }
 }
 
 export function getPlayerSpeedFromObjects(objects: RoomObjectConfig[]): PlayerSpeedConfig {
@@ -70,6 +87,7 @@ function getStorage(storage?: Storage): Storage {
 
 export function createSpeedEditorSession(options?: {
   playerSpeed?: PlayerSpeedConfig
+  mvSpeed?: MvSpeedSource
   storage?: Storage
   objects?: RoomObjectConfig[]
 }): SpeedEditorSessionBundle {
@@ -82,10 +100,10 @@ export function createSpeedEditorSession(options?: {
     exits: [],
   }))
 
-  // Clear behavior rules for non-player objects so they remain static
-  // landmarks and only player movement is simulated during speed tuning.
+  // Clear behavior rules for guards so they remain static
+  // landmarks and do not pursue or attack during speed tuning.
   worldState.worldObjects = worldState.worldObjects.map((obj) => {
-    if (obj.id !== WORLD_OBJECT_IDS.player) {
+    if (obj.id !== WORLD_OBJECT_IDS.player && obj.id !== WORLD_OBJECT_IDS.dagger) {
       return new BasicWorldObject(obj.id, obj.roomId, obj.metadata, [], obj.state)
     }
     return obj
@@ -106,12 +124,15 @@ export function createSpeedEditorSession(options?: {
     state.vy = 0
   }
 
-  // Simulation engine only runs PlayerMovementProcess:
-  // guards will not pursue or attack, and exact player movement physics are executed.
-  const simulationEngine = new TickSimulationEngine([new PlayerMovementProcess()])
+  // Simulation engine runs PlayerMovementProcess and DaggerPickupProcess:
+  // guards will not pursue or attack, while player movement and thrown weapon physics execute.
+  const simulationEngine = new TickSimulationEngine([
+    new PlayerMovementProcess(),
+    new DaggerPickupProcess(),
+  ])
   const session = new GameSession({
     worldState,
-    commandSubmission: createRoom1CommandSubmissionService(),
+    commandSubmission: createRoom1CommandSubmissionService(options?.mvSpeed),
     simulationClock: new RealtimeSimulationClock(),
     simulationEngine,
     saveRepository: new LocalStorageSaveRepository(getStorage(options?.storage)),

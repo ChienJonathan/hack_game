@@ -4,13 +4,13 @@ import { RegisteredCommandRegistry } from '../commands/RegisteredCommandRegistry
 import type { RegisteredCommand } from '../commands/CommandRegistry.ts'
 import { HelpCommandExecutor } from '../commands/executors/help.ts'
 import { LsCommandExecutor } from '../commands/executors/ls.ts'
-import { MvCommandExecutor } from '../commands/executors/mv.ts'
+import { MvCommandExecutor, type MvSpeedSource } from '../commands/executors/mv.ts'
 import { VirtualCommandParser } from '../commands/VirtualCommandParser.ts'
 
-export function createRoom1CommandSubmissionService(): CommandSubmissionService {
+export function createRoom1CommandSubmissionService(mvSpeedSource?: MvSpeedSource): CommandSubmissionService {
   const commands: RegisteredCommand[] = [
     { name: 'ls', requirements: [], executor: new LsCommandExecutor() },
-    { name: 'mv', requirements: [], executor: new MvCommandExecutor() },
+    { name: 'mv', requirements: [], executor: new MvCommandExecutor(mvSpeedSource) },
   ]
   const helpCommandName = 'help'
 

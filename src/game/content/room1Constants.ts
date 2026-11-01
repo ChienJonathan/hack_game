@@ -39,5 +39,5 @@ export const CHARACTER_SIZE = { width: 110, height: 160 } as const
 export const CHARACTER_BASE_SIZE = { width: 176, height: 176 } as const
 export const DAGGER_SIZE = { width: 72, height: 72 } as const
 export const MAX_HEALTH = 100
-export const DEFAULT_THROW_SPEED = 300
+
 

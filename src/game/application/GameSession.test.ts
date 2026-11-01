@@ -359,6 +359,24 @@ describe('commands', () => {
     expect(guard.discovered).toBe(true)
   })
 
+  it('moves thrown object at constant mv_speed across simulation ticks', () => {
+    const session = newSession()
+    const dagger = stateOf(session, 'dagger')
+
+    session.submitCommand('mv dagger guard')
+    const daggerRecord = dagger as unknown as Record<string, unknown>
+    const thrown = daggerRecord.thrown as { speed: number }
+    expect(thrown).toBeDefined()
+    expect(thrown.speed).toBe(300)
+
+    // Velocity is immediately at throw speed in direction of target
+    expect(Math.hypot(dagger.vx as number, dagger.vy as number)).toBeCloseTo(300, 1)
+
+    // Advance 1 simulation tick (~16.67ms): velocity remains constant at throw speed
+    session.update(SIMULATION_TICK_MS)
+    expect(Math.hypot(dagger.vx as number, dagger.vy as number)).toBeCloseTo(300, 1)
+  })
+
   it('unequips weapon when thrown and allows pickup when in reach', () => {
     const session = newSession()
     const player = stateOf(session, 'player')

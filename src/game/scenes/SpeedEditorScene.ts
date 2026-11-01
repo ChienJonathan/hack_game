@@ -9,6 +9,7 @@ import {
   type PlayerSpeedConfig,
 } from '../content/room1.ts'
 import { generateRoom1Source } from '../content/room1Serializer.ts'
+import { generateMvConstantsSource } from '../commands/mvSerializer.ts'
 import { GameSession } from '../application/GameSession.ts'
 import {
   PhaserRoomView,
@@ -18,7 +19,11 @@ import { COMMAND_INPUT_TEXTURE_KEY } from '../presentation/PhaserCommandInputVie
 import type { WorldState } from '../domain/WorldState.ts'
 import {
   DEFAULT_SPEED_CONFIG,
+  DEFAULT_MV_SPEED,
+  GAME_MV_SPEED,
+  type MvSpeedConfig,
   getPlayerSpeedFromObjects,
+  getMvSpeedConfig,
   createSpeedEditorSession,
 } from './speedEditorSession.ts'
 
@@ -38,16 +43,20 @@ export class SpeedEditorScene extends Phaser.Scene {
   private worldState!: WorldState
   private readonly roomView = new PhaserRoomView()
   private playerSpeed: PlayerSpeedConfig = { ...DEFAULT_SPEED_CONFIG }
+  private mvSpeed: MvSpeedConfig = { mv_speed: DEFAULT_MV_SPEED }
 
   private panelContainer: Phaser.GameObjects.Container | undefined
   private headerText: Phaser.GameObjects.Text | undefined
   private instructionText: Phaser.GameObjects.Text | undefined
   private saveButton: Phaser.GameObjects.Container | undefined
+  private testMvButton: Phaser.GameObjects.Container | undefined
 
   private speedFields: Map<keyof PlayerSpeedConfig, Phaser.GameObjects.Text> = new Map()
+  private mvSpeedFields: Map<keyof MvSpeedConfig, Phaser.GameObjects.Text> = new Map()
   private telemetrySpeedText: Phaser.GameObjects.Text | undefined
   private telemetryVelocityText: Phaser.GameObjects.Text | undefined
   private telemetryInputText: Phaser.GameObjects.Text | undefined
+  private telemetryThrownText: Phaser.GameObjects.Text | undefined
   private speedGaugeGraphics: Phaser.GameObjects.Graphics | undefined
   private isPromptOpen = false
 
@@ -68,13 +77,18 @@ export class SpeedEditorScene extends Phaser.Scene {
 
   create(): void {
     this.speedFields.clear()
+    this.mvSpeedFields.clear()
     this.isPromptOpen = false
 
-    // Initialize player speed from ROOM1_OBJECTS
+    // Initialize player speed and mv speed
     this.playerSpeed = getPlayerSpeedFromObjects(ROOM1_OBJECTS)
+    this.mvSpeed = getMvSpeedConfig(GAME_MV_SPEED)
 
-    // Create session reusing main game movement code
-    const bundle = createSpeedEditorSession({ playerSpeed: this.playerSpeed })
+    // Create session reusing main game movement code and dynamic mv speed
+    const bundle = createSpeedEditorSession({
+      playerSpeed: this.playerSpeed,
+      mvSpeed: () => this.mvSpeed,
+    })
     this.session = bundle.session
     this.worldState = bundle.worldState
 
@@ -83,7 +97,7 @@ export class SpeedEditorScene extends Phaser.Scene {
 
     // Header Title
     this.headerText = this.add
-      .text(ROOM_LAYOUT.left, 24, 'SPEED EDITOR — Player Movement & Physics Tuning', {
+      .text(ROOM_LAYOUT.left, 24, 'SPEED EDITOR — Player Movement & MV Speed Tuning', {
         fontFamily: FONT_FAMILY,
         fontSize: 18,
         color: ACCENT_COLOR,
@@ -109,7 +123,7 @@ export class SpeedEditorScene extends Phaser.Scene {
       .text(
         960,
         1048,
-        'Arrows: Move player · R: Reset position · Click +/-: Adjust · Click value: Exact input',
+        'Arrows: Move · R: Reset · Click +/-: Adjust · Click value: Exact input · TEST MV: Throw dagger',
         {
           fontFamily: FONT_FAMILY,
           fontSize: 13,
@@ -133,8 +147,10 @@ export class SpeedEditorScene extends Phaser.Scene {
       this.instructionText?.destroy()
       this.panelContainer?.destroy(true)
       this.saveButton?.destroy(true)
+      this.testMvButton?.destroy(true)
       this.roomView.destroy()
       this.speedFields.clear()
+      this.mvSpeedFields.clear()
     })
   }
 
@@ -156,29 +172,34 @@ export class SpeedEditorScene extends Phaser.Scene {
 
     const items: Phaser.GameObjects.GameObject[] = [bg]
 
-    // Vertical dividers dividing into: Parameter Tuning (left), Telemetry (middle), Actions (right)
+    // Vertical dividers dividing into:
+    // Sub-col 1: Player Speed (0..530)
+    // Sub-col 2: MV Throw Speed (530..1060)
+    // Col 2: Telemetry (1060..1420)
+    // Col 3: Actions (1420..1728)
     const dividers = this.add.graphics()
     dividers.lineStyle(2, 0x333333, 1)
+    dividers.lineBetween(530, 16, 530, PANEL_HEIGHT - 16)
     dividers.lineBetween(1060, 16, 1060, PANEL_HEIGHT - 16)
     dividers.lineBetween(1420, 16, 1420, PANEL_HEIGHT - 16)
+    dividers.lineBetween(1075, 160, 1405, 160)
     items.push(dividers)
 
-    // ─── Column 1: Speed Parameter Controls ───
+    // ─── Sub-column 1: Player Speed Parameters ───
     const col1Title = this.add
-      .text(540, 16, 'PLAYER SPEED PARAMETERS', {
+      .text(265, 14, 'PLAYER SPEED PARAMETERS', {
         fontFamily: FONT_FAMILY,
-        fontSize: 14,
+        fontSize: 13,
         color: ACCENT_COLOR,
       })
       .setOrigin(0.5, 0)
     items.push(col1Title)
 
-    // Build the 4 rows: maxSpeed, acceleration, frictionAcceleration, turnaroundAcceleration
     this.buildSpeedControlRow(
       'maxSpeed',
       'MAX SPEED (px/s)',
       'Velocity cap in movement mode',
-      50,
+      46,
       [-50, -10, 10, 50],
       items,
     )
@@ -186,7 +207,7 @@ export class SpeedEditorScene extends Phaser.Scene {
       'acceleration',
       'ACCEL (px/s²)',
       'Speed-up rate toward input',
-      110,
+      104,
       [-250, -50, 50, 250],
       items,
     )
@@ -194,7 +215,7 @@ export class SpeedEditorScene extends Phaser.Scene {
       'frictionAcceleration',
       'FRICTION (px/s²)',
       'Braking rate when input ceases',
-      170,
+      162,
       [-250, -50, 50, 250],
       items,
     )
@@ -202,84 +223,139 @@ export class SpeedEditorScene extends Phaser.Scene {
       'turnaroundAcceleration',
       'TURNAROUND (px/s²)',
       'Reverse rate opposing velocity',
-      230,
+      220,
       [-250, -50, 50, 250],
       items,
     )
 
+    // ─── Sub-column 2: MV Command Speed Parameters ───
+    const mvTitle = this.add
+      .text(795, 14, 'MV COMMAND SPEED', {
+        fontFamily: FONT_FAMILY,
+        fontSize: 13,
+        color: ACCENT_COLOR,
+      })
+      .setOrigin(0.5, 0)
+    items.push(mvTitle)
+
+    this.buildMvSpeedControlRow(
+      'mv_speed',
+      'MV SPEED (px/s)',
+      'Velocity for thrown objects (mv command)',
+      75,
+      [-50, -10, 10, 50],
+      items,
+    )
+
+    const testMvBtn = this.createButton(
+      795,
+      175,
+      'TEST MV (THROW DAGGER)',
+      '#004d40',
+      '#80cbc4',
+      () => this.testMvThrow(),
+      330,
+      38,
+    )
+    this.testMvButton = testMvBtn
+    items.push(testMvBtn)
+
     // ─── Column 2: Live Telemetry & Speedometer ───
     const col2Title = this.add
-      .text(1240, 16, 'LIVE TELEMETRY', {
+      .text(1240, 14, 'LIVE TELEMETRY', {
         fontFamily: FONT_FAMILY,
-        fontSize: 14,
+        fontSize: 13,
         color: ACCENT_COLOR,
       })
       .setOrigin(0.5, 0)
     items.push(col2Title)
 
     this.telemetrySpeedText = this.add
-      .text(1080, 54, 'Speed: 0.0 / 300 px/s', {
+      .text(1080, 44, 'Player: 0.0 / 300 px/s', {
         fontFamily: FONT_FAMILY,
-        fontSize: 13,
+        fontSize: 12,
         color: VALUE_COLOR,
       })
       .setOrigin(0, 0)
 
     this.telemetryVelocityText = this.add
-      .text(1080, 84, 'Vx: +0.0  Vy: +0.0', {
+      .text(1080, 70, 'Vx: +0.0  Vy: +0.0', {
         fontFamily: FONT_FAMILY,
-        fontSize: 12,
+        fontSize: 11,
         color: TEXT_COLOR,
       })
       .setOrigin(0, 0)
 
     this.telemetryInputText = this.add
-      .text(1080, 112, 'Input: (0.0, 0.0)', {
+      .text(1080, 94, 'Input: (0.0, 0.0)', {
         fontFamily: FONT_FAMILY,
-        fontSize: 12,
+        fontSize: 11,
         color: DIM_COLOR,
       })
       .setOrigin(0, 0)
 
     // Visual speedometer gauge bar
     const gaugeBg = this.add
-      .rectangle(1080 + 155, 155, 310, 20, 0x111111, 1)
+      .rectangle(1080 + 155, 134, 310, 18, 0x111111, 1)
       .setStrokeStyle(2, 0x444444, 1)
     this.speedGaugeGraphics = this.add.graphics()
+
+    this.telemetryThrownText = this.add
+      .text(1080, 174, 'MV Thrown: Idle\n(click TEST MV)', {
+        fontFamily: FONT_FAMILY,
+        fontSize: 11,
+        color: '#80cbc4',
+      })
+      .setOrigin(0, 0)
+
     items.push(
       this.telemetrySpeedText,
       this.telemetryVelocityText,
       this.telemetryInputText,
       gaugeBg,
       this.speedGaugeGraphics,
+      this.telemetryThrownText,
     )
 
     // ─── Column 3: Actions ───
     const col3Title = this.add
-      .text(1574, 20, 'ACTIONS', {
+      .text(1574, 14, 'ACTIONS', {
         fontFamily: FONT_FAMILY,
-        fontSize: 14,
+        fontSize: 13,
         color: ACCENT_COLOR,
       })
       .setOrigin(0.5, 0)
     items.push(col3Title)
 
     // Save button
-    const saveBtn = this.createSaveButton(1574, 85)
+    const saveBtn = this.createSaveButton(1574, 68)
     items.push(saveBtn)
 
     // Reset defaults button
     const resetDefaultBtn = this.createButton(
       1574,
-      155,
+      132,
       'RESET DEFAULTS',
       '#37474f',
       '#eceff1',
       () => this.resetDefaults(),
       250,
-      38,
+      36,
     )
     items.push(resetDefaultBtn)
+
+    // Reset positions button
+    const resetPosBtn = this.createButton(
+      1574,
+      196,
+      'RESET POSITIONS (R)',
+      '#263238',
+      '#cfd8dc',
+      () => this.resetPlayerPosition(),
+      250,
+      36,
+    )
+    items.push(resetPosBtn)
 
     this.panelContainer = this.add.container(PANEL_X, PANEL_Y, items).setDepth(40)
     this.refreshSpeedPanelFields()
@@ -293,31 +369,29 @@ export class SpeedEditorScene extends Phaser.Scene {
     steps: number[],
     containerItems: Phaser.GameObjects.GameObject[],
   ): void {
-    // Label and description
     const label = this.add
-      .text(28, y, title, {
+      .text(16, y, title, {
         fontFamily: FONT_FAMILY,
-        fontSize: 13,
+        fontSize: 11,
         color: TEXT_COLOR,
       })
       .setOrigin(0, 0)
 
     const desc = this.add
-      .text(28, y + 20, subtitle, {
+      .text(16, y + 17, subtitle, {
         fontFamily: FONT_FAMILY,
-        fontSize: 10,
+        fontSize: 9,
         color: DIM_COLOR,
       })
       .setOrigin(0, 0)
 
-    // Current value display (clickable to input exact number)
     const valText = this.add
-      .text(370, y + 8, '--', {
+      .text(205, y + 8, '--', {
         fontFamily: FONT_FAMILY,
-        fontSize: 15,
+        fontSize: 12,
         color: VALUE_COLOR,
         backgroundColor: '#262626',
-        padding: { x: 10, y: 5 },
+        padding: { x: 6, y: 4 },
       })
       .setOrigin(0.5, 0.5)
       .setInteractive({ useHandCursor: true })
@@ -330,8 +404,7 @@ export class SpeedEditorScene extends Phaser.Scene {
     this.speedFields.set(property, valText)
     containerItems.push(label, desc, valText)
 
-    // Quick step buttons (e.g. [-250, -50, +50, +250])
-    const buttonPositions = [470, 565, 660, 755]
+    const buttonPositions = [262, 320, 378, 436]
     for (let i = 0; i < steps.length; i++) {
       const step = steps[i]
       const stepLabel = step > 0 ? `+${step}` : `${step}`
@@ -341,10 +414,10 @@ export class SpeedEditorScene extends Phaser.Scene {
       const btn = this.add
         .text(btnX, y + 8, stepLabel, {
           fontFamily: FONT_FAMILY,
-          fontSize: 12,
+          fontSize: 10,
           color: isPositive ? '#a5d6a7' : '#ef9a9a',
           backgroundColor: '#333333',
-          padding: { x: 8, y: 5 },
+          padding: { x: 5, y: 4 },
         })
         .setOrigin(0.5, 0.5)
         .setInteractive({ useHandCursor: true })
@@ -353,6 +426,77 @@ export class SpeedEditorScene extends Phaser.Scene {
         pointer.event?.stopPropagation?.()
         const multiplier = pointer.event?.shiftKey ? 5 : 1
         this.adjustSpeed(property, step * multiplier)
+      })
+
+      containerItems.push(btn)
+    }
+  }
+
+  private buildMvSpeedControlRow(
+    property: keyof MvSpeedConfig,
+    title: string,
+    subtitle: string,
+    y: number,
+    steps: number[],
+    containerItems: Phaser.GameObjects.GameObject[],
+  ): void {
+    const label = this.add
+      .text(548, y, title, {
+        fontFamily: FONT_FAMILY,
+        fontSize: 11,
+        color: TEXT_COLOR,
+      })
+      .setOrigin(0, 0)
+
+    const desc = this.add
+      .text(548, y + 17, subtitle, {
+        fontFamily: FONT_FAMILY,
+        fontSize: 9,
+        color: DIM_COLOR,
+      })
+      .setOrigin(0, 0)
+
+    const valText = this.add
+      .text(745, y + 8, '--', {
+        fontFamily: FONT_FAMILY,
+        fontSize: 12,
+        color: VALUE_COLOR,
+        backgroundColor: '#262626',
+        padding: { x: 6, y: 4 },
+      })
+      .setOrigin(0.5, 0.5)
+      .setInteractive({ useHandCursor: true })
+
+    valText.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      pointer.event?.stopPropagation?.()
+      this.promptMvSpeed(property)
+    })
+
+    this.mvSpeedFields.set(property, valText)
+    containerItems.push(label, desc, valText)
+
+    const buttonPositions = [805, 865, 925, 985]
+    for (let i = 0; i < steps.length; i++) {
+      const step = steps[i]
+      const stepLabel = step > 0 ? `+${step}` : `${step}`
+      const btnX = buttonPositions[i]
+      const isPositive = step > 0
+
+      const btn = this.add
+        .text(btnX, y + 8, stepLabel, {
+          fontFamily: FONT_FAMILY,
+          fontSize: 10,
+          color: isPositive ? '#a5d6a7' : '#ef9a9a',
+          backgroundColor: '#333333',
+          padding: { x: 5, y: 4 },
+        })
+        .setOrigin(0.5, 0.5)
+        .setInteractive({ useHandCursor: true })
+
+      btn.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+        pointer.event?.stopPropagation?.()
+        const multiplier = pointer.event?.shiftKey ? 5 : 1
+        this.adjustMvSpeed(step * multiplier, property)
       })
 
       containerItems.push(btn)
@@ -400,7 +544,7 @@ export class SpeedEditorScene extends Phaser.Scene {
       .setStrokeStyle(2, 0x66bb6a, 1)
 
     const label = this.add
-      .text(0, 0, 'SAVE TO ROOM1.TS', {
+      .text(0, 0, 'SAVE CHANGES', {
         fontFamily: FONT_FAMILY,
         fontSize: 13,
         color: '#ffffff',
@@ -424,6 +568,10 @@ export class SpeedEditorScene extends Phaser.Scene {
       const val = this.playerSpeed[key]
       field.setText(val.toString())
     }
+    for (const [key, field] of this.mvSpeedFields.entries()) {
+      const val = this.mvSpeed[key]
+      field.setText(val.toString())
+    }
   }
 
   private updateTelemetry(): void {
@@ -439,7 +587,7 @@ export class SpeedEditorScene extends Phaser.Scene {
     const maxSpd = this.playerSpeed.maxSpeed
 
     this.telemetrySpeedText?.setText(
-      `Speed: ${speed.toFixed(1)} / ${maxSpd} px/s`,
+      `Player: ${speed.toFixed(1)} / ${maxSpd} px/s`,
     )
     this.telemetryVelocityText?.setText(
       `Vx: ${vx >= 0 ? '+' : ''}${vx.toFixed(1)}  Vy: ${vy >= 0 ? '+' : ''}${vy.toFixed(1)}`,
@@ -454,11 +602,27 @@ export class SpeedEditorScene extends Phaser.Scene {
       const ratio = Math.min(1, Math.max(0, speed / Math.max(1, maxSpd)))
       const barWidth = Math.round(ratio * 306)
       if (barWidth > 0) {
-        // Dynamic color interpolation between cyan and yellow/red when capped
+        // Dynamic color interpolation between cyan and green when capped
         const color = ratio > 0.95 ? 0x00e676 : 0x4fc3f7
         this.speedGaugeGraphics.fillStyle(color, 1)
-        this.speedGaugeGraphics.fillRect(1080 + 2, 147, barWidth, 16)
+        this.speedGaugeGraphics.fillRect(1080 + 2, 126, barWidth, 16)
       }
+    }
+
+    // Telemetry for thrown objects (mv)
+    const thrownObj = this.worldState.worldObjects.find(
+      (o) => (o.state as Record<string, unknown>).thrown != null,
+    )
+    if (thrownObj) {
+      const tState = thrownObj.state as Record<string, unknown>
+      const tvx = typeof tState.vx === 'number' ? tState.vx : 0
+      const tvy = typeof tState.vy === 'number' ? tState.vy : 0
+      const curSpeed = Math.hypot(tvx, tvy)
+      this.telemetryThrownText?.setText(
+        `MV: ${thrownObj.id}\n${curSpeed.toFixed(1)} px/s`,
+      )
+    } else {
+      this.telemetryThrownText?.setText(`MV Speed: ${this.mvSpeed.mv_speed} px/s\n(click TEST MV)`)
     }
   }
 
@@ -489,12 +653,30 @@ export class SpeedEditorScene extends Phaser.Scene {
     this.refreshSpeedPanelFields()
   }
 
+  public setMvSpeed(newSpeed: number | Partial<MvSpeedConfig>): void {
+    if (typeof newSpeed === 'number') {
+      this.mvSpeed.mv_speed = newSpeed
+    } else {
+      Object.assign(this.mvSpeed, newSpeed)
+    }
+    GAME_MV_SPEED.mv_speed = this.mvSpeed.mv_speed
+    this.refreshSpeedPanelFields()
+  }
+
   public adjustSpeed(property: keyof PlayerSpeedConfig, delta: number): void {
     const current = this.playerSpeed[property]
     const min = property === 'maxSpeed' ? 10 : 50
     const next = Math.max(min, Math.round(current + delta))
     if (next !== current) {
       this.setPlayerSpeed({ [property]: next })
+    }
+  }
+
+  public adjustMvSpeed(delta: number, property: keyof MvSpeedConfig = 'mv_speed'): void {
+    const current = this.mvSpeed[property] ?? this.mvSpeed.mv_speed
+    const next = Math.max(10, Math.round(current + delta))
+    if (next !== current) {
+      this.setMvSpeed({ [property]: next })
     }
   }
 
@@ -514,8 +696,33 @@ export class SpeedEditorScene extends Phaser.Scene {
     }
   }
 
+  public promptMvSpeed(property: keyof MvSpeedConfig = 'mv_speed'): void {
+    this.isPromptOpen = true
+    this.session.releaseAllKeys()
+    const current = this.mvSpeed[property] ?? this.mvSpeed.mv_speed
+    const input = window.prompt(`Enter new ${property}:`, current.toString())
+    this.session.releaseAllKeys()
+    this.isPromptOpen = false
+
+    if (input === null) return
+    const parsed = parseInt(input.trim(), 10)
+    if (!isNaN(parsed) && parsed >= 10 && parsed !== current) {
+      this.setMvSpeed({ [property]: parsed })
+    }
+  }
+
+  public testMvThrow(): void {
+    const dagger = this.worldState.worldObjects.find((o) => o.id === WORLD_OBJECT_IDS.dagger)
+    if (!dagger) return
+
+    const dState = dagger.state as Record<string, unknown>
+    const target = typeof dState.x === 'number' && dState.x > 900 ? 'hacker' : 'guard'
+    this.session.submitCommand(`mv dagger ${target}`)
+  }
+
   public resetDefaults(): void {
     this.setPlayerSpeed(DEFAULT_SPEED_CONFIG)
+    this.setMvSpeed(DEFAULT_MV_SPEED)
   }
 
   public resetPlayerPosition(): void {
@@ -527,7 +734,21 @@ export class SpeedEditorScene extends Phaser.Scene {
       state.y = room1Player?.y ?? ROOM_LAYOUT.playerStart.y
       state.vx = 0
       state.vy = 0
+      state.thrown = null
     }
+
+    const dagger = this.worldState.worldObjects.find((o) => o.id === WORLD_OBJECT_IDS.dagger)
+    if (dagger) {
+      const state = dagger.state as Record<string, unknown>
+      const room1Dagger = ROOM1_OBJECTS.find((o) => o.role === 'weapon' || o.id === WORLD_OBJECT_IDS.dagger)
+      state.x = room1Dagger?.x ?? ROOM_LAYOUT.daggerStart.x
+      state.y = room1Dagger?.y ?? ROOM_LAYOUT.daggerStart.y
+      state.vx = 0
+      state.vy = 0
+      state.thrown = null
+      state.equippedBy = null
+    }
+
     this.session.releaseAllKeys()
   }
 
@@ -536,44 +757,61 @@ export class SpeedEditorScene extends Phaser.Scene {
     if (player) {
       player.speed = { ...this.playerSpeed }
     }
+    GAME_MV_SPEED.mv_speed = this.mvSpeed.mv_speed
 
-    const source = generateRoom1Source(ROOM1_OBJECTS)
+    const room1Source = generateRoom1Source(ROOM1_OBJECTS)
+    const mvSource = generateMvConstantsSource(this.mvSpeed)
     const bg = this.saveButton?.getAt(0) as Phaser.GameObjects.Rectangle | undefined
     const label = this.saveButton?.getAt(1) as Phaser.GameObjects.Text | undefined
 
     try {
-      const response = await fetch('/api/save-room1', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: source }),
-      })
+      const [room1Response, mvResponse] = await Promise.all([
+        fetch('/api/save-room1', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: room1Source }),
+        }),
+        fetch('/api/save-mv', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: mvSource }),
+        }),
+      ])
 
-      if (!response.ok) {
-        throw new Error(`Server returned ${response.status}: ${response.statusText}`)
+      if (!room1Response.ok) {
+        throw new Error(`Server returned ${room1Response.status} on save-room1: ${room1Response.statusText}`)
+      }
+      if (!mvResponse.ok) {
+        throw new Error(`Server returned ${mvResponse.status} on save-mv: ${mvResponse.statusText}`)
       }
 
-      const result = await response.json()
-      if (!result.success) {
-        throw new Error(result.error ?? 'Unknown save error')
+      const room1Result = await room1Response.json()
+      if (!room1Result.success) {
+        throw new Error(room1Result.error ?? 'Unknown save-room1 error')
+      }
+
+      const mvResult = await mvResponse.json()
+      if (!mvResult.success) {
+        throw new Error(mvResult.error ?? 'Unknown save-mv error')
       }
 
       if (bg && label) {
         bg.setFillStyle(0x66bb6a, 1)
-        label.setText('SAVED TO ROOM1.TS!')
+        label.setText('SAVED CHANGES!')
         this.time.delayedCall(1500, () => {
           bg.setFillStyle(0x2e7d32, 1)
-          label.setText('SAVE TO ROOM1.TS')
+          label.setText('SAVE CHANGES')
         })
       }
       return true
     } catch (err) {
-      console.error('Failed to save room1 speed:', err)
+      console.error('Failed to save changes:', err)
       if (bg && label) {
         bg.setFillStyle(0xb71c1c, 1)
         label.setText('SAVE FAILED (CONSOLE)')
         this.time.delayedCall(2000, () => {
           bg.setFillStyle(0x2e7d32, 1)
-          label.setText('SAVE TO ROOM1.TS')
+          label.setText('SAVE CHANGES')
         })
       }
       return false

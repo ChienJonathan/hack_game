@@ -92,5 +92,13 @@ describe('room1Serializer', () => {
     expect(source).toContain('turnaroundAcceleration: 1600')
     expect(source).toContain('maxSpeed: 240')
   })
+
+  it('does not couple mv speed to room1 serialization', () => {
+    const objects: RoomObjectConfig[] = []
+    const source = generateRoom1Source(objects)
+
+    expect(source).not.toContain('ROOM1_MV_SPEED')
+    expect(source).not.toContain('MvSpeedConfig')
+  })
 })
 
