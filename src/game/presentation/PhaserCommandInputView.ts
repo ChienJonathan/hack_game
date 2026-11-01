@@ -198,6 +198,16 @@ export class PhaserCommandInputView implements CommandInputView {
     this.render()
   }
 
+  clearInput(): void {
+    this.value = ''
+    this.cursorIndex = 0
+    this.historyIndex = undefined
+    this.historyDraft = ''
+    this.scrollOffset = 0
+    this.markCursorActive()
+    this.render()
+  }
+
   setKeyGate(gate: (event: KeyboardEvent) => boolean): void {
     this.keyGate = gate
   }
@@ -255,6 +265,13 @@ export class PhaserCommandInputView implements CommandInputView {
     if (event.key === 'Enter') {
       event.preventDefault()
       this.submit()
+      return
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      this.clearInput()
+      this.setInputEnabled(false)
       return
     }
 

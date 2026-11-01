@@ -26,6 +26,10 @@ describe('INPUT_BINDINGS', () => {
     expect(INPUT_BINDINGS.attack.keys).toContain(' ')
     expect(INPUT_BINDINGS.attack.mouseButtons).toContain('left')
   })
+
+  it('binds escape to exit command mode', () => {
+    expect(INPUT_BINDINGS.exitCommandMode).toContain('escape')
+  })
 })
 
 describe('isAlphabetKey', () => {

@@ -16,6 +16,7 @@ export interface CommandInputView {
   ): void
   setPrompt(prompt: string): void
   setInputEnabled(enabled: boolean): void
+  clearInput(): void
   setKeyGate(gate: (event: KeyboardEvent) => boolean): void
   destroy(): void
 }

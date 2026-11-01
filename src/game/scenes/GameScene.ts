@@ -125,6 +125,14 @@ export class GameScene extends Phaser.Scene {
       return false
     }
 
+    if (INPUT_BINDINGS.exitCommandMode.includes(key)) {
+      event.preventDefault()
+      this.session.enterMovementMode()
+      this.commandInputView?.clearInput()
+      this.commandInputView?.setInputEnabled(false)
+      return false
+    }
+
     const { typeable } = this.session.keyDown(key)
     return typeable
   }
