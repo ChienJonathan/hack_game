@@ -93,7 +93,7 @@ export class SpeedEditorScene extends Phaser.Scene {
 
     // Top Right Navigation Hints
     this.add
-      .text(1824, 26, 'R: Reset Pos · ESC: Level Editor · F2: Game', {
+      .text(1824, 26, 'R: Reset Pos · ESC: Level · F2: Game · F4: AI Editor', {
         fontFamily: FONT_FAMILY,
         fontSize: 14,
         color: DIM_COLOR,
@@ -647,6 +647,12 @@ export class SpeedEditorScene extends Phaser.Scene {
     if (event.key === 'F2') {
       event.preventDefault()
       this.returnToGame()
+      return
+    }
+
+    if (event.key === 'F4') {
+      event.preventDefault()
+      this.scene.start('behavior-tree-editor')
       return
     }
 

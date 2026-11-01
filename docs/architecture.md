@@ -133,6 +133,8 @@ classDiagram
   LevelEditorScene ..> room1Serializer : serializes RoomObjectConfig[]
   LevelEditorScene ..> SpeedEditorScene : opens via F3 or UI button
   LevelEditorScene ..> BehaviorTreeEditorScene : opens via F4 or UI button
+  SpeedEditorScene ..> BehaviorTreeEditorScene : opens via F4
+  BehaviorTreeEditorScene ..> SpeedEditorScene : opens via F3
   SpeedEditorScene ..> room1 : reads & overwrites ROOM1_OBJECTS
   SpeedEditorScene ..> speedEditorSession : wraps GameSession & TickSimulationEngine
   speedEditorSession --> PlayerMovementProcess : reuses main movement physics
@@ -202,7 +204,7 @@ Editable configurations export directly to `room1.ts` (`ROOM1_OBJECTS`). Objects
 - **Reset Position**: **R** or `RESET POS (R)` snaps player to start coordinates with zero velocity for standstill acceleration trials.
 - **Reset Defaults**: Restores default physics values.
 - **Save**: Writes updated speed directly to `src/game/content/room1.ts` via `/api/save-room1` and updates `ROOM1_OBJECTS`.
-- **Navigation**: Accessed from Level Editor via `OPEN SPEED EDITOR (F3)` or **F3**; **Escape** returns to Level Editor, **F2** returns to gameplay.
+- **Navigation**: Accessed from Level Editor via `OPEN SPEED EDITOR (F3)` or **F3**, or from AI Editor via **F3**; **Escape** returns to Level Editor, **F2** returns to gameplay, **F4** opens AI Editor.
 
 ## Behavior Tree & AI System
 
@@ -234,7 +236,7 @@ Each node evaluates to one of three statuses per simulation tick:
 
 ## AI Behavior Tree Editor
 
-`BehaviorTreeEditorScene` (`'behavior-tree-editor'`) provides an interactive visual editor and live simulation sandbox for boss and enemy behavior trees. Accessed exclusively from Level Editor via **F4** or the **AI EDITOR (F4)** button in Level Editor's Character Stats panel.
+`BehaviorTreeEditorScene` (`'behavior-tree-editor'`) provides an interactive visual editor and live simulation sandbox for boss and enemy behavior trees. Accessed from Level Editor (via **F4** or the **AI EDITOR (F4)** button in the Character Stats panel) or Speed Editor (via **F4**).
 
 ### Editor Layout & Capabilities
 
@@ -248,7 +250,7 @@ Each node evaluates to one of three statuses per simulation tick:
 2. **Top Navigation & Simulation Toolbar (`y = 20..58`)**:
    - Quick preset selector buttons for instant switching between preset trees (`Standard Guard`, `Patrol Guard`, `Boss: Cyber Enforcer`, `Hit & Run`, `Tank Boss`).
    - Playback controls: `PAUSE (SPC)` / `PLAY`, single-step forward `STEP (T)`, and position reset `RESET (R)`.
-   - Navigation hotkey hints (**P** for panel toggle, **F2** for gameplay, **F4** / **ESC** for Level Editor).
+   - Navigation hotkey hints (**P** for panel toggle, **F2** for gameplay, **F3** for Speed Editor, **F4** / **ESC** for Level Editor).
 
 3. **Bottom Dock Panel (`y = 720..1015`, toggleable with P key)**:
    - **Column 1: Behavior Tree Graph Canvas**: Dynamic 2D tree layout with parent-child connection lines, execution halo glow reflecting `SUCCESS`, `FAILURE`, and `RUNNING` statuses each tick, interactive panning via drag, and `[CENTER]` button.
@@ -259,8 +261,9 @@ Each node evaluates to one of three statuses per simulation tick:
 
 | Action | Control |
 |---|---|
-| **Open AI Editor** | **F4** or **AI EDITOR (F4)** button (from Level Editor only) |
+| **Open AI Editor** | **F4** (from Level Editor or Speed Editor) or **AI EDITOR (F4)** button |
 | **Return to Level Editor** | **F4** or **Escape** |
+| **Open Speed Editor** | **F3** |
 | **Move Player in Room** | **Arrow keys** or click inside room chamber to reposition |
 | **Toggle Bottom Panel** | **P** key |
 | **Play / Pause Sim** | **Space** or `PAUSE (SPC)` button |

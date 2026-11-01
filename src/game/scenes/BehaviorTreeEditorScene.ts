@@ -283,7 +283,7 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
 
     // Top Right Navigation Hints
     this.add
-      .text(1880, 20, 'P: Panel · R: Reset · F2: Game · F4 / ESC: Level', {
+      .text(1880, 20, 'P: Panel · R: Reset · F2: Game · F3: Speed · F4 / ESC: Level', {
         fontFamily: FONT_FAMILY,
         fontSize: 12,
         color: DIM_COLOR,
@@ -1223,6 +1223,12 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
     if (event.key === 'F2') {
       event.preventDefault()
       this.scene.start('game')
+      return
+    }
+
+    if (event.key === 'F3') {
+      event.preventDefault()
+      this.scene.start('speed-editor')
       return
     }
 
