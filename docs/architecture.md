@@ -82,7 +82,7 @@ Attacks damage nearest character within Reach (bounding-box gap). Items (includi
 
 Room 1 initializes with Player Character (upper-left, named `hacker`), Dagger (lower-left), and Guard (right). All World Object sprites are shown by default. Exiting right leads to Room 2:
 - Undiscovered world objects display a `?` overhead label at the top of their sprite; the player character displays `hacker` and is never `?`.
-- `ls` discovers objects in the room and reveals their `?` labels to their respective names; interaction also works prior to discovery and marks interacted objects discovered.
+- `ls` discovers objects in the room and reveals their `?` labels to their respective names; direct player interaction (picking up an item or attacking a guard) also marks the target object discovered, while guard movement/pursuit and guard attacks do not discover the guard.
 - The player walks with WASD, automatically picks up the Dagger (and any items) on contact/reach, and attacks with J or left click.
 - Guard pursues player when player enters room's right half; attacks within Reach.
 - Player reaching 0 Health triggers `game-over`. Defeating guard stops pursuit. Reaching exit triggers `congratulations`.

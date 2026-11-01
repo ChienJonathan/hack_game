@@ -225,6 +225,29 @@ describe('guard', () => {
     expect({ x: guard.x, y: guard.y }).toEqual(start)
     expect(stateOf(session, WORLD_OBJECT_IDS.player).health).toBe(100)
   })
+
+  it('does not discover guard when guard starts moving/chasing; only becomes discovered when attacked by player', () => {
+    const session = newSession()
+    const guard = stateOf(session, 'guard')
+    const player = stateOf(session, 'player')
+    player.x = ROOM_LAYOUT.rightHalfStartX + 100
+    player.y = ROOM_LAYOUT.guardStart.y
+    const startX = guard.x
+
+    // Run simulation for 500ms: guard starts chasing and moves
+    runFor(session, 500)
+    expect(guard.x).toBeLessThan(startX)
+    expect(guard.chasing).toBe(true)
+    // Guard must NOT be discovered simply by moving
+    expect(guard.discovered).toBe(false)
+
+    // Player attacks guard within reach
+    guard.x = player.x + 10
+    guard.y = player.y
+    session.attack()
+    // Now guard IS discovered because player interacted with it (attacked by player)
+    expect(guard.discovered).toBe(true)
+  })
 })
 
 describe('commands', () => {

@@ -247,7 +247,6 @@ export class GuardResponseProcess implements WorldObjectProcess {
       return
     }
 
-    guard.discovered = true
     guard.alerted = true
     guard.chasing = true
 
