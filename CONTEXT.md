@@ -92,6 +92,18 @@ _Avoid_: Typing mode, terminal mode
 The speed at which game-world time runs relative to real time, determined by the current input state.
 _Avoid_: Frame rate (when referring to the speed of game-world time)
 
+**Save Slot**:
+The single place where the game keeps one saved record of the world. Saving again replaces the previous record.
+_Avoid_: Save file, checkpoint (when referring to the place the record is kept)
+
+**Save Point**:
+A moment in play at which the game writes the Save Slot. No Save Point exists yet.
+_Avoid_: Autosave (when referring to the moment itself)
+
+**Game Over Choice**:
+An option offered when the Player Character is defeated: restart from the beginning, or return to the Save Slot's record.
+_Avoid_: Continue, retry
+
 **Command History**:
 The raw command text the player has submitted.
 _Avoid_: Command result log

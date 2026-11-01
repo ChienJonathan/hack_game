@@ -463,3 +463,44 @@ describe('input bindings and mode switching', () => {
     expect(session.inputMode).toBe('movement')
   })
 })
+
+describe('saved state', () => {
+  function storageStub(): Storage {
+    const items = new Map<string, string>()
+    return {
+      getItem: (key: string) => items.get(key) ?? null,
+      setItem: (key: string, value: string) => void items.set(key, value),
+      removeItem: (key: string) => void items.delete(key),
+    } as unknown as Storage
+  }
+
+  it('reports no saved state until a save is written, and load does nothing', () => {
+    const session = createRoom1Session({ movementBindings: bindings, storage: storageStub() })
+    expect(session.hasSavedState()).toBe(false)
+    expect(session.loadSavedState()).toBe(false)
+  })
+
+  it('restores the saved world, resumes playing in movement mode', () => {
+    const storage = storageStub()
+    const session = createRoom1Session({ movementBindings: bindings, storage })
+    stateOf(session, 'player').x = 321
+    session.saveCurrentState()
+
+    stateOf(session, 'player').x = 999
+    session.getWorldState().outcome = 'game-over'
+    session.enterCommandMode()
+
+    expect(session.hasSavedState()).toBe(true)
+    expect(session.loadSavedState()).toBe(true)
+    expect(stateOf(session, 'player').x).toBe(321)
+    expect(session.getWorldState().outcome).toBe('playing')
+    expect(session.inputMode).toBe('movement')
+  })
+
+  it('treats corrupt save data as no save', () => {
+    const storage = storageStub()
+    storage.setItem('hack-game.save', '{not json')
+    const session = createRoom1Session({ movementBindings: bindings, storage })
+    expect(session.hasSavedState()).toBe(false)
+  })
+})

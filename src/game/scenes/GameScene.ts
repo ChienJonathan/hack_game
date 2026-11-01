@@ -14,8 +14,14 @@ export class GameScene extends Phaser.Scene {
   private readonly roomView = new PhaserRoomView()
   private outcomePanel: PhaserGameOutcomePanel | undefined
 
+  private resumeFromSave = false
+
   constructor() {
     super({ key: 'game' })
+  }
+
+  init(data?: { resumeFromSave?: boolean }): void {
+    this.resumeFromSave = data?.resumeFromSave === true
   }
 
   preload(): void {
@@ -27,9 +33,16 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     this.session = createRoom1Session({ movementBindings: INPUT_BINDINGS.movement })
+    if (this.resumeFromSave) {
+      this.session.loadSavedState()
+    }
     const worldState = this.session.getWorldState()
     this.roomView.mount(this, worldState)
-    this.outcomePanel = new PhaserGameOutcomePanel(this)
+    this.outcomePanel = new PhaserGameOutcomePanel(
+      this,
+      () => this.session.hasSavedState(),
+      (choice) => this.scene.restart({ resumeFromSave: choice === 'load-save' }),
+    )
 
     const commandInputView = new PhaserCommandInputView()
     this.commandInputView = commandInputView
@@ -83,11 +96,29 @@ export class GameScene extends Phaser.Scene {
     this.commandInputView?.setPrompt(this.promptForRoom(worldState.currentRoomId))
     this.roomView.update(worldState, (objectId) => this.session.getRenderPosition(objectId))
     this.outcomePanel?.update(worldState)
+
+    if (worldState.outcome === 'game-over' && this.session.inputMode === 'command') {
+      this.session.enterMovementMode()
+      this.commandInputView?.clearInput()
+      this.commandInputView?.setInputEnabled(false)
+    }
   }
 
   // Returns whether the command input should process the key event.
   private readonly handleKeyDown = (event: KeyboardEvent): boolean => {
     const key = event.key.toLowerCase()
+
+    if (this.outcomePanel?.menuActive) {
+      event.preventDefault()
+      if (key === 'arrowleft') {
+        this.outcomePanel.moveSelection(-1)
+      } else if (key === 'arrowright') {
+        this.outcomePanel.moveSelection(1)
+      } else if (key === 'enter' && !event.repeat) {
+        this.outcomePanel.confirmSelection()
+      }
+      return false
+    }
 
     if (this.session.inputMode === 'movement') {
       if (INPUT_BINDINGS.attack.keys.includes(key)) {
