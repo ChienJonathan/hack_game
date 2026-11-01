@@ -249,7 +249,7 @@ Each node evaluates to one of three statuses per simulation tick:
 
 2. **Top Navigation & Simulation Toolbar (`y = 14..62`)**:
    - Organized in a dual-row header preventing UI overlaps:
-     - Row 1 (`y = 14`): Scene title and clean navigation hotkey hints (**P** for panel toggle, **F3** for Speed Editor, **F4** / **ESC** for Level Editor, **F2** for gameplay).
+     - Row 1 (`y = 14`): Scene title and clean navigation hotkey hints (**R** for reset, **P** for panel toggle, **F3** for Speed Editor, **F4** / **ESC** for Level Editor, **F2** for gameplay).
      - Row 2 (`y = 48`): Preset selector buttons (`STD GUARD`, `PATROL GUARD`, `CYBER BOSS`, `HIT & RUN`, `TANK BOSS`) with active selection highlights on the left; playback controls on the right (`PAUSE (SPC)` / `RESUME (SPC)`, `STEP (T)`, `RESET (R)`).
 
 3. **Bottom Dock Panel (`y = 720..1015`, toggleable with P key)**:

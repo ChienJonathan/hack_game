@@ -168,7 +168,7 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
     this.setupInputHandlers()
     this.refreshTreeVisuals()
     this.refreshInspector()
-    this.showStatus('Room 1 AI Chamber loaded. Arrows: Move player · Click enemy to preview AI · P: Toggle Panel.')
+    this.showStatus('Room 1 AI Chamber loaded. Arrows: Move player · Click enemy to preview AI · R: Reset · P: Toggle Panel.')
   }
 
   update(_time: number, delta: number): void {
@@ -201,7 +201,7 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
       .setDepth(50)
 
     this.add
-      .text(1880, 14, 'P: Panel · F3: Speed · F4 / ESC: Level · F2: Game', {
+      .text(1880, 14, 'R: Reset · P: Panel · F3: Speed · F4 / ESC: Level · F2: Game', {
         fontFamily: FONT_FAMILY,
         fontSize: 12,
         color: DIM_COLOR,
@@ -749,7 +749,7 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
       .text(
         960,
         1048,
-        'Arrows: Move player · Click enemy: Preview AI · Drag canvas: Pan tree',
+        'Arrows: Move player · Click enemy: Preview AI · R: Reset · Drag canvas: Pan tree',
         {
           fontFamily: FONT_FAMILY,
           fontSize: 13,
