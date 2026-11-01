@@ -26,6 +26,7 @@ import {
   getMvSpeedConfig,
   createSpeedEditorSession,
 } from './speedEditorSession.ts'
+import { SceneManager } from './SceneManager.ts'
 
 const FONT_FAMILY = '"Press Start 2P", monospace'
 const TEXT_COLOR = '#d6d6d6'
@@ -107,7 +108,7 @@ export class SpeedEditorScene extends Phaser.Scene {
 
     // Top Right Navigation Hints
     this.add
-      .text(ROOM_LAYOUT.right, 26, 'ESC: Level · F4: AI Editor · F2: Game', {
+      .text(ROOM_LAYOUT.right, 26, 'F2: Level · F4: AI Editor · F3 / ESC: Game', {
         fontFamily: FONT_FAMILY,
         fontSize: 12,
         color: DIM_COLOR,
@@ -819,33 +820,25 @@ export class SpeedEditorScene extends Phaser.Scene {
   }
 
   public returnToLevelEditor(): void {
-    this.scene.start('level-editor')
+    const sceneManager = SceneManager.get(this.game)
+    if (sceneManager) {
+      sceneManager.openEditor('level-editor')
+    } else {
+      this.scene.start('level-editor')
+    }
   }
 
   public returnToGame(): void {
-    this.scene.start('game')
+    const sceneManager = SceneManager.get(this.game)
+    if (sceneManager) {
+      sceneManager.exitEditor()
+    } else {
+      this.scene.start('game')
+    }
   }
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     if (this.isPromptOpen) return
-
-    if (event.key === 'Escape' || event.key === 'F3') {
-      event.preventDefault()
-      this.returnToLevelEditor()
-      return
-    }
-
-    if (event.key === 'F2') {
-      event.preventDefault()
-      this.returnToGame()
-      return
-    }
-
-    if (event.key === 'F4') {
-      event.preventDefault()
-      this.scene.start('behavior-tree-editor')
-      return
-    }
 
     const key = event.key.toLowerCase()
     if (key === 'r') {

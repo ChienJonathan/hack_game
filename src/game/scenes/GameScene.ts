@@ -87,18 +87,6 @@ export class GameScene extends Phaser.Scene {
 
   // Returns whether the command input should process the key event.
   private readonly handleKeyDown = (event: KeyboardEvent): boolean => {
-    if (event.key === 'F2') {
-      event.preventDefault()
-      this.scene.start('level-editor')
-      return false
-    }
-
-    if (event.key === 'F3') {
-      event.preventDefault()
-      this.scene.start('speed-editor')
-      return false
-    }
-
     const key = event.key.toLowerCase()
 
     if (this.session.inputMode === 'movement') {

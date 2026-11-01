@@ -201,7 +201,7 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
       .setDepth(50)
 
     this.add
-      .text(1880, 14, 'R: Reset · P: Panel · F3: Speed · F4 / ESC: Level · F2: Game', {
+      .text(1880, 14, 'R: Reset · P: Panel · F2: Level · F3: Speed · F4 / ESC: Game', {
         fontFamily: FONT_FAMILY,
         fontSize: 12,
         color: DIM_COLOR,
@@ -1312,25 +1312,6 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
   }
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
-    // Navigation
-    if (event.key === 'Escape' || event.key === 'F4') {
-      event.preventDefault()
-      this.scene.start('level-editor')
-      return
-    }
-
-    if (event.key === 'F2') {
-      event.preventDefault()
-      this.scene.start('game')
-      return
-    }
-
-    if (event.key === 'F3') {
-      event.preventDefault()
-      this.scene.start('speed-editor')
-      return
-    }
-
     // Toggle bottom panel with P
     if (event.key === 'p' || event.key === 'P') {
       event.preventDefault()

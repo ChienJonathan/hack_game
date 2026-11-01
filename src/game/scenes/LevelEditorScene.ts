@@ -24,6 +24,7 @@ import {
   type ScalableMovableObject,
   type CharacterProperty,
 } from './levelEditorHistory.ts'
+import { SceneManager } from './SceneManager.ts'
 
 const FONT_FAMILY = '"Press Start 2P", monospace'
 const TEXT_COLOR = '#d6d6d6'
@@ -1200,24 +1201,6 @@ export class LevelEditorScene extends Phaser.Scene {
   }
 
   private onKeyDown(event: KeyboardEvent): void {
-    if (event.key === 'Escape' || event.key === 'F2') {
-      event.preventDefault()
-      this.scene.start('game')
-      return
-    }
-
-    if (event.key === 'F3') {
-      event.preventDefault()
-      this.openSpeedEditor()
-      return
-    }
-
-    if (event.key === 'F4') {
-      event.preventDefault()
-      this.openAiEditor()
-      return
-    }
-
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z' && !event.shiftKey) {
       event.preventDefault()
       this.undo()
@@ -1388,13 +1371,23 @@ export class LevelEditorScene extends Phaser.Scene {
   }
 
   public openSpeedEditor(): void {
-    this.syncToRoom1Objects()
-    this.scene.start('speed-editor')
+    const sceneManager = SceneManager.get(this.game)
+    if (sceneManager) {
+      sceneManager.openEditor('speed-editor')
+    } else {
+      this.syncToRoom1Objects()
+      this.scene.start('speed-editor')
+    }
   }
 
   public openAiEditor(): void {
-    this.syncToRoom1Objects()
-    this.scene.start('behavior-tree-editor')
+    const sceneManager = SceneManager.get(this.game)
+    if (sceneManager) {
+      sceneManager.openEditor('behavior-tree-editor')
+    } else {
+      this.syncToRoom1Objects()
+      this.scene.start('behavior-tree-editor')
+    }
   }
 
   public async saveLayout(): Promise<boolean> {

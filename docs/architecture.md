@@ -131,10 +131,10 @@ classDiagram
   LevelEditorScene ..> room1 : reads & overwrites ROOM1_OBJECTS
   LevelEditorScene --> EditorHistory : manages undo stack
   LevelEditorScene ..> room1Serializer : serializes RoomObjectConfig[]
-  LevelEditorScene ..> SpeedEditorScene : opens via F3 or UI button
-  LevelEditorScene ..> BehaviorTreeEditorScene : opens via F4 or UI button
-  SpeedEditorScene ..> BehaviorTreeEditorScene : opens via F4
-  BehaviorTreeEditorScene ..> SpeedEditorScene : opens via F3
+  SceneManager ..> GameScene : manages transitions & hotkeys
+  SceneManager ..> LevelEditorScene : manages transitions (F2 toggle / Esc)
+  SceneManager ..> SpeedEditorScene : manages transitions (F3 toggle / Esc)
+  SceneManager ..> BehaviorTreeEditorScene : manages transitions (F4 toggle / Esc)
   SpeedEditorScene ..> room1 : reads & overwrites ROOM1_OBJECTS
   SpeedEditorScene ..> speedEditorSession : wraps GameSession & TickSimulationEngine
   speedEditorSession --> PlayerMovementProcess : reuses main movement physics
@@ -152,7 +152,7 @@ src/
   application/  GameSession.ts, InputModeController.ts
   ai/           behaviorTree/{BehaviorTreeTypes.ts, BehaviorTreeEvaluator.ts, BehaviorTreePresets.ts, BehaviorTreeProcess.ts, BehaviorTreeModel.ts}
   content/      room1.ts, room1Constants.ts, room1Commands.ts, room1Serializer.ts, room1WorldState.ts, createRoom1Session.ts
-  scenes/       GameScene.ts, LevelEditorScene.ts, levelEditorHistory.ts, SpeedEditorScene.ts, speedEditorSession.ts, BehaviorTreeEditorScene.ts, aiEditorSession.ts
+  scenes/       GameScene.ts, SceneManager.ts, LevelEditorScene.ts, levelEditorHistory.ts, SpeedEditorScene.ts, speedEditorSession.ts, BehaviorTreeEditorScene.ts, aiEditorSession.ts
   domain/       WorldState.ts, Room.ts, WorldObject.ts, BasicWorldObject.ts, CharacterState.ts, CollisionWorld.ts, CombatService.ts, PickUpService.ts, WeaponDefinition.ts, ids.ts, JsonValue.ts, WorldPath.ts, WorldPathResolver.ts, VirtualWorldPathResolver.ts
   processes/    BehaviorRule.ts, ProcessDefinition.ts, ProcessInstance.ts
   commands/     CommandSubmissionService.ts, CommandRegistry.ts, RegisteredCommandRegistry.ts, CommandParser.ts, VirtualCommandParser.ts, CommandRequirement.ts, CommandRequirementChecker.ts, EveryCommandRequirementChecker.ts, ParsedCommand.ts, CommandHistory.ts, CommandFeedback.ts, CommandResult.ts, executors/{base.ts, help.ts, ls.ts, mv.ts}
@@ -165,9 +165,9 @@ docs/           architecture.md, adr/0001..0007
 
 ## Level Editor
 
-`LevelEditorScene` (`'level-editor'`) provides visual editing of room1 world object positions and sizes. Toggled from gameplay with **F2** (or **Escape** to return).
+`LevelEditorScene` (`'level-editor'`) provides visual editing of room1 world object positions and sizes. Accessible from anywhere via **F2**; pressing **F2** or **Escape** returns to the current active playable scene (`'game'`).
 
-Editable configurations export directly to `room1.ts` (`ROOM1_OBJECTS`). Objects use base sizes (`CHARACTER_BASE_SIZE` 176×176, `DAGGER_SIZE` 72×72) with default 1.00 scales. Editor controls dock below room view (`y = 720..1010`), leaving room area (`y = 80..700`) unobstructed.
+Editable configurations export directly to `room1.ts` (`ROOM1_OBJECTS`). Objects use base sizes (`CHARACTER_BASE_SIZE` 176×176, `DAGGER_SIZE` 72×72) with default 1.00 scales. Editor controls dock below room view (`y = 720..1010`), leaving room area (`y = 80..700`) unobstructed. Editor navigation and hotkeys are managed centrally by `SceneManager`.
 
 ### Features & Controls
 
@@ -179,6 +179,8 @@ Editable configurations export directly to `room1.ts` (`ROOM1_OBJECTS`). Objects
 | **Selection** | Click sprite, panel list entry, or cycle with `Tab` / `Shift+Tab` |
 | **Character Stats** | Edit guard `max_health` & `speed`, or player `max_health` (`+/-` 10, Shift: 50, click value for prompt) |
 | **Speed Editor Access** | `OPEN SPEED EDITOR (F3)` button or **F3** shortcut |
+| **AI Editor Access** | `AI EDITOR (F4)` button or **F4** shortcut |
+| **Return to Game** | **F2** or **Escape** (exits to active playable scene) |
 | **Undo / Redo** | `Ctrl+Z` reverses operations via invertible delta stack (move, scale, stat, spawn/despawn) |
 | **Toggle Panel** | **P** toggles bottom property panel visibility |
 | **Save** | `SAVE TO ROOM1.TS` overwrites file via `/api/save-room1` and syncs in-memory `ROOM1_OBJECTS` |
@@ -213,7 +215,7 @@ Editable configurations export directly to `room1.ts` (`ROOM1_OBJECTS`). Objects
 - **Reset Position**: **R** (or `RESET POSITIONS (R)` button) snaps player and dagger back to start coordinates with zero velocity for clean trials.
 - **Reset Defaults**: Restores default physics values for both player and `mv_speed`.
 - **Save Changes**: `SAVE CHANGES` button writes updated player speed directly to `src/game/content/room1.ts` via `/api/save-room1` (`ROOM1_OBJECTS`) and saves `mv_speed` to `src/game/commands/mvConstants.ts` via `/api/save-mv`, syncing global runtime `GAME_MV_SPEED`.
-- **Navigation**: Accessed from Level Editor via `OPEN SPEED EDITOR (F3)` or **F3**, or from AI Editor via **F3**; **Escape** returns to Level Editor, **F2** returns to gameplay, **F4** opens AI Editor.
+- **Navigation**: Accessible from anywhere via **F3**; **Escape** or **F3** exits to the current active playable scene (`'game'`), **F2** opens Level Editor, **F4** opens AI Editor.
 
 ## Behavior Tree & AI System
 
@@ -245,7 +247,7 @@ Each node evaluates to one of three statuses per simulation tick:
 
 ## AI Behavior Tree Editor
 
-`BehaviorTreeEditorScene` (`'behavior-tree-editor'`) provides an interactive visual editor and live simulation sandbox for boss and enemy behavior trees. Accessed from Level Editor (via **F4** or the **AI EDITOR (F4)** button in the Character Stats panel) or Speed Editor (via **F4**).
+`BehaviorTreeEditorScene` (`'behavior-tree-editor'`) provides an interactive visual editor and live simulation sandbox for boss and enemy behavior trees. Accessible from anywhere via **F4** (or the **AI EDITOR (F4)** button in the Character Stats panel).
 
 ### Editor Layout & Capabilities
 
@@ -258,7 +260,7 @@ Each node evaluates to one of three statuses per simulation tick:
 
 2. **Top Navigation & Simulation Toolbar (`y = 14..62`)**:
    - Organized in a dual-row header preventing UI overlaps:
-     - Row 1 (`y = 14`): Scene title and clean navigation hotkey hints (**R** for reset, **P** for panel toggle, **F3** for Speed Editor, **F4** / **ESC** for Level Editor, **F2** for gameplay).
+     - Row 1 (`y = 14`): Scene title and clean navigation hotkey hints (**R** for reset, **P** for panel toggle, **F2** for Level Editor, **F3** for Speed Editor, **F4** / **ESC** for Game).
      - Row 2 (`y = 48`): Preset selector buttons (`STD GUARD`, `PATROL GUARD`, `CYBER BOSS`, `HIT & RUN`, `TANK BOSS`) with active selection highlights on the left; playback controls on the right (`PAUSE (SPC)` / `RESUME (SPC)`, `STEP (T)`, `RESET (R)`).
 
 3. **Bottom Dock Panel (`y = 720..1015`, toggleable with P key)**:
@@ -270,8 +272,8 @@ Each node evaluates to one of three statuses per simulation tick:
 
 | Action | Control |
 |---|---|
-| **Open AI Editor** | **F4** (from Level Editor or Speed Editor) or **AI EDITOR (F4)** button |
-| **Return to Level Editor** | **F4** or **Escape** |
+| **Open AI Editor** | **F4** (from anywhere) or **AI EDITOR (F4)** button in Level Editor |
+| **Open Level Editor** | **F2** |
 | **Open Speed Editor** | **F3** |
 | **Move Player in Room** | **Arrow keys** |
 | **Preview AI with Enemy** | Click enemy in room chamber |
@@ -285,7 +287,7 @@ Each node evaluates to one of three statuses per simulation tick:
 | **Delete Node** | `Delete` / `Backspace` or `DELETE (DEL)` button |
 | **Damage Boss (-25 HP)** | `DMG BOSS (-25)` button |
 | **Heal Boss (+25 HP)** | `HEAL BOSS (+25)` button |
-| **Return to Game** | **F2** |
+| **Return to Game** | **F4** or **Escape** |
 
 ## Framework References
 

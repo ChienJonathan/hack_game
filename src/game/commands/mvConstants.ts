@@ -3,7 +3,7 @@
  * Constant across all rooms in the game world.
  */
 
-export const DEFAULT_MV_SPEED = 1250
+export const DEFAULT_MV_SPEED = 300
 
 export interface MvSpeedConfig {
   mv_speed: number
