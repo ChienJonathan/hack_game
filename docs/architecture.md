@@ -191,6 +191,18 @@ assets/         fonts/, ui/, characters/{player, guard}/, items/weapons/
 docs/           architecture.md, adr/0001..0007
 ```
 
+### Character Animations & Spritesheets
+
+- **Guard Swing Animation (`src/assets/game/characters/guard/swing.png`)**:
+  - Horizontal spritesheet strip for Phaser (`frameWidth: 1254, frameHeight: 1254`, 5 frames, 6270×1254).
+  - Frame breakdown:
+    - Frame 0: Neutral ready stance, perfectly aligned with `idle.png`.
+    - Frame 1: Windup anticipation with elbow lifted and club cocked back overhead.
+    - Frame 2: Forward slash impact with dynamic white crescent motion arc.
+    - Frame 3: Follow-through extension angling down-forward.
+    - Frame 4: Recovery arc pulling the club smoothly back into ready stance.
+  - Usable in Phaser via `scene.load.spritesheet('guard-swing', guardSwingUrl, { frameWidth: 1254, frameHeight: 1254 })`.
+
 ## Level Editor
 
 `LevelEditorScene` (`'level-editor'`) provides visual editing of room1 world object positions, sizes, character stats, and weapon parameters. Accessible from anywhere via **F2**; pressing **F2** or **Escape** returns to the current active playable scene (`'game'`).
