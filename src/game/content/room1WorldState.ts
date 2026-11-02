@@ -11,10 +11,12 @@ import {
   CHARACTER_SIZE,
   CHARACTER_BASE_SIZE,
   DAGGER_SIZE,
+  BOULDER_SIZE,
+  BOULDER_BASE_SIZE,
   MAX_HEALTH,
   GAME_WEAPON_CONFIG,
 } from './room1Constants.ts'
-import { ROOM1_OBJECTS, type RoomObjectConfig } from './room1.ts'
+import { ROOM1_OBJECTS, type RoomObjectConfig, type WorldObjectRole } from './room1.ts'
 
 const alwaysActiveRule = (processDefinitionId: string) => ({
   condition: ALWAYS_ACTIVE_BEHAVIOR,
@@ -43,7 +45,7 @@ export function resolveScale(
 }
 
 export function computeCollisionSize(
-  role: 'player' | 'guard' | 'weapon',
+  role: WorldObjectRole,
   scaleX: number,
   scaleY: number,
 ): { width: number; height: number } {
@@ -51,6 +53,13 @@ export function computeCollisionSize(
     return {
       width: Math.max(12, Math.round(DAGGER_SIZE.width * scaleX)),
       height: Math.max(12, Math.round(DAGGER_SIZE.height * scaleY)),
+    }
+  }
+
+  if (role === 'obejct' || role === 'object') {
+    return {
+      width: Math.max(16, Math.round(BOULDER_SIZE.width * scaleX)),
+      height: Math.max(16, Math.round(BOULDER_SIZE.height * scaleY)),
     }
   }
 
@@ -141,6 +150,28 @@ export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJE
           weaponAttackDurationMs: obj.attackDurationMs ?? GAME_WEAPON_CONFIG.attackDurationMs,
           holdOffsetX: obj.holdOffsetX ?? GAME_WEAPON_CONFIG.holdOffsetX,
           holdOffsetY: obj.holdOffsetY ?? GAME_WEAPON_CONFIG.holdOffsetY,
+        },
+      )
+    }
+
+    if (obj.role === 'obejct' || obj.role === 'object') {
+      const { scaleX, scaleY } = resolveScale(obj, BOULDER_BASE_SIZE.width, BOULDER_BASE_SIZE.height)
+      const { width, height } = computeCollisionSize(obj.role, scaleX, scaleY)
+      return createRoomWorldObject(
+        obj.id,
+        { name: obj.id, role: obj.role, discoverable: true },
+        [],
+        {
+          x: obj.x,
+          y: obj.y,
+          width,
+          height,
+          displayWidth: obj.displayWidth,
+          displayHeight: obj.displayHeight,
+          scaleX,
+          scaleY,
+          discovered: false,
+          alive: true,
         },
       )
     }

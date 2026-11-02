@@ -12,12 +12,14 @@ export const WORLD_OBJECT_IDS = {
   player: 'player',
   dagger: 'dagger',
   guard: 'guard',
+  boulder: 'boulder',
 } as const
 
 export const PROCESS_IDS = {
   player: 'player-movement',
   dagger: 'dagger-pickup',
   guard: 'guard-response',
+  boulder: 'boulder-behavior',
 } as const
 
 export const ROOM_LAYOUT = {
@@ -37,6 +39,8 @@ export const ROOM_LAYOUT = {
 
 export const CHARACTER_SIZE = { width: 110, height: 160 } as const
 export const CHARACTER_BASE_SIZE = { width: 176, height: 176 } as const
+export const BOULDER_SIZE = { width: 120, height: 120 } as const
+export const BOULDER_BASE_SIZE = { width: 128, height: 128 } as const
 export const MAX_HEALTH = 100
 
 export {

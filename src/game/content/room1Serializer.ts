@@ -59,9 +59,11 @@ export function generateRoom1Source(objects: RoomObjectConfig[]): string {
   [key: string]: number
 }
 
+export type WorldObjectRole = 'player' | 'guard' | 'weapon' | 'obejct' | 'object'
+
 export interface RoomObjectConfig {
   id: string
-  role: 'player' | 'guard' | 'weapon'
+  role: WorldObjectRole
   x: number
   y: number
   displayWidth: number

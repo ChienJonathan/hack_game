@@ -6,9 +6,11 @@ export interface PlayerSpeedConfig {
   [key: string]: number
 }
 
+export type WorldObjectRole = 'player' | 'guard' | 'weapon' | 'obejct' | 'object'
+
 export interface RoomObjectConfig {
   id: string
-  role: 'player' | 'guard' | 'weapon'
+  role: WorldObjectRole
   x: number
   y: number
   displayWidth: number
@@ -40,6 +42,16 @@ export const ROOM1_OBJECTS: RoomObjectConfig[] = [
       maxSpeed: 300,
     },
     maxHealth: 100,
+  },
+  {
+    id: "boulder",
+    role: "obejct",
+    x: 800,
+    y: 280,
+    displayWidth: 120,
+    displayHeight: 120,
+    scaleX: 1,
+    scaleY: 1,
   },
   {
     id: "dagger",

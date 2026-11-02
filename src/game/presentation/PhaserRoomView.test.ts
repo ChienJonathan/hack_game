@@ -289,6 +289,8 @@ describe('PhaserRoomView', () => {
     daggerState.equippedBy = 'player'
     daggerState.x = 400
     daggerState.y = 300
+    daggerState.holdOffsetX = 44
+    daggerState.holdOffsetY = 38
 
     // When holder faces right: local offset (+44, +38), flipX is false
     view.update(worldState)
@@ -325,6 +327,8 @@ describe('PhaserRoomView', () => {
     daggerState.equippedBy = 'player'
     daggerState.x = 400
     daggerState.y = 300
+    daggerState.holdOffsetX = 44
+    daggerState.holdOffsetY = 38
 
     // Explicit attack translation when facing right: +30px thrust
     daggerState.attackOffsetX = 30

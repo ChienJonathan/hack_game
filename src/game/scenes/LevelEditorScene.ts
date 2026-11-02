@@ -6,18 +6,20 @@ import {
   ROOM_NAMES,
   ROOM_IDS,
   CHARACTER_BASE_SIZE,
+  BOULDER_BASE_SIZE,
   DAGGER_SIZE,
   GAME_WEAPON_CONFIG,
   computeDaggerAttackTranslation,
 } from '../content/room1Constants.ts'
 import { createInitialWorldState } from '../content/room1WorldState.ts'
-import { ROOM1_OBJECTS, type PlayerSpeedConfig, type RoomObjectConfig } from '../content/room1.ts'
+import { ROOM1_OBJECTS, type PlayerSpeedConfig, type RoomObjectConfig, type WorldObjectRole } from '../content/room1.ts'
 import { generateRoom1Source } from '../content/room1Serializer.ts'
 import {
   WORLD_OBJECT_TEXTURE_URLS,
   PLAYER_TEXTURE_KEY,
   GUARD_TEXTURE_KEY,
   DAGGER_TEXTURE_KEY,
+  BOULDER_TEXTURE_KEY,
 } from '../presentation/PhaserRoomView.ts'
 import { COMMAND_INPUT_TEXTURE_KEY } from '../presentation/PhaserCommandInputView.ts'
 import type { WorldObject } from '../domain/WorldObject.ts'
@@ -59,7 +61,7 @@ export interface SpawnObjectConfig {
 }
 
 export interface EditorObject extends ScalableMovableObject {
-  role: 'player' | 'guard' | 'weapon'
+  role: WorldObjectRole
   sprite: Phaser.GameObjects.Image
   outline: Phaser.GameObjects.Rectangle
   scaleHandle: Phaser.GameObjects.Rectangle
@@ -321,12 +323,16 @@ export class LevelEditorScene extends Phaser.Scene {
     const textureKey = this.textureKeyFor(worldObject)
     if (!textureKey) return
 
-    const role: 'player' | 'guard' | 'weapon' =
+    const role: WorldObjectRole =
       worldObject.metadata.role === 'weapon'
         ? 'weapon'
         : worldObject.metadata.role === 'guard'
           ? 'guard'
-          : 'player'
+          : worldObject.metadata.role === 'obejct'
+            ? 'obejct'
+            : worldObject.metadata.role === 'object'
+              ? 'object'
+              : 'player'
 
     const isWeapon = role === 'weapon'
     const isCharacter = role === 'player' || role === 'guard'
@@ -368,8 +374,12 @@ export class LevelEditorScene extends Phaser.Scene {
         ? state.holdOffsetY
         : (roomObj?.holdOffsetY ?? GAME_WEAPON_CONFIG.holdOffsetY)
       : undefined
-    const defaultBaseWidth = isWeapon ? DAGGER_SIZE.width : CHARACTER_BASE_SIZE.width
-    const defaultBaseHeight = isWeapon ? DAGGER_SIZE.height : CHARACTER_BASE_SIZE.height
+    const defaultBaseWidth = isWeapon
+      ? DAGGER_SIZE.width
+      : (role === 'obejct' || role === 'object' ? BOULDER_BASE_SIZE.width : CHARACTER_BASE_SIZE.width)
+    const defaultBaseHeight = isWeapon
+      ? DAGGER_SIZE.height
+      : (role === 'obejct' || role === 'object' ? BOULDER_BASE_SIZE.height : CHARACTER_BASE_SIZE.height)
 
     const displayWidth = typeof state.displayWidth === 'number'
       ? state.displayWidth
@@ -1853,7 +1863,7 @@ export class LevelEditorScene extends Phaser.Scene {
   }
 
   public spawnWorldObject(
-    role: 'guard' | 'weapon' | 'player' = 'guard',
+    role: WorldObjectRole = 'guard',
     config: SpawnObjectConfig = {},
     recordHistory = true,
   ): EditorObject {
@@ -1892,8 +1902,12 @@ export class LevelEditorScene extends Phaser.Scene {
     const textureKey = this.textureKeyForRole(role)
     const isWeapon = role === 'weapon'
     const isCharacter = role === 'player' || role === 'guard'
-    const defaultBaseWidth = isWeapon ? DAGGER_SIZE.width : CHARACTER_BASE_SIZE.width
-    const defaultBaseHeight = isWeapon ? DAGGER_SIZE.height : CHARACTER_BASE_SIZE.height
+    const defaultBaseWidth = isWeapon
+      ? DAGGER_SIZE.width
+      : (role === 'obejct' || role === 'object' ? BOULDER_BASE_SIZE.width : CHARACTER_BASE_SIZE.width)
+    const defaultBaseHeight = isWeapon
+      ? DAGGER_SIZE.height
+      : (role === 'obejct' || role === 'object' ? BOULDER_BASE_SIZE.height : CHARACTER_BASE_SIZE.height)
 
     const displayWidth = config.displayWidth ?? defaultBaseWidth
     const displayHeight = config.displayHeight ?? defaultBaseHeight
@@ -2128,8 +2142,8 @@ export class LevelEditorScene extends Phaser.Scene {
     }
   }
 
-  private generateNextId(role: 'guard' | 'weapon' | 'player'): string {
-    const prefix = role === 'weapon' ? 'dagger' : role
+  private generateNextId(role: WorldObjectRole): string {
+    const prefix = role === 'weapon' ? 'dagger' : (role === 'obejct' || role === 'object' ? 'boulder' : role)
     let counter = 2
     while (this.editorObjects.some((o) => o.id === `${prefix}-${counter}`)) {
       counter++
@@ -2137,7 +2151,7 @@ export class LevelEditorScene extends Phaser.Scene {
     return `${prefix}-${counter}`
   }
 
-  private textureKeyForRole(role: 'player' | 'guard' | 'weapon'): string {
+  private textureKeyForRole(role: WorldObjectRole): string {
     switch (role) {
       case 'player':
         return PLAYER_TEXTURE_KEY
@@ -2145,18 +2159,28 @@ export class LevelEditorScene extends Phaser.Scene {
         return GUARD_TEXTURE_KEY
       case 'weapon':
         return DAGGER_TEXTURE_KEY
+      case 'obejct':
+      case 'object':
+        return BOULDER_TEXTURE_KEY
     }
   }
 
   private textureKeyFor(worldObject: WorldObject): string | undefined {
+    if (worldObject.id === 'boulder') {
+      return BOULDER_TEXTURE_KEY
+    }
     const role =
       worldObject.metadata.role === 'weapon'
         ? 'weapon'
         : worldObject.metadata.role === 'guard'
           ? 'guard'
-          : worldObject.metadata.role === 'player'
-            ? 'player'
-            : undefined
+          : worldObject.metadata.role === 'obejct'
+            ? 'obejct'
+            : worldObject.metadata.role === 'object'
+              ? 'object'
+              : worldObject.metadata.role === 'player'
+                ? 'player'
+                : undefined
     return role ? this.textureKeyForRole(role) : undefined
   }
 }

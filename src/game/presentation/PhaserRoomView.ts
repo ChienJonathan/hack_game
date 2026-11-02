@@ -2,6 +2,7 @@ import type Phaser from 'phaser'
 import guardImageUrl from '../../assets/game/characters/guard/idle.png'
 import playerImageUrl from '../../assets/game/characters/player/idle.png'
 import daggerImageUrl from '../../assets/game/items/weapons/dagger.png'
+import boulderImageUrl from '../../assets/game/objects/boulder.png'
 import type { WorldObject } from '../domain/WorldObject.ts'
 import type { WorldState } from '../domain/WorldState.ts'
 import { WORLD_OBJECT_IDS, ROOM_IDS, ROOM_LAYOUT, ROOM_NAMES } from '../content/room1Constants.ts'
@@ -10,6 +11,7 @@ import { WorldObjectViewRegistry } from './WorldObjectViewRegistry.ts'
 export const PLAYER_TEXTURE_KEY = 'player-idle'
 export const GUARD_TEXTURE_KEY = 'guard-idle'
 export const DAGGER_TEXTURE_KEY = 'dagger'
+export const BOULDER_TEXTURE_KEY = 'boulder'
 export const ITEM_LABEL_WIDTH_RATIO = 0.75
 
 export {
@@ -28,6 +30,7 @@ export const WORLD_OBJECT_TEXTURE_URLS = {
   [PLAYER_TEXTURE_KEY]: playerImageUrl,
   [GUARD_TEXTURE_KEY]: guardImageUrl,
   [DAGGER_TEXTURE_KEY]: daggerImageUrl,
+  [BOULDER_TEXTURE_KEY]: boulderImageUrl,
 } as const
 
 interface DisplayState {
@@ -334,6 +337,9 @@ export class PhaserRoomView {
   }
 
   private textureKeyFor(worldObject: WorldObject): string | undefined {
+    if (worldObject.id === WORLD_OBJECT_IDS.boulder || worldObject.id === 'boulder') {
+      return BOULDER_TEXTURE_KEY
+    }
     switch (worldObject.metadata.role) {
       case 'player':
         return PLAYER_TEXTURE_KEY
@@ -341,6 +347,9 @@ export class PhaserRoomView {
         return GUARD_TEXTURE_KEY
       case 'weapon':
         return DAGGER_TEXTURE_KEY
+      case 'obejct':
+      case 'object':
+        return BOULDER_TEXTURE_KEY
       default:
         return undefined
     }

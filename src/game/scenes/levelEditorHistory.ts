@@ -72,14 +72,14 @@ export interface PropertyChange {
 export interface SpawnChange {
   readonly type: 'spawn'
   readonly objectId: string
-  readonly role: 'player' | 'guard' | 'weapon'
+  readonly role: 'player' | 'guard' | 'weapon' | 'obejct' | 'object'
   readonly snapshot: ScalableMovableObject
 }
 
 export interface DespawnChange {
   readonly type: 'despawn'
   readonly objectId: string
-  readonly role: 'player' | 'guard' | 'weapon'
+  readonly role: 'player' | 'guard' | 'weapon' | 'obejct' | 'object'
   readonly snapshot: ScalableMovableObject
 }
 

@@ -423,8 +423,25 @@ export class GuardResponseProcess implements WorldObjectProcess {
   }
 }
 
+export class BoulderProcess implements WorldObjectProcess {
+  readonly id = PROCESS_IDS.boulder
+  readonly definitionId = PROCESS_IDS.boulder
+
+  canRun(context: ProcessTickContext): boolean {
+    return context.worldObject.roomId === context.state.currentRoomId
+  }
+
+  tick(context: ProcessTickContext): void {
+    const objState = getMutableWorldObjectState<MutableWorldObjectState>(context.worldObject)
+    if (objState.thrown) {
+      updateThrownState(objState as unknown as Record<string, unknown>, context.state, context.tickDurationMs)
+    }
+  }
+}
+
 export const ROOM1_PROCESSES: readonly WorldObjectProcess[] = [
   new PlayerMovementProcess(),
   new DaggerPickupProcess(),
   new GuardResponseProcess(),
+  new BoulderProcess(),
 ]

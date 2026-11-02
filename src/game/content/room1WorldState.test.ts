@@ -128,6 +128,7 @@ describe('room1WorldState scaled collision AABB', () => {
     const player = state.worldObjects.find((o) => o.id === 'player')!
     const dagger = state.worldObjects.find((o) => o.id === 'dagger')!
     const guard = state.worldObjects.find((o) => o.id === 'guard')!
+    const boulder = state.worldObjects.find((o) => o.id === 'boulder')!
 
     expect(player.metadata.name).toBe('hacker')
     expect(player.metadata.role).toBe('player')
@@ -139,6 +140,22 @@ describe('room1WorldState scaled collision AABB', () => {
 
     expect(guard.metadata.discoverable).toBe(true)
     expect((guard.state as Record<string, unknown>).discovered).toBe(false)
+
+    expect(boulder).toBeDefined()
+    expect(boulder.metadata.name).toBe('boulder')
+    expect(boulder.metadata.role).toBe('obejct')
+    expect(boulder.metadata.discoverable).toBe(true)
+    expect((boulder.state as Record<string, unknown>).discovered).toBe(false)
+  })
+
+  it('computes collision size for obejct role correctly', () => {
+    const size = computeCollisionSize('obejct', 1, 1)
+    expect(size.width).toBe(120)
+    expect(size.height).toBe(120)
+
+    const scaled = computeCollisionSize('obejct', 0.5, 0.5)
+    expect(scaled.width).toBe(60)
+    expect(scaled.height).toBe(60)
   })
 
   it('alters collision gap calculation when character scale changes', () => {

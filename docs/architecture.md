@@ -58,7 +58,7 @@ Synchronous submission pipeline:
 
 - `WorldState`: Root aggregate for rooms, world objects, active process instances, current room, simulation tick, outcome, and command history.
 - `Room`: Enterable area owning exits.
-- `WorldObject`: Domain entity with identity, room ID, metadata, behavior rules, and runtime state.
+- `WorldObject`: Domain entity with identity, room ID, metadata, behavior rules, and runtime state. Roles include `player`, `guard`, `weapon`, and `obejct` (such as static environmental world objects like `boulder`).
 - `BehaviorRule`: Maps object condition to `ProcessDefinition`.
 - `VirtualWorldPathResolver`: Resolves virtual command paths to room/object IDs (no host filesystem access).
 
@@ -76,11 +76,11 @@ Characters start with 100 Health. Weapon definitions scale cooldowns with simula
 | Dagger | 35 | 0.5s | 10 px | Single-target |
 | Guard | 20 | 1.0s | 5 px | Hostile guard attack |
 
-Attacks damage nearest character within Reach (bounding-box gap). Items (including Dagger) are automatically picked up when within `PICKUP_REACH = 10` px; both actions mark undiscovered targets discovered. Hitboxes scale proportionally via `scaleX`/`scaleY` from base dimensions (`CHARACTER_SIZE` 110×160, `DAGGER_SIZE` 72×72).
+Attacks damage nearest character within Reach (bounding-box gap). Items (including Dagger) are automatically picked up when within `PICKUP_REACH = 10` px; both actions mark undiscovered targets discovered. Hitboxes scale proportionally via `scaleX`/`scaleY` from base dimensions (`CHARACTER_SIZE` 110×160, `DAGGER_SIZE` 72×72, `BOULDER_SIZE` 120×120).
 
 ### First Room Behavior
 
-Room 1 initializes with Player Character (upper-left, named `hacker`), Dagger (lower-left), and Guard (right). All World Object sprites are shown by default. Exiting right leads to Room 2:
+Room 1 initializes with Player Character (upper-left, named `hacker`), Dagger (lower-left), Boulder (environmental world object with role `obejct`), and Guards (right). All World Object sprites are shown by default. Exiting right leads to Room 2:
 - Undiscovered world objects display a `?` overhead label at the top of their sprite; the player character displays `hacker` and is never `?`.
 - `ls` discovers objects in the room and reveals their `?` labels to their respective names; direct player interaction (picking up an item or attacking a guard) also marks the target object discovered, while guard movement/pursuit and guard attacks do not discover the guard.
 - `mv <label1> <label2>` throws `<label1>` towards `<label2>` (an object or room exit) with speed `mv_speed` (`DEFAULT_MV_SPEED` 300 px/s in `src/game/commands/mvConstants.ts`, constant across all rooms), unequipping it if equipped. If `<label2>` does not exist in the room, it renames `<label1>` to `<label2>` and marks it discovered.

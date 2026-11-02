@@ -123,5 +123,28 @@ describe('room1Serializer', () => {
     expect(source).toContain('holdOffsetX: 16')
     expect(source).toContain('holdOffsetY: 8')
   })
+
+  it('serializes world object with obejct role', () => {
+    const objects: RoomObjectConfig[] = [
+      {
+        id: 'boulder',
+        role: 'obejct',
+        x: 800,
+        y: 280,
+        displayWidth: 120,
+        displayHeight: 120,
+        scaleX: 1,
+        scaleY: 1,
+      },
+    ]
+
+    const source = generateRoom1Source(objects)
+    expect(source).toContain('id: "boulder"')
+    expect(source).toContain('role: "obejct"')
+    expect(source).toContain('x: 800')
+    expect(source).toContain('y: 280')
+    expect(source).toContain('displayWidth: 120')
+    expect(source).toContain('displayHeight: 120')
+  })
 })
 
