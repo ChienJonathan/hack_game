@@ -38,9 +38,9 @@ describe('aiEditorSession', () => {
 
     bundle.step(20)
 
-    const switched = bundle.setTargetGuard('guard-2')
+    const switched = bundle.setTargetGuard('guard2')
     expect(switched).toBe(true)
-    expect(bundle.targetGuardId).toBe('guard-2')
+    expect(bundle.targetGuardId).toBe('guard2')
 
     // Must advance simulation without throwing "No simulation process registered"
     expect(() => {
@@ -48,15 +48,15 @@ describe('aiEditorSession', () => {
       bundle.step(20)
     }).not.toThrow()
 
-    // Now damage affects guard-2
-    const g2 = bundle.worldState.worldObjects.find((o) => o.id === 'guard-2')!
+    // Now damage affects guard2
+    const g2 = bundle.worldState.worldObjects.find((o) => o.id === 'guard2')!
     const initialHp = (g2.state as { health: number }).health
     bundle.damageBoss(20)
     expect((g2.state as { health: number }).health).toBe(initialHp - 20)
 
-    // Switch to guard-3 and step simulation
-    expect(bundle.setTargetGuard('guard-3')).toBe(true)
-    expect(bundle.targetGuardId).toBe('guard-3')
+    // Switch to guard3 and step simulation
+    expect(bundle.setTargetGuard('guard3')).toBe(true)
+    expect(bundle.targetGuardId).toBe('guard3')
     expect(() => {
       bundle.step(20)
     }).not.toThrow()

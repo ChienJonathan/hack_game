@@ -11,6 +11,7 @@ import {
   invertChange,
   computeEditorCollisionBox,
   wouldOverlapAnyEditorObject,
+  generateNextObjectId,
 } from './levelEditorHistory.ts'
 import { GAME_WEAPON_CONFIG, resetGameWeaponConfig } from '../content/weaponConstants.ts'
 
@@ -166,10 +167,10 @@ describe('levelEditorHistory', () => {
     })
 
     it('defines the reverse of a spawn change as despawn change and vice versa', () => {
-      const snapshot = createTestObject({ id: 'guard-2' })
+      const snapshot = createTestObject({ id: 'guard2' })
       const spawnChange = {
         type: 'spawn' as const,
-        objectId: 'guard-2',
+        objectId: 'guard2',
         role: 'enemy' as const,
         snapshot,
       }
@@ -177,7 +178,7 @@ describe('levelEditorHistory', () => {
       const reverse = invertChange(spawnChange)
       expect(reverse).toEqual({
         type: 'despawn',
-        objectId: 'guard-2',
+        objectId: 'guard2',
         role: 'enemy',
         snapshot,
       })
@@ -187,11 +188,11 @@ describe('levelEditorHistory', () => {
 
   describe('applyChange', () => {
     it('handles spawn and despawn without throwing or mutating target', () => {
-      const obj = createTestObject({ id: 'guard-2', x: 100 })
+      const obj = createTestObject({ id: 'guard2', x: 100 })
       expect(() => {
         applyChange(obj, {
           type: 'spawn',
-          objectId: 'guard-2',
+          objectId: 'guard2',
           role: 'enemy',
           snapshot: obj,
         })
@@ -201,7 +202,7 @@ describe('levelEditorHistory', () => {
       expect(() => {
         applyChange(obj, {
           type: 'despawn',
-          objectId: 'guard-2',
+          objectId: 'guard2',
           role: 'enemy',
           snapshot: obj,
         })
@@ -603,10 +604,10 @@ describe('levelEditorHistory', () => {
 
     it('returns DespawnChange when undoing a SpawnChange', () => {
       const history = new EditorHistory()
-      const snapshot = createTestObject({ id: 'guard-2' })
+      const snapshot = createTestObject({ id: 'guard2' })
       history.push({
         type: 'spawn',
-        objectId: 'guard-2',
+        objectId: 'guard2',
         role: 'enemy',
         snapshot,
       })
@@ -614,7 +615,7 @@ describe('levelEditorHistory', () => {
       const reversed = history.undo(() => snapshot)
       expect(reversed).toEqual({
         type: 'despawn',
-        objectId: 'guard-2',
+        objectId: 'guard2',
         role: 'enemy',
         snapshot,
       })
@@ -622,10 +623,10 @@ describe('levelEditorHistory', () => {
 
     it('returns SpawnChange when undoing a DespawnChange', () => {
       const history = new EditorHistory()
-      const snapshot = createTestObject({ id: 'guard-2' })
+      const snapshot = createTestObject({ id: 'guard2' })
       history.push({
         type: 'despawn',
-        objectId: 'guard-2',
+        objectId: 'guard2',
         role: 'enemy',
         snapshot,
       })
@@ -633,7 +634,7 @@ describe('levelEditorHistory', () => {
       const reversed = history.undo(() => undefined)
       expect(reversed).toEqual({
         type: 'spawn',
-        objectId: 'guard-2',
+        objectId: 'guard2',
         role: 'enemy',
         snapshot,
       })
@@ -736,7 +737,7 @@ describe('levelEditorHistory', () => {
     it('preserves weapon properties in snapshot during spawn and despawn undo', () => {
       const history = new EditorHistory()
       const weaponSnapshot = createTestObject({
-        id: 'dagger-2',
+        id: 'dagger2',
         attackDistance: 45,
         attackDurationMs: 250,
         holdOffsetX: 50,
@@ -745,7 +746,7 @@ describe('levelEditorHistory', () => {
 
       history.push({
         type: 'spawn',
-        objectId: 'dagger-2',
+        objectId: 'dagger2',
         role: 'weapon',
         snapshot: weaponSnapshot,
       })
@@ -753,7 +754,7 @@ describe('levelEditorHistory', () => {
       const despawnReversed = history.undo(() => weaponSnapshot)
       expect(despawnReversed).toEqual({
         type: 'despawn',
-        objectId: 'dagger-2',
+        objectId: 'dagger2',
         role: 'weapon',
         snapshot: weaponSnapshot,
       })
@@ -841,26 +842,26 @@ describe('levelEditorHistory', () => {
 
   describe('wouldOverlapAnyEditorObject', () => {
     const existing = [
-      { id: 'guard-1', role: 'enemy' as const, x: 200, y: 200, scaleX: 1, scaleY: 1 },
-      { id: 'boulder-1', role: 'object' as const, x: 500, y: 200, scaleX: 1, scaleY: 1 },
-      { id: 'dagger-1', role: 'weapon' as const, x: 300, y: 200, scaleX: 1, scaleY: 1 },
+      { id: 'guard1', role: 'enemy' as const, x: 200, y: 200, scaleX: 1, scaleY: 1 },
+      { id: 'boulder1', role: 'object' as const, x: 500, y: 200, scaleX: 1, scaleY: 1 },
+      { id: 'dagger1', role: 'weapon' as const, x: 300, y: 200, scaleX: 1, scaleY: 1 },
     ]
 
     it('lets a weapon overlap a character or another weapon, since they pass through each other', () => {
-      expect(wouldOverlapAnyEditorObject('dagger-2', 'weapon', 200, 200, 1, 1, existing)).toBe(false)
-      expect(wouldOverlapAnyEditorObject('dagger-2', 'weapon', 300, 200, 1, 1, existing)).toBe(false)
+      expect(wouldOverlapAnyEditorObject('dagger2', 'weapon', 200, 200, 1, 1, existing)).toBe(false)
+      expect(wouldOverlapAnyEditorObject('dagger2', 'weapon', 300, 200, 1, 1, existing)).toBe(false)
     })
 
     it('does not let a weapon overlap an obstacle, which it collides with', () => {
-      expect(wouldOverlapAnyEditorObject('dagger-2', 'weapon', 500, 200, 1, 1, existing)).toBe(true)
+      expect(wouldOverlapAnyEditorObject('dagger2', 'weapon', 500, 200, 1, 1, existing)).toBe(true)
     })
 
     it('does not let an obstacle overlap a weapon', () => {
-      expect(wouldOverlapAnyEditorObject('boulder-2', 'object', 300, 200, 1, 1, existing)).toBe(true)
+      expect(wouldOverlapAnyEditorObject('boulder2', 'object', 300, 200, 1, 1, existing)).toBe(true)
     })
 
     it('returns false when testing against weapons', () => {
-      // Placing player at dagger-1 position (300, 200). Guard-1 is at 200 (distance 100).
+      // Placing player at dagger1 position (300, 200). Guard1 is at 200 (distance 100).
       // Guard width 110 (half 55), Player width 110 (half 55). 55+55 = 110 > 100.
       // So place at 350, 200: distance from guard is 150 > 110, distance from boulder is 150 > 115.
       // Dagger is at 300 (distance 50). Dagger does not cause collision!
@@ -869,14 +870,14 @@ describe('levelEditorHistory', () => {
     })
 
     it('returns true when candidate collision box overlaps another non-weapon object', () => {
-      // Guard-1 is at (200, 200) with width 110, height 160.
+      // Guard1 is at (200, 200) with width 110, height 160.
       // Test player at (240, 200) -> distance in X is 40 < 110, distance in Y is 0 < 160 -> overlaps!
       const result = wouldOverlapAnyEditorObject('player', 'player', 240, 200, 1, 1, existing)
       expect(result).toBe(true)
     })
 
     it('returns false when candidate is separated or touching', () => {
-      // Guard-1 at (200, 200), width 110 (right edge = 255).
+      // Guard1 at (200, 200), width 110 (right edge = 255).
       // Candidate at (310, 200), width 110 (left edge = 255). Touching at 255 -> no overlap!
       const touching = wouldOverlapAnyEditorObject('player', 'player', 310, 200, 1, 1, existing)
       expect(touching).toBe(false)
@@ -886,13 +887,13 @@ describe('levelEditorHistory', () => {
     })
 
     it('ignores itself by objectId', () => {
-      // Testing guard-1 at its own position (200, 200)
-      const result = wouldOverlapAnyEditorObject('guard-1', 'enemy', 200, 200, 1, 1, existing)
+      // Testing guard1 at its own position (200, 200)
+      const result = wouldOverlapAnyEditorObject('guard1', 'enemy', 200, 200, 1, 1, existing)
       expect(result).toBe(false)
     })
 
     it('respects custom candidate colliderWidth and colliderHeight', () => {
-      // Guard-1 at (200, 200), width 110 (right edge = 255).
+      // Guard1 at (200, 200), width 110 (right edge = 255).
       // Candidate at (320, 200). With default width 110 (left edge = 265), it does not overlap.
       const noOverlapDefault = wouldOverlapAnyEditorObject('player', 'player', 320, 200, 1, 1, existing)
       expect(noOverlapDefault).toBe(false)
@@ -905,9 +906,9 @@ describe('levelEditorHistory', () => {
 
     it('respects custom obstacle colliderWidth and colliderHeight', () => {
       const obstacleWithCustomCollider = [
-        { id: 'guard-1', role: 'enemy' as const, x: 200, y: 200, scaleX: 1, scaleY: 1, colliderWidth: 200, colliderHeight: 160 },
+        { id: 'guard1', role: 'enemy' as const, x: 200, y: 200, scaleX: 1, scaleY: 1, colliderWidth: 200, colliderHeight: 160 },
       ]
-      // Guard-1 right edge = 200 + 100 = 300.
+      // Guard1 right edge = 200 + 100 = 300.
       // Candidate player at (320, 200) with default width 110 (left edge = 320 - 55 = 265 < 300) -> overlaps!
       const result = wouldOverlapAnyEditorObject('player', 'player', 320, 200, 1, 1, obstacleWithCustomCollider)
       expect(result).toBe(true)
@@ -958,6 +959,42 @@ describe('levelEditorHistory', () => {
       history.push({ type: 'physics_attr', objectId: 'o', key: 'max_velocity', prevValue: undefined, nextValue: 80 })
       history.undo((id) => (id === 'o' ? obj : undefined))
       expect(obj.max_velocity).toBeUndefined()
+    })
+  })
+
+  describe('generateNextObjectId', () => {
+    it('spawns base name if no instance of the object exists', () => {
+      expect(generateNextObjectId('enemy', [])).toBe('guard')
+      expect(generateNextObjectId('weapon', [])).toBe('dagger')
+      expect(generateNextObjectId('object', [])).toBe('boulder')
+    })
+
+    it('uses <name><num> starting at 2 as default way to spawn multi-instances', () => {
+      const roomObjects = [
+        { id: 'player' },
+        { id: 'boulder' },
+        { id: 'dagger' },
+        { id: 'guard' },
+        { id: 'guard2' },
+        { id: 'guard3' },
+      ]
+
+      expect(generateNextObjectId('enemy', roomObjects)).toBe('guard4')
+      expect(generateNextObjectId('weapon', roomObjects)).toBe('dagger2')
+      expect(generateNextObjectId('object', roomObjects)).toBe('boulder2')
+    })
+
+    it('fills lowest available index when an intermediate multi-instance was deleted', () => {
+      const roomObjects = [
+        { id: 'guard' },
+        { id: 'guard3' },
+      ]
+      expect(generateNextObjectId('enemy', roomObjects)).toBe('guard2')
+    })
+
+    it('supports customPrefix for arbitrary world objects', () => {
+      expect(generateNextObjectId('object', [{ id: 'chest' }], 'chest')).toBe('chest2')
+      expect(generateNextObjectId('object', [], 'chest')).toBe('chest')
     })
   })
 })

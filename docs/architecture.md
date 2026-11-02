@@ -262,7 +262,7 @@ Editable configurations export directly to `room1.ts` (`ROOM1_OBJECTS`). Objects
 |---|---|
 | **Reposition** | Drag sprite, or arrow keys (1 px, Shift: 10 px; blocked from collisionbox overlap) |
 | **Uniform Scale** | Drag yellow corner handle, `+`/`-` keys, or panel `×1.1` / `÷1.1` buttons (blocked from collisionbox overlap) |
-| **Spawn / Despawn** | `+ GUARD`, `+ DAGGER` buttons (spawns in non-overlapping spot); despawn with `REMOVE SELECTED` or `Del`/`Backspace` |
+| **Spawn / Despawn** | `+ GUARD`, `+ DAGGER` buttons (spawns in non-overlapping spot using `<name><num>` naming for multi-instances such as `guard2`, `guard3`, `dagger2`); despawn with `REMOVE SELECTED` or `Del`/`Backspace` |
 | **Collisionboxes** | Non-weapon objects render green collisionbox rectangles (`110×scaleX` by `160×scaleY` for characters, `120×scaleX` by `120×scaleY` for boulders, or custom `colliderWidth`×`colliderHeight`); weapons have no collisionbox |
 | **Collider Box Editing** | Drag green corner handle, hotkeys `[` / `]`, panel `BOX +` / `BOX -` buttons, or inspector `box_w` / `box_h` fields (+/- 10, Shift: 50, click for prompt; blocked from collisionbox overlap) |
 | **Selection** | Click sprite, panel list entry, or cycle with `Tab` / `Shift+Tab` |
@@ -363,7 +363,7 @@ Each node evaluates to one of three statuses per simulation tick:
 
 1. **Upper Live Room Chamber (`y = 80..700`)**:
    - Reuses Room 1 layout and `PhaserRoomView` directly, running domain physics and combat in real-time inside `GameSession`.
-   - Control player with Arrow keys. Click any enemy in the room (`guard`, `guard-2`, `guard-3`) to preview the AI Behavior Tree with that clicked enemy.
+   - Control player with Arrow keys. Click any enemy in the room (`guard`, `guard2`, `guard3`) to preview the AI Behavior Tree with that clicked enemy.
    - Live visual detection radius (cyan ring, 380px), attack reach (red ring, 60px), and active target ring rendered around the selected enemy in room coordinates.
    - Overhead action tags (`[GUARD] [CHASING]`, `[ALERTED]`, etc.) floating above the previewed enemy entity.
    - All standard Room 1 entities and obstacles rendered with full interpolation.

@@ -232,7 +232,7 @@ describe('PhaserRoomView', () => {
 
     // Verify undiscovered items/enemies have '?'
     const questionMarks = texts.filter((t) => t.text === '?')
-    expect(questionMarks.length).toBeGreaterThanOrEqual(4) // dagger, guard, guard-2, guard-3
+    expect(questionMarks.length).toBeGreaterThanOrEqual(4) // dagger, guard, guard2, guard3
   })
 
   it('reveals ? to object names when objects become discovered (e.g. after ls)', () => {
@@ -258,8 +258,8 @@ describe('PhaserRoomView', () => {
     expect(texts.some((t) => t.text === 'hacker')).toBe(true)
     expect(texts.some((t) => t.text === 'dagger')).toBe(true)
     expect(texts.some((t) => t.text === 'guard')).toBe(true)
-    expect(texts.some((t) => t.text === 'guard-2')).toBe(true)
-    expect(texts.some((t) => t.text === 'guard-3')).toBe(true)
+    expect(texts.some((t) => t.text === 'guard2')).toBe(true)
+    expect(texts.some((t) => t.text === 'guard3')).toBe(true)
   })
 
   it('keeps item label visible when equipped by a character and shrinks text width to ratio of item sprite', () => {

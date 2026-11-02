@@ -33,10 +33,10 @@ function throwTo(body: Body, targetX: number, targetY: number, targetObjectId: s
   body.thrown = { targetX, targetY, targetObjectId, hitIds: [] }
 }
 
-/** Boulder at (500, 500) with only `guard-2` left alive as an obstacle at (700, 500). */
+/** Boulder at (500, 500) with only `guard2` left alive as an obstacle at (700, 500). */
 function boulderSetup(targetId: string) {
   const ctx = setup({ mv_acceleration: 1000 })
-  for (const id of ['player', 'guard', 'guard-2', 'guard-3']) {
+  for (const id of ['player', 'guard', 'guard2', 'guard3']) {
     ctx.body(id).alive = false
   }
   const boulder = ctx.body(WORLD_OBJECT_IDS.boulder)
@@ -44,7 +44,7 @@ function boulderSetup(targetId: string) {
   boulder.y = 500
   boulder.vx = 400
   boulder.vy = 0
-  const blocker = ctx.body('guard-2')
+  const blocker = ctx.body('guard2')
   blocker.alive = true
   blocker.x = 700
   blocker.y = 500
@@ -177,7 +177,7 @@ describe('MvDrive', () => {
 
   it('lets a thrown Weapon fly through a Character', () => {
     const { tick, body } = setup({ mv_acceleration: 0 })
-    for (const id of ['player', 'guard-2', 'guard-3', 'boulder']) {
+    for (const id of ['player', 'guard2', 'guard3', 'boulder']) {
       body(id).alive = false
     }
     const guard = body('guard')
@@ -197,7 +197,7 @@ describe('MvDrive', () => {
 
 describe('MvDrive collisions', () => {
   it('ends the Throw at the first Collision and keeps the speed for the physics step', () => {
-    const { tick, boulder, blocker } = boulderSetup('guard-2')
+    const { tick, boulder, blocker } = boulderSetup('guard2')
     blocker.x = 612
 
     tick()
@@ -207,7 +207,7 @@ describe('MvDrive collisions', () => {
   })
 
   it('marks the target discovered when the Collision is with the target itself', () => {
-    const { tick, boulder, blocker } = boulderSetup('guard-2')
+    const { tick, boulder, blocker } = boulderSetup('guard2')
     blocker.x = 612
 
     tick()
@@ -230,7 +230,7 @@ describe('MvDrive collisions', () => {
   })
 
   it('never reaches a target it would collide with first: a thrown boulder stops short of a guard', () => {
-    const { tick, boulder, blocker } = boulderSetup('guard-2')
+    const { tick, boulder, blocker } = boulderSetup('guard2')
     boulder.vx = 0
 
     for (let i = 0; i < 600 && boulder.thrown; i++) tick()

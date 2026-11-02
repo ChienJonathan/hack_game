@@ -98,7 +98,7 @@ export const ROOM1_OBJECTS: RoomObjectConfig[] = [
     colliderHeight: 160,
   },
   {
-    id: "guard-2",
+    id: "guard2",
     role: "enemy",
     x: 1012,
     y: 410,
@@ -112,7 +112,7 @@ export const ROOM1_OBJECTS: RoomObjectConfig[] = [
     colliderHeight: 163,
   },
   {
-    id: "guard-3",
+    id: "guard3",
     role: "enemy",
     x: 1160,
     y: 440,

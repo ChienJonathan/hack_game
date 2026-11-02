@@ -58,6 +58,35 @@ export function wouldOverlapAnyEditorObject(
   return false
 }
 
+/**
+ * Generates the next object ID using the `<name><num>` pattern for multi-instances
+ * (e.g., guard, guard2, guard3; dagger, dagger2; boulder, boulder2).
+ */
+export function generateNextObjectId(
+  role: WorldObjectRole,
+  existing: readonly ({ id: string } | string)[],
+  customPrefix?: string,
+): string {
+  const prefix =
+    customPrefix ??
+    (role === 'weapon'
+      ? 'dagger'
+      : role === 'object'
+        ? 'boulder'
+        : role === 'enemy' || role === 'guard'
+          ? 'guard'
+          : role)
+  const existingIds = new Set(existing.map((item) => (typeof item === 'string' ? item : item.id)))
+  if (!existingIds.has(prefix)) {
+    return prefix
+  }
+  let counter = 2
+  while (existingIds.has(`${prefix}${counter}`)) {
+    counter++
+  }
+  return `${prefix}${counter}`
+}
+
 export interface ScalableMovableObject {
   id: string
   x: number

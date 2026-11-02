@@ -195,7 +195,7 @@ describe('MvCommandExecutor', () => {
       const distAfter = Math.hypot((guardState.x as number) - nextX, (guardState.y as number) - nextY)
       expect(distAfter).toBeLessThan(distBefore)
 
-      // Guard-2 stands on the way: the boulder collides with it, which ends the Throw before it arrives
+      // guard2 stands on the way: the boulder collides with it, which ends the Throw before it arrives
       for (let i = 0; i < 600 && boulderState.thrown; i++) {
         engine.advance(state, SIMULATION_TICK_MS)
       }
@@ -253,10 +253,10 @@ describe('MvCommandExecutor', () => {
       const state = createInitialWorldState()
       expect(run(state, '*', 'GUARD')).toEqual({
         status: 'success',
-        feedback: [{ kind: 'popup', text: 'Threw hacker, boulder, dagger, guard-2, guard-3 to guard.' }],
+        feedback: [{ kind: 'popup', text: 'Threw hacker, boulder, dagger, guard2, guard3 to guard.' }],
       })
       expect(stateOf(state, WORLD_OBJECT_IDS.guard).thrown).toBeFalsy()
-      for (const id of [WORLD_OBJECT_IDS.player, WORLD_OBJECT_IDS.boulder, WORLD_OBJECT_IDS.dagger, 'guard-2', 'guard-3']) {
+      for (const id of [WORLD_OBJECT_IDS.player, WORLD_OBJECT_IDS.boulder, WORLD_OBJECT_IDS.dagger, 'guard2', 'guard3']) {
         expect(stateOf(state, id).thrown).toMatchObject({ targetObjectId: WORLD_OBJECT_IDS.guard })
         expect(stateOf(state, id).discovered).toBe(true)
       }
@@ -303,7 +303,7 @@ describe('MvCommandExecutor', () => {
       expect(find(state, WORLD_OBJECT_IDS.player).metadata.name).toBe('x_0')
       expect(find(state, WORLD_OBJECT_IDS.boulder).metadata.name).toBe('x_1')
       expect(find(state, WORLD_OBJECT_IDS.dagger).metadata.name).toBe('x_2')
-      expect(find(state, 'guard-3').metadata.name).toBe('x_5')
+      expect(find(state, 'guard3').metadata.name).toBe('x_5')
     })
 
     it('skips suffixes already taken by other objects or exits', () => {
@@ -313,7 +313,7 @@ describe('MvCommandExecutor', () => {
       // the renamed guard no longer matches "*a*" and keeps x_1 taken
       expect(find(state, WORLD_OBJECT_IDS.player).metadata.name).toBe('x_0')
       expect(find(state, WORLD_OBJECT_IDS.dagger).metadata.name).toBe('x_2')
-      expect(find(state, 'guard-2').metadata.name).toBe('x_3')
+      expect(find(state, 'guard2').metadata.name).toBe('x_3')
     })
 
     it('does not count the sources themselves as collisions', () => {

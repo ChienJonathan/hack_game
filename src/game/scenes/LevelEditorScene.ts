@@ -36,6 +36,7 @@ import {
   EditorHistory,
   computeEditorCollisionBox,
   wouldOverlapAnyEditorObject,
+  generateNextObjectId,
   type ScalableMovableObject,
   type CharacterProperty,
   type PhysicsAttrKey,
@@ -2815,20 +2816,8 @@ export class LevelEditorScene extends Phaser.Scene {
     }
   }
 
-  private generateNextId(role: WorldObjectRole): string {
-    const prefix =
-      role === 'weapon'
-        ? 'dagger'
-        : role === 'object'
-          ? 'boulder'
-          : role === 'enemy' || role === 'guard'
-            ? 'guard'
-            : role
-    let counter = 2
-    while (this.editorObjects.some((o) => o.id === `${prefix}-${counter}`)) {
-      counter++
-    }
-    return `${prefix}-${counter}`
+  public generateNextId(role: WorldObjectRole): string {
+    return generateNextObjectId(role, this.editorObjects)
   }
 
   private textureKeyForRole(role: WorldObjectRole): string {

@@ -292,8 +292,8 @@ describe('commands', () => {
     const session = newSession()
     const dagger = stateOf(session, 'dagger')
     const guard = stateOf(session, 'guard')
-    const guard2 = stateOf(session, 'guard-2')
-    const guard3 = stateOf(session, 'guard-3')
+    const guard2 = stateOf(session, 'guard2')
+    const guard3 = stateOf(session, 'guard3')
 
     expect(dagger.discovered).toBe(false)
     expect(guard.discovered).toBe(false)
@@ -440,7 +440,7 @@ describe('commands', () => {
   it('throws player to exit zone and triggers congratulations upon reaching exit', () => {
     const session = newSession()
     // Thrown characters are blocked by solid objects, so clear the path first.
-    for (const id of ['guard', 'guard-2', 'guard-3', 'boulder']) {
+    for (const id of ['guard', 'guard2', 'guard3', 'boulder']) {
       ;(stateOf(session, id) as unknown as { alive: boolean }).alive = false
     }
     const result = session.submitCommand('mv hacker room2')

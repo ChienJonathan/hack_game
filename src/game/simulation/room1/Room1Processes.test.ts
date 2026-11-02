@@ -225,7 +225,7 @@ describe('Room1Processes braking only below the top speed', () => {
     const get = (id: string) => getMutableWorldObjectState<MutableWorldObjectState>(
       state.worldObjects.find((o) => o.id === id)!,
     )
-    for (const id of ['boulder', 'guard', 'guard-2', 'guard-3']) {
+    for (const id of ['boulder', 'guard', 'guard2', 'guard3']) {
       get(id).alive = false
     }
     const player = get(WORLD_OBJECT_IDS.player)
