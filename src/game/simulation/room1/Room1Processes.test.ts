@@ -5,6 +5,7 @@ import { TickSimulationEngine } from '../TickSimulationEngine.ts'
 import { ROOM1_PROCESSES } from './Room1Processes.ts'
 import { getMutableWorldObjectState, type MutableWorldObjectState } from '../../domain/WorldObjectState.ts'
 import { AabbCollisionWorld } from '../../domain/CollisionWorld.ts'
+import { DEFAULT_DRAG, DEFAULT_FRICTION } from '../physicsConstants.ts'
 
 describe('Room1Processes collisionbox overlap prevention', () => {
   const collisionWorld = new AabbCollisionWorld()
@@ -50,7 +51,7 @@ describe('Room1Processes collisionbox overlap prevention', () => {
     expect(collisionWorld.overlaps(playerBox, boulderBox)).toBe(false)
   })
 
-  it('pushes the boulder along when the player runs into it at speed', () => {
+  it('cannot push the heavy boulder (mass 100) by running into it', () => {
     const state = createInitialWorldState()
     const player = state.worldObjects.find((o) => o.id === WORLD_OBJECT_IDS.player)!
     const boulder = state.worldObjects.find((o) => o.id === WORLD_OBJECT_IDS.boulder)!
@@ -68,7 +69,7 @@ describe('Room1Processes collisionbox overlap prevention', () => {
       engine.advance(state, 16.67)
     }
 
-    expect(boulderState.x as number).toBeGreaterThan(740 + 20)
+    expect(boulderState.x as number).toBeLessThan(740 + 20)
     expect(playerState.x as number).toBeLessThan(boulderState.x as number)
   })
 
@@ -215,8 +216,8 @@ describe('Room1Processes collisionbox overlap prevention', () => {
 })
 
 describe('Room1Processes braking only below the top speed', () => {
-  const FRICTION = 5
-  const DRAG = 0.5
+  const FRICTION = DEFAULT_FRICTION
+  const DRAG = DEFAULT_DRAG
   const DT = 1000 / 60 / 1000
 
   function setup() {
@@ -258,7 +259,7 @@ describe('Room1Processes braking only below the top speed', () => {
     const { state, player, engine } = setup()
     player.vx = 800
 
-    for (let i = 0; i < 40; i++) engine.advance(state, 16.67)
+    for (let i = 0; i < 90; i++) engine.advance(state, 16.67)
 
     expect(player.vx as number).toBe(0)
   })
