@@ -94,7 +94,7 @@ export const ROOM1_OBJECTS: RoomObjectConfig[] = [
   {
     id: "guard-3",
     role: "guard",
-    x: 1040,
+    x: 1160,
     y: 440,
     displayWidth: 87,
     displayHeight: 87,

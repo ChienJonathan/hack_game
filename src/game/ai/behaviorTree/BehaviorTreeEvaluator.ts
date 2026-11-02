@@ -36,28 +36,50 @@ function distance(a: { x: number; y: number }, b: { x: number; y: number }): num
   return Math.hypot(b.x - a.x, b.y - a.y)
 }
 
+function getObstacles(context: BehaviorTreeContext, excludeId: string): Box[] {
+  const obstacles: Box[] = []
+  for (const obj of context.state.worldObjects) {
+    if (obj.id === excludeId) continue
+    if (obj.roomId !== context.state.currentRoomId) continue
+    if (obj.metadata.role === 'weapon') continue
+    const s = obj.state as Record<string, unknown>
+    if (s.alive === false) continue
+    if (typeof s.x !== 'number' || typeof s.y !== 'number') continue
+    if (typeof s.width !== 'number' || typeof s.height !== 'number') continue
+    obstacles.push({
+      x: s.x,
+      y: s.y,
+      width: s.width,
+      height: s.height,
+    })
+  }
+  return obstacles
+}
+
 function moveToward(
   position: { x: number; y: number; width: number; height: number },
   target: { x: number; y: number },
   speed: number,
   tickDurationMs: number,
+  obstacles: readonly Box[] = [],
 ): void {
   const deltaX = target.x - position.x
   const deltaY = target.y - position.y
   const remainingDistance = Math.hypot(deltaX, deltaY)
   const maxDistance = (speed * tickDurationMs) / 1000
 
-  if (remainingDistance <= maxDistance || remainingDistance === 0) {
-    position.x = target.x
-    position.y = target.y
-  } else {
-    position.x += (deltaX / remainingDistance) * maxDistance
-    position.y += (deltaY / remainingDistance) * maxDistance
+  let nextX = target.x
+  let nextY = target.y
+  if (remainingDistance > maxDistance && remainingDistance !== 0) {
+    nextX = position.x + (deltaX / remainingDistance) * maxDistance
+    nextY = position.y + (deltaY / remainingDistance) * maxDistance
   }
 
-  const clamped = collision.clampToBounds(boxOf(position), ROOM_BOUNDS)
-  position.x = clamped.x
-  position.y = clamped.y
+  const currentBox = boxOf(position)
+  const targetBox = { x: nextX, y: nextY, width: position.width, height: position.height }
+  const resolved = collision.resolveMovement(currentBox, targetBox, obstacles, ROOM_BOUNDS)
+  position.x = resolved.x
+  position.y = resolved.y
 }
 
 function moveAway(
@@ -65,22 +87,25 @@ function moveAway(
   avoid: { x: number; y: number },
   speed: number,
   tickDurationMs: number,
+  obstacles: readonly Box[] = [],
 ): void {
   const deltaX = position.x - avoid.x
   const deltaY = position.y - avoid.y
   const remainingDistance = Math.hypot(deltaX, deltaY)
   const maxDistance = (speed * tickDurationMs) / 1000
 
-  if (remainingDistance === 0) {
-    position.x += maxDistance
-  } else {
-    position.x += (deltaX / remainingDistance) * maxDistance
-    position.y += (deltaY / remainingDistance) * maxDistance
+  let nextX = position.x + maxDistance
+  let nextY = position.y
+  if (remainingDistance !== 0) {
+    nextX = position.x + (deltaX / remainingDistance) * maxDistance
+    nextY = position.y + (deltaY / remainingDistance) * maxDistance
   }
 
-  const clamped = collision.clampToBounds(boxOf(position), ROOM_BOUNDS)
-  position.x = clamped.x
-  position.y = clamped.y
+  const currentBox = boxOf(position)
+  const targetBox = { x: nextX, y: nextY, width: position.width, height: position.height }
+  const resolved = collision.resolveMovement(currentBox, targetBox, obstacles, ROOM_BOUNDS)
+  position.x = resolved.x
+  position.y = resolved.y
 }
 
 export class BehaviorTreeEvaluator {
@@ -287,7 +312,8 @@ export class BehaviorTreeEvaluator {
     const baseSpeed = typeof entityState.speed === 'number' ? entityState.speed : 210
     const speed = baseSpeed * multiplier
 
-    moveToward(entityState, playerState, speed, context.tickDurationMs)
+    const obstacles = getObstacles(context, context.entity.id)
+    moveToward(entityState, playerState, speed, context.tickDurationMs, obstacles)
     entityState.chasing = true
     return 'RUNNING'
   }
@@ -371,7 +397,8 @@ export class BehaviorTreeEvaluator {
     const prevX = entityState.x
     const prevY = entityState.y
 
-    moveToward(entityState, { x: charge.targetX, y: charge.targetY }, chargeSpeed, context.tickDurationMs)
+    const obstacles = getObstacles(context, context.entity.id)
+    moveToward(entityState, { x: charge.targetX, y: charge.targetY }, chargeSpeed, context.tickDurationMs, obstacles)
 
     // Check collision / hit on player
     const gap = collision.gap(boxOf(entityState), boxOf(playerState))
@@ -420,8 +447,8 @@ export class BehaviorTreeEvaluator {
 
     const target = waypoints[index]
     const speed = (typeof entityState.speed === 'number' ? entityState.speed : 210) * (params?.speedMultiplier ?? 0.8)
-
-    moveToward(entityState, target, speed, context.tickDurationMs)
+    const obstacles = getObstacles(context, context.entity.id)
+    moveToward(entityState, target, speed, context.tickDurationMs, obstacles)
 
     if (distance(entityState, target) < 16) {
       index = (index + 1) % waypoints.length
@@ -450,7 +477,8 @@ export class BehaviorTreeEvaluator {
     }
 
     const speed = (typeof entityState.speed === 'number' ? entityState.speed : 210) * (params?.speedMultiplier ?? 1.2)
-    moveAway(entityState, playerState, speed, context.tickDurationMs)
+    const obstacles = getObstacles(context, context.entity.id)
+    moveAway(entityState, playerState, speed, context.tickDurationMs, obstacles)
     entityState.chasing = false
     return 'RUNNING'
   }

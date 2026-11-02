@@ -18,7 +18,7 @@ import {
 } from '../../content/weaponConstants.ts'
 import type { PlayerSpeedConfig } from '../../content/room1.ts'
 import type { CharacterState } from '../../domain/CharacterState.ts'
-import { AabbCollisionWorld } from '../../domain/CollisionWorld.ts'
+import { AabbCollisionWorld, type Box } from '../../domain/CollisionWorld.ts'
 import { CombatService } from '../../domain/CombatService.ts'
 import { PICKUP_REACH, PickUpService } from '../../domain/PickUpService.ts'
 import { weaponFor } from '../../domain/WeaponDefinition.ts'
@@ -51,11 +51,6 @@ interface GuardState extends CharacterState {
   alerted: boolean
   chasing: boolean
   attacking: boolean
-}
-
-interface Position {
-  x: number
-  y: number
 }
 
 const ROOM_BOUNDS = {
@@ -91,20 +86,24 @@ function boxOf(entity: { x: number; y: number; width: number; height: number }) 
   return { x: entity.x, y: entity.y, width: entity.width, height: entity.height }
 }
 
-function moveToward(position: Position, target: Position, speed: number, tickDurationMs: number): void {
-  const deltaX = target.x - position.x
-  const deltaY = target.y - position.y
-  const remainingDistance = Math.hypot(deltaX, deltaY)
-  const maxDistance = (speed * tickDurationMs) / 1000
-
-  if (remainingDistance <= maxDistance || remainingDistance === 0) {
-    position.x = target.x
-    position.y = target.y
-    return
+function getObstacles(context: ProcessTickContext, excludeId: string): Box[] {
+  const obstacles: Box[] = []
+  for (const obj of context.state.worldObjects) {
+    if (obj.id === excludeId) continue
+    if (obj.roomId !== context.state.currentRoomId) continue
+    if (obj.metadata.role === 'weapon') continue
+    const s = obj.state as Record<string, unknown>
+    if (s.alive === false) continue
+    if (typeof s.x !== 'number' || typeof s.y !== 'number') continue
+    if (typeof s.width !== 'number' || typeof s.height !== 'number') continue
+    obstacles.push({
+      x: s.x,
+      y: s.y,
+      width: s.width,
+      height: s.height,
+    })
   }
-
-  position.x += (deltaX / remainingDistance) * maxDistance
-  position.y += (deltaY / remainingDistance) * maxDistance
+  return obstacles
 }
 
 export interface ThrownState {
@@ -253,13 +252,20 @@ export class PlayerMovementProcess implements WorldObjectProcess {
         }
       }
 
+      const currentBox = {
+        x: player.x,
+        y: player.y,
+        width: player.width,
+        height: player.height,
+      }
       const nextBox = {
         x: player.x + vx * dt,
         y: player.y + vy * dt,
         width: player.width,
         height: player.height,
       }
-      const clamped = collision.clampToBounds(nextBox, ROOM_BOUNDS)
+      const obstacles = getObstacles(context, context.worldObject.id)
+      const clamped = collision.resolveMovement(currentBox, nextBox, obstacles, ROOM_BOUNDS)
       if (clamped.x !== nextBox.x) {
         vx = 0
       }
@@ -277,9 +283,22 @@ export class PlayerMovementProcess implements WorldObjectProcess {
       }
       const speed = typeof player.speed === 'number' ? player.speed : 240
       const distance = (speed * context.tickDurationMs) / 1000
-      player.x += player.moveX * distance
-      player.y += player.moveY * distance
-      Object.assign(player, collision.clampToBounds(boxOf(player), ROOM_BOUNDS))
+      const currentBox = {
+        x: player.x,
+        y: player.y,
+        width: player.width,
+        height: player.height,
+      }
+      const nextBox = {
+        x: player.x + player.moveX * distance,
+        y: player.y + player.moveY * distance,
+        width: player.width,
+        height: player.height,
+      }
+      const obstacles = getObstacles(context, context.worldObject.id)
+      const resolved = collision.resolveMovement(currentBox, nextBox, obstacles, ROOM_BOUNDS)
+      player.x = resolved.x
+      player.y = resolved.y
     }
 
     if (player.alive && player.weaponId === null) {
@@ -397,7 +416,23 @@ export class GuardResponseProcess implements WorldObjectProcess {
 
     const reach = weaponFor(guard.weaponId).reach
     if (collision.gap(boxOf(guard), boxOf(player)) > reach) {
-      moveToward(guard, player, guard.speed, context.tickDurationMs)
+      const deltaX = player.x - guard.x
+      const deltaY = player.y - guard.y
+      const remainingDistance = Math.hypot(deltaX, deltaY)
+      const maxDistance = (guard.speed * context.tickDurationMs) / 1000
+
+      let targetX = player.x
+      let targetY = player.y
+      if (remainingDistance > maxDistance && remainingDistance !== 0) {
+        targetX = guard.x + (deltaX / remainingDistance) * maxDistance
+        targetY = guard.y + (deltaY / remainingDistance) * maxDistance
+      }
+      const currentBox = boxOf(guard)
+      const nextBox = { x: targetX, y: targetY, width: guard.width, height: guard.height }
+      const obstacles = getObstacles(context, context.worldObject.id)
+      const resolved = collision.resolveMovement(currentBox, nextBox, obstacles, ROOM_BOUNDS)
+      guard.x = resolved.x
+      guard.y = resolved.y
     }
 
     const attack = combat.attack(context.state, context.worldObject.id)

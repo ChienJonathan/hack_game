@@ -11,7 +11,7 @@ import {
   GAME_WEAPON_CONFIG,
   computeDaggerAttackTranslation,
 } from '../content/room1Constants.ts'
-import { createInitialWorldState } from '../content/room1WorldState.ts'
+import { createInitialWorldState, computeCollisionSize } from '../content/room1WorldState.ts'
 import { ROOM1_OBJECTS, type PlayerSpeedConfig, type RoomObjectConfig, type WorldObjectRole } from '../content/room1.ts'
 import { generateRoom1Source } from '../content/room1Serializer.ts'
 import {
@@ -25,6 +25,8 @@ import { COMMAND_INPUT_TEXTURE_KEY } from '../presentation/PhaserCommandInputVie
 import type { WorldObject } from '../domain/WorldObject.ts'
 import {
   EditorHistory,
+  computeEditorCollisionBox,
+  wouldOverlapAnyEditorObject,
   type ScalableMovableObject,
   type CharacterProperty,
 } from './levelEditorHistory.ts'
@@ -64,6 +66,7 @@ export interface EditorObject extends ScalableMovableObject {
   role: WorldObjectRole
   sprite: Phaser.GameObjects.Image
   outline: Phaser.GameObjects.Rectangle
+  collisionBox?: Phaser.GameObjects.Rectangle
   scaleHandle: Phaser.GameObjects.Rectangle
   label: Phaser.GameObjects.Text
 }
@@ -410,6 +413,17 @@ export class LevelEditorScene extends Phaser.Scene {
       .setDepth(2)
       .setVisible(false)
 
+    // Collision box (added for all world objects besides weapon)
+    let collisionBox: Phaser.GameObjects.Rectangle | undefined
+    if (role !== 'weapon') {
+      const collSize = computeCollisionSize(role, scaleX, scaleY)
+      collisionBox = this.add
+        .rectangle(x, y, collSize.width, collSize.height)
+        .setStrokeStyle(2, 0x00e676, 0.9)
+        .setFillStyle(0x00e676, 0.12)
+        .setDepth(2)
+    }
+
     // Scale handle (bottom-right corner)
     const scaleHandle = this.add
       .rectangle(
@@ -438,6 +452,7 @@ export class LevelEditorScene extends Phaser.Scene {
       role,
       sprite,
       outline,
+      collisionBox,
       scaleHandle,
       label,
       x,
@@ -1254,11 +1269,41 @@ export class LevelEditorScene extends Phaser.Scene {
     return this.editorObjects.find((obj) => obj.id === this.selectedId)
   }
 
+  public getCollisionBox(
+    role: WorldObjectRole,
+    x: number,
+    y: number,
+    scaleX: number,
+    scaleY: number,
+  ): { x: number; y: number; width: number; height: number } | null {
+    return computeEditorCollisionBox(role, x, y, scaleX, scaleY)
+  }
+
+  public wouldOverlapAny(
+    objectId: string,
+    x: number,
+    y: number,
+    scaleX?: number,
+    scaleY?: number,
+  ): boolean {
+    const targetObj = this.editorObjects.find((o) => o.id === objectId)
+    const role = targetObj?.role ?? 'guard'
+    const sX = scaleX ?? targetObj?.scaleX ?? 1
+    const sY = scaleY ?? targetObj?.scaleY ?? 1
+    return wouldOverlapAnyEditorObject(objectId, role, x, y, sX, sY, this.editorObjects)
+  }
+
   private updateObjectVisuals(obj: EditorObject): void {
     obj.sprite.setPosition(obj.x, obj.y)
     obj.sprite.setDisplaySize(obj.displayWidth, obj.displayHeight)
     obj.outline.setPosition(obj.x, obj.y)
     obj.outline.setSize(obj.displayWidth + 8, obj.displayHeight + 8)
+    if (obj.collisionBox) {
+      const collSize = computeCollisionSize(obj.role, obj.scaleX, obj.scaleY)
+      obj.collisionBox.setPosition(obj.x, obj.y)
+      obj.collisionBox.setSize(collSize.width, collSize.height)
+      obj.collisionBox.setVisible(obj.sprite.visible)
+    }
     obj.scaleHandle.setPosition(
       obj.x + obj.displayWidth / 2,
       obj.y + obj.displayHeight / 2,
@@ -1384,10 +1429,19 @@ export class LevelEditorScene extends Phaser.Scene {
     const prevDisplayWidth = selected.displayWidth
     const prevDisplayHeight = selected.displayHeight
 
-    selected.scaleX *= factor
-    selected.scaleY *= factor
-    selected.displayWidth = Math.max(16, Math.round(selected.baseWidth * selected.scaleX))
-    selected.displayHeight = Math.max(16, Math.round(selected.baseHeight * selected.scaleY))
+    const nextScaleX = selected.scaleX * factor
+    const nextScaleY = selected.scaleY * factor
+    const nextDisplayWidth = Math.max(16, Math.round(selected.baseWidth * nextScaleX))
+    const nextDisplayHeight = Math.max(16, Math.round(selected.baseHeight * nextScaleY))
+
+    if (selected.role !== 'weapon' && this.wouldOverlapAny(selected.id, selected.x, selected.y, nextScaleX, nextScaleY)) {
+      return
+    }
+
+    selected.scaleX = nextScaleX
+    selected.scaleY = nextScaleY
+    selected.displayWidth = nextDisplayWidth
+    selected.displayHeight = nextDisplayHeight
 
     this.history.push({
       type: 'scale',
@@ -1419,6 +1473,9 @@ export class LevelEditorScene extends Phaser.Scene {
     const prevY = selected.y
     const nextX = snap(selected.x + dx)
     const nextY = snap(selected.y + dy)
+    if (selected.role !== 'weapon' && this.wouldOverlapAny(selected.id, nextX, nextY)) {
+      return
+    }
     const actualDx = nextX - prevX
     const actualDy = nextY - prevY
 
@@ -1518,8 +1575,26 @@ export class LevelEditorScene extends Phaser.Scene {
       }
       const dx = pointer.worldX - this.dragStartX
       const dy = pointer.worldY - this.dragStartY
-      selected.x = snap(this.dragObjStartX + dx)
-      selected.y = snap(this.dragObjStartY + dy)
+      const targetX = snap(this.dragObjStartX + dx)
+      const targetY = snap(this.dragObjStartY + dy)
+
+      if (selected.role === 'weapon') {
+        selected.x = targetX
+        selected.y = targetY
+      } else {
+        if (!this.wouldOverlapAny(selected.id, targetX, targetY)) {
+          selected.x = targetX
+          selected.y = targetY
+        } else {
+          if (!this.wouldOverlapAny(selected.id, targetX, selected.y)) {
+            selected.x = targetX
+          }
+          if (!this.wouldOverlapAny(selected.id, selected.x, targetY)) {
+            selected.y = targetY
+          }
+        }
+      }
+
       this.updateObjectVisuals(selected)
       if (selected.role === 'player' && this.testEquippedWeaponId) {
         const weapon = this.editorObjects.find((o) => o.id === this.testEquippedWeaponId)
@@ -1538,10 +1613,19 @@ export class LevelEditorScene extends Phaser.Scene {
       // Use the larger axis delta to scale uniformly
       const delta = Math.abs(dx) > Math.abs(dy) ? dx : dy
       const scaleFactor = 1 + delta / 200
-      selected.displayWidth = Math.max(16, Math.round(this.scaleStartWidth * scaleFactor))
-      selected.displayHeight = Math.max(16, Math.round(this.scaleStartHeight * scaleFactor))
-      selected.scaleX = selected.displayWidth / selected.baseWidth
-      selected.scaleY = selected.displayHeight / selected.baseHeight
+      const candDisplayW = Math.max(16, Math.round(this.scaleStartWidth * scaleFactor))
+      const candDisplayH = Math.max(16, Math.round(this.scaleStartHeight * scaleFactor))
+      const candScaleX = candDisplayW / selected.baseWidth
+      const candScaleY = candDisplayH / selected.baseHeight
+
+      if (selected.role !== 'weapon' && this.wouldOverlapAny(selected.id, selected.x, selected.y, candScaleX, candScaleY)) {
+        return
+      }
+
+      selected.displayWidth = candDisplayW
+      selected.displayHeight = candDisplayH
+      selected.scaleX = candScaleX
+      selected.scaleY = candScaleY
       this.updateObjectVisuals(selected)
       this.updatePropertyPanel()
     }
@@ -1943,8 +2027,31 @@ export class LevelEditorScene extends Phaser.Scene {
 
     const defaultX = 960 + (this.editorObjects.length % 5) * 40 - 80
     const defaultY = 380 + (this.editorObjects.length % 5) * 30 - 60
-    const x = config.x !== undefined ? config.x : defaultX
-    const y = config.y !== undefined ? config.y : defaultY
+    let x = config.x !== undefined ? config.x : defaultX
+    let y = config.y !== undefined ? config.y : defaultY
+
+    if (role !== 'weapon') {
+      const collSize = computeCollisionSize(role, scaleX, scaleY)
+      let offset = 0
+      while (offset < 800) {
+        let collides = false
+        for (const other of this.editorObjects) {
+          if (other.role === 'weapon') continue
+          const otherSize = computeCollisionSize(other.role, other.scaleX, other.scaleY)
+          if (
+            Math.abs(x - other.x) < (collSize.width + otherSize.width) / 2 &&
+            Math.abs(y - other.y) < (collSize.height + otherSize.height) / 2
+          ) {
+            collides = true
+            break
+          }
+        }
+        if (!collides) break
+        offset += 60
+        x = (config.x !== undefined ? config.x : defaultX) + offset
+        y = (config.y !== undefined ? config.y : defaultY) + (offset % 120)
+      }
+    }
 
     const sprite = this.add.image(x, y, textureKey).setDepth(3)
     sprite.setDisplaySize(displayWidth, displayHeight)
@@ -1957,6 +2064,17 @@ export class LevelEditorScene extends Phaser.Scene {
       .setFillStyle(SELECTED_OUTLINE, 0.08)
       .setDepth(2)
       .setVisible(false)
+
+    // Collision box (added for all world objects besides weapon)
+    let collisionBox: Phaser.GameObjects.Rectangle | undefined
+    if (role !== 'weapon') {
+      const collSize = computeCollisionSize(role, scaleX, scaleY)
+      collisionBox = this.add
+        .rectangle(x, y, collSize.width, collSize.height)
+        .setStrokeStyle(2, 0x00e676, 0.9)
+        .setFillStyle(0x00e676, 0.12)
+        .setDepth(2)
+    }
 
     // Scale handle (bottom-right corner)
     const scaleHandle = this.add
@@ -1986,6 +2104,7 @@ export class LevelEditorScene extends Phaser.Scene {
       role,
       sprite,
       outline,
+      collisionBox,
       scaleHandle,
       label,
       x,
@@ -2048,6 +2167,7 @@ export class LevelEditorScene extends Phaser.Scene {
 
     obj.sprite.destroy()
     obj.outline.destroy()
+    obj.collisionBox?.destroy()
     obj.scaleHandle.destroy()
     obj.label.destroy()
 

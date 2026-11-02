@@ -26,6 +26,73 @@ describe('gap', () => {
   })
 })
 
+describe('overlaps', () => {
+  it('returns true when boxes overlap internally', () => {
+    const a = { x: 50, y: 50, width: 20, height: 20 }
+    const b = { x: 60, y: 50, width: 20, height: 20 } // overlap: distance 10 < 20
+    expect(world.overlaps(a, b)).toBe(true)
+  })
+
+  it('returns false when boxes only touch edge-to-edge', () => {
+    const a = { x: 50, y: 50, width: 20, height: 20 }
+    const b = { x: 70, y: 50, width: 20, height: 20 } // touching: distance 20 === 20
+    expect(world.overlaps(a, b)).toBe(false)
+  })
+
+  it('returns false when boxes are separated', () => {
+    const a = { x: 50, y: 50, width: 20, height: 20 }
+    const b = { x: 100, y: 50, width: 20, height: 20 }
+    expect(world.overlaps(a, b)).toBe(false)
+  })
+
+  it('returns false when boxes overlap in one axis but not the other', () => {
+    const a = { x: 50, y: 50, width: 20, height: 20 }
+    const b = { x: 50, y: 100, width: 20, height: 20 }
+    expect(world.overlaps(a, b)).toBe(false)
+  })
+})
+
+describe('resolveMovement', () => {
+  const bounds = { left: 0, top: 0, right: 200, bottom: 200 }
+
+  it('moves unhindered when no obstacles exist', () => {
+    const current = { x: 50, y: 50, width: 20, height: 20 }
+    const target = { x: 80, y: 70, width: 20, height: 20 }
+    const resolved = world.resolveMovement(current, target, [], bounds)
+    expect(resolved).toEqual({ x: 80, y: 70 })
+  })
+
+  it('clamps movement so moving box touches obstacle edge without overlapping', () => {
+    const current = { x: 50, y: 50, width: 20, height: 20 }
+    const target = { x: 100, y: 50, width: 20, height: 20 }
+    const obstacle = { x: 90, y: 50, width: 20, height: 20 } // obstacle left edge = 80
+    const resolved = world.resolveMovement(current, target, [obstacle], bounds)
+    // Box should stop at x = 70 (so right edge is 80)
+    expect(resolved.x).toBe(70)
+    expect(resolved.y).toBe(50)
+    expect(world.overlaps({ ...current, ...resolved }, obstacle)).toBe(false)
+  })
+
+  it('allows sliding along unaffected axis during diagonal collision', () => {
+    const current = { x: 50, y: 50, width: 20, height: 20 }
+    const target = { x: 100, y: 80, width: 20, height: 20 }
+    const obstacle = { x: 90, y: 50, width: 20, height: 20 }
+    const resolved = world.resolveMovement(current, target, [obstacle], bounds)
+    // Stopped at x = 70 on X, but slides along Y to 80
+    expect(resolved.x).toBe(70)
+    expect(resolved.y).toBe(80)
+    expect(world.overlaps({ ...current, ...resolved }, obstacle)).toBe(false)
+  })
+
+  it('clamps to room bounds when moving beyond boundaries', () => {
+    const current = { x: 190, y: 50, width: 20, height: 20 }
+    const target = { x: 220, y: 50, width: 20, height: 20 }
+    const resolved = world.resolveMovement(current, target, [], bounds)
+    expect(resolved.x).toBe(190) // bounds.right (200) - width/2 (10)
+    expect(resolved.y).toBe(50)
+  })
+})
+
 describe('clampToBounds', () => {
   const bounds = { left: 0, top: 0, right: 100, bottom: 50 }
 

@@ -44,6 +44,10 @@ export function resolveScale(
   return { scaleX, scaleY }
 }
 
+export function hasCollisionBox(role: WorldObjectRole): boolean {
+  return role !== 'weapon'
+}
+
 export function computeCollisionSize(
   role: WorldObjectRole,
   scaleX: number,
@@ -83,6 +87,7 @@ export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJE
           y: obj.y,
           width,
           height,
+          collisionBox: { width, height },
           displayWidth: obj.displayWidth,
           displayHeight: obj.displayHeight,
           scaleX,
@@ -137,6 +142,7 @@ export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJE
           y: obj.y,
           width,
           height,
+          collisionBox: null,
           displayWidth: obj.displayWidth,
           displayHeight: obj.displayHeight,
           scaleX,
@@ -166,6 +172,7 @@ export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJE
           y: obj.y,
           width,
           height,
+          collisionBox: { width, height },
           displayWidth: obj.displayWidth,
           displayHeight: obj.displayHeight,
           scaleX,
@@ -188,6 +195,7 @@ export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJE
         y: obj.y,
         width,
         height,
+        collisionBox: { width, height },
         displayWidth: obj.displayWidth,
         displayHeight: obj.displayHeight,
         scaleX,

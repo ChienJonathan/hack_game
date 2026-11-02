@@ -3,6 +3,7 @@ import {
   createInitialWorldState,
   computeCollisionSize,
   resolveScale,
+  hasCollisionBox,
 } from './room1WorldState.ts'
 import { CHARACTER_SIZE, DAGGER_SIZE, CHARACTER_BASE_SIZE } from './room1Constants.ts'
 import type { RoomObjectConfig } from './room1.ts'
@@ -183,5 +184,51 @@ describe('room1WorldState scaled collision AABB', () => {
     // Gap = 120 - 82.5 = 37.5 px
     const scaledOtherBox = { x: 220, y: 100, width: 55, height: 80 }
     expect(collisionWorld.gap(playerBox, scaledOtherBox)).toBe(37.5)
+  })
+
+  it('identifies collisionbox presence with hasCollisionBox for world object roles', () => {
+    expect(hasCollisionBox('player')).toBe(true)
+    expect(hasCollisionBox('guard')).toBe(true)
+    expect(hasCollisionBox('obejct')).toBe(true)
+    expect(hasCollisionBox('object')).toBe(true)
+    expect(hasCollisionBox('weapon')).toBe(false)
+  })
+
+  it('assigns collisionBox to all world objects except weapon', () => {
+    const state = createInitialWorldState()
+    const player = state.worldObjects.find((o) => o.id === 'player')!
+    const guard = state.worldObjects.find((o) => o.id === 'guard')!
+    const boulder = state.worldObjects.find((o) => o.id === 'boulder')!
+    const dagger = state.worldObjects.find((o) => o.id === 'dagger')!
+
+    const playerState = player.state as Record<string, unknown>
+    const guardState = guard.state as Record<string, unknown>
+    const boulderState = boulder.state as Record<string, unknown>
+    const daggerState = dagger.state as Record<string, unknown>
+
+    expect(playerState.collisionBox).toEqual({ width: playerState.width, height: playerState.height })
+    expect(guardState.collisionBox).toEqual({ width: guardState.width, height: guardState.height })
+    expect(boulderState.collisionBox).toEqual({ width: boulderState.width, height: boulderState.height })
+    expect(daggerState.collisionBox).toBeNull()
+  })
+
+  it('guarantees no initial world object collisionboxes overlap each other', () => {
+    const state = createInitialWorldState()
+    const collisionWorld = new AabbCollisionWorld()
+    const nonWeaponObjects = state.worldObjects.filter((o) => hasCollisionBox(o.metadata.role as any))
+
+    for (let i = 0; i < nonWeaponObjects.length; i++) {
+      for (let j = i + 1; j < nonWeaponObjects.length; j++) {
+        const objA = nonWeaponObjects[i]
+        const objB = nonWeaponObjects[j]
+        const stateA = objA.state as { x: number; y: number; width: number; height: number }
+        const stateB = objB.state as { x: number; y: number; width: number; height: number }
+        const boxA = { x: stateA.x, y: stateA.y, width: stateA.width, height: stateA.height }
+        const boxB = { x: stateB.x, y: stateB.y, width: stateB.width, height: stateB.height }
+
+        const overlaps = collisionWorld.overlaps(boxA, boxB)
+        expect(overlaps).toBe(false)
+      }
+    }
   })
 })

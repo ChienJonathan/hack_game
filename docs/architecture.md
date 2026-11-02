@@ -78,6 +78,15 @@ Characters start with 100 Health. Weapon definitions scale cooldowns with simula
 
 Attacks damage nearest character within Reach (bounding-box gap). Items (including Dagger) are automatically picked up when within `PICKUP_REACH = 10` px; both actions mark undiscovered targets discovered. Hitboxes scale proportionally via `scaleX`/`scaleY` from base dimensions (`CHARACTER_SIZE` 110×160, `DAGGER_SIZE` 72×72, `BOULDER_SIZE` 120×120).
 
+### Collisionbox & Solid Obstacle Resolution
+
+All world objects besides weapons have a domain-owned `collisionBox` (`width`, `height`) and physical collision footprint (`hasCollisionBox(role)` returns `true` for `player`, `guard`, `obejct`, `object`, and `false` for `weapon`). Weapons (`dagger`) have `collisionBox: null`, allowing characters to walk over them for pickup without collision blocking.
+
+`AabbCollisionWorld` provides `overlaps(a, b)` and `resolveMovement(currentBox, targetBox, obstacles, bounds)` to guarantee that collisionboxes never overlap each other:
+- In simulation (`PlayerMovementProcess`, `GuardResponseProcess`, `BehaviorTreeEvaluator`), moving entities resolve motion axis-by-axis against obstacles (all other alive room entities with collisionboxes) and room bounds, sliding smoothly along obstacle edges without penetrating or overlapping.
+- In `LevelEditorScene`, each non-weapon world object displays a visual green collisionbox matching its scaled physical dimensions. Dragging, nudging, scaling, and spawning enforce non-overlapping constraints so collisionboxes can never be placed overlapping each other.
+- In `room1.ts`, all starting world object positions are arranged without collisionbox overlap.
+
 ### First Room Behavior
 
 Room 1 initializes with Player Character (upper-left, named `hacker`), Dagger (lower-left), Boulder (environmental world object with role `obejct`), and Guards (right). All World Object sprites are shown by default. Exiting right leads to Room 2:
@@ -192,9 +201,10 @@ Editable configurations export directly to `room1.ts` (`ROOM1_OBJECTS`). Objects
 
 | Action | Control |
 |---|---|
-| **Reposition** | Drag sprite, or arrow keys (1 px, Shift: 10 px) |
-| **Uniform Scale** | Drag yellow corner handle, `+`/`-` keys, or panel `×1.1` / `÷1.1` buttons |
-| **Spawn / Despawn** | `+ GUARD`, `+ DAGGER` buttons; despawn with `REMOVE SELECTED` or `Del`/`Backspace` |
+| **Reposition** | Drag sprite, or arrow keys (1 px, Shift: 10 px; blocked from collisionbox overlap) |
+| **Uniform Scale** | Drag yellow corner handle, `+`/`-` keys, or panel `×1.1` / `÷1.1` buttons (blocked from collisionbox overlap) |
+| **Spawn / Despawn** | `+ GUARD`, `+ DAGGER` buttons (spawns in non-overlapping spot); despawn with `REMOVE SELECTED` or `Del`/`Backspace` |
+| **Collisionboxes** | Non-weapon objects render green collisionbox rectangles (`110×scaleX` by `160×scaleY` for characters, `120×scaleX` by `120×scaleY` for boulders); weapons have no collisionbox |
 | **Selection** | Click sprite, panel list entry, or cycle with `Tab` / `Shift+Tab` |
 | **Character Stats** | Edit guard `max_health` & `speed`, or player `max_health` (`+/-` 10, Shift: 50, click value for prompt) |
 | **Weapon Stats** | Edit weapon `attack_dist`, `attack_dur`, `hold_offset_x`, `hold_offset_y` (`+/-` 10, Shift: 50, click value for prompt) |

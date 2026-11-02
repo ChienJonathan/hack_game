@@ -8,6 +8,8 @@ import {
   EditorHistory,
   applyChange,
   invertChange,
+  computeEditorCollisionBox,
+  wouldOverlapAnyEditorObject,
 } from './levelEditorHistory.ts'
 import { GAME_WEAPON_CONFIG, resetGameWeaponConfig } from '../content/weaponConstants.ts'
 
@@ -718,6 +720,69 @@ describe('levelEditorHistory', () => {
         expect(spawnReversed.snapshot.holdOffsetX).toBe(50)
         expect(spawnReversed.snapshot.holdOffsetY).toBe(35)
       }
+    })
+  })
+
+  describe('computeEditorCollisionBox', () => {
+    it('returns null for weapon role', () => {
+      expect(computeEditorCollisionBox('weapon', 100, 100, 1, 1)).toBeNull()
+    })
+
+    it('returns scaled collision box for characters and boulders', () => {
+      const guardBox = computeEditorCollisionBox('guard', 200, 300, 1, 1)
+      expect(guardBox).toEqual({ x: 200, y: 300, width: 110, height: 160 })
+
+      const scaledGuard = computeEditorCollisionBox('guard', 200, 300, 0.5, 0.5)
+      expect(scaledGuard).toEqual({ x: 200, y: 300, width: 55, height: 80 })
+
+      const boulderBox = computeEditorCollisionBox('obejct', 400, 500, 1, 1)
+      expect(boulderBox).toEqual({ x: 400, y: 500, width: 120, height: 120 })
+    })
+  })
+
+  describe('wouldOverlapAnyEditorObject', () => {
+    const existing = [
+      { id: 'guard-1', role: 'guard' as const, x: 200, y: 200, scaleX: 1, scaleY: 1 },
+      { id: 'boulder-1', role: 'obejct' as const, x: 500, y: 200, scaleX: 1, scaleY: 1 },
+      { id: 'dagger-1', role: 'weapon' as const, x: 300, y: 200, scaleX: 1, scaleY: 1 },
+    ]
+
+    it('returns false for weapons even if placed inside another object', () => {
+      // Weapon at guard position: should not collide
+      const result = wouldOverlapAnyEditorObject('dagger-2', 'weapon', 200, 200, 1, 1, existing)
+      expect(result).toBe(false)
+    })
+
+    it('returns false when testing against weapons', () => {
+      // Placing player at dagger-1 position (300, 200). Guard-1 is at 200 (distance 100).
+      // Guard width 110 (half 55), Player width 110 (half 55). 55+55 = 110 > 100.
+      // So place at 350, 200: distance from guard is 150 > 110, distance from boulder is 150 > 115.
+      // Dagger is at 300 (distance 50). Dagger does not cause collision!
+      const result = wouldOverlapAnyEditorObject('player', 'player', 350, 200, 1, 1, existing)
+      expect(result).toBe(false)
+    })
+
+    it('returns true when candidate collision box overlaps another non-weapon object', () => {
+      // Guard-1 is at (200, 200) with width 110, height 160.
+      // Test player at (240, 200) -> distance in X is 40 < 110, distance in Y is 0 < 160 -> overlaps!
+      const result = wouldOverlapAnyEditorObject('player', 'player', 240, 200, 1, 1, existing)
+      expect(result).toBe(true)
+    })
+
+    it('returns false when candidate is separated or touching', () => {
+      // Guard-1 at (200, 200), width 110 (right edge = 255).
+      // Candidate at (310, 200), width 110 (left edge = 255). Touching at 255 -> no overlap!
+      const touching = wouldOverlapAnyEditorObject('player', 'player', 310, 200, 1, 1, existing)
+      expect(touching).toBe(false)
+
+      const separated = wouldOverlapAnyEditorObject('player', 'player', 350, 200, 1, 1, existing)
+      expect(separated).toBe(false)
+    })
+
+    it('ignores itself by objectId', () => {
+      // Testing guard-1 at its own position (200, 200)
+      const result = wouldOverlapAnyEditorObject('guard-1', 'guard', 200, 200, 1, 1, existing)
+      expect(result).toBe(false)
     })
   })
 })
