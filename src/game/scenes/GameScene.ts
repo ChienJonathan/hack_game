@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { PhaserGameHud } from '../presentation/PhaserGameHud.ts'
 import textboxImageUrl from '../../assets/game/ui/textbox.png'
 import type { GameSession } from '../application/GameSession.ts'
 import { createRoom1Session } from '../content/createRoom1Session.ts'
@@ -13,6 +14,7 @@ export class GameScene extends Phaser.Scene {
   private commandInputView: PhaserCommandInputView | undefined
   private readonly roomView = new PhaserRoomView()
   private outcomePanel: PhaserGameOutcomePanel | undefined
+  private hud: PhaserGameHud | undefined
 
   private resumeFromSave = false
 
@@ -37,7 +39,10 @@ export class GameScene extends Phaser.Scene {
       this.session.loadSavedState()
     }
     const worldState = this.session.getWorldState()
-    this.roomView.mount(this, worldState)
+    this.cameras.main.setBackgroundColor('#0b141d')
+    this.roomView.mount(this, worldState, false)
+    this.hud = new PhaserGameHud(this)
+    this.hud.update(worldState, this.session.inputMode)
     this.outcomePanel = new PhaserGameOutcomePanel(
       this,
       () => this.session.hasSavedState(),
@@ -82,6 +87,8 @@ export class GameScene extends Phaser.Scene {
       this.game.events.off(Phaser.Core.Events.BLUR, this.handleBlur)
       commandInputView.destroy()
       this.roomView.destroy()
+      this.hud?.destroy()
+      this.hud = undefined
       this.outcomePanel?.destroy()
       this.outcomePanel = undefined
       if (this.commandInputView === commandInputView) {
@@ -94,8 +101,9 @@ export class GameScene extends Phaser.Scene {
     this.session.update(delta)
     const worldState = this.session.getWorldState()
     this.commandInputView?.setPrompt(this.promptForRoom(worldState.currentRoomId))
-    this.roomView.update(worldState, (objectId) => this.session.getRenderPosition(objectId))
+    this.roomView.update(worldState, (objectId) => this.session.getRenderPosition(objectId), delta)
     this.outcomePanel?.update(worldState)
+    this.hud?.update(worldState, this.session.inputMode)
 
     if (worldState.outcome === 'game-over' && this.session.inputMode === 'command') {
       this.session.enterMovementMode()

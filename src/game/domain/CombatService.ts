@@ -1,7 +1,7 @@
 import { AabbCollisionWorld } from './CollisionWorld.ts'
 import type { CollisionWorld } from './CollisionWorld.ts'
 import { CHARACTER_ROLES } from './CharacterState.ts'
-import type { CharacterState } from './CharacterState.ts'
+import type { CharacterCombatState } from './CharacterState.ts'
 import { weaponFor } from './WeaponDefinition.ts'
 import type { WorldObject } from './WorldObject.ts'
 import { getMutableWorldObjectState } from './WorldObjectState.ts'
@@ -12,8 +12,8 @@ export type AttackResult =
   | { readonly status: 'no-target' }
   | { readonly status: 'cooling-down' }
 
-function characterState(worldObject: WorldObject): CharacterState {
-  return getMutableWorldObjectState<CharacterState>(worldObject)
+function characterState(worldObject: WorldObject): CharacterCombatState {
+  return getMutableWorldObjectState<CharacterCombatState>(worldObject)
 }
 
 function boxOf(worldObject: WorldObject) {
@@ -60,6 +60,10 @@ export class CombatService {
     targetState.alive = targetState.health > 0
     targetState.discovered = true
     attackerState.attackCooldownMs = weapon.cooldownMs
+    attackerState.attackSequence = (attackerState.attackSequence ?? 0) + 1
+    attackerState.facing = targetState.x < attackerState.x ? 'left' : 'right'
+    targetState.damageSequence = (targetState.damageSequence ?? 0) + 1
+    targetState.lastDamageFromX = attackerState.x
     return { status: 'hit', targetId: target.worldObject.id, damage: weapon.damage }
   }
 
