@@ -98,14 +98,14 @@ After the rules run, `applyPlayerDefeat` (`domain/PlayerDefeat.ts`) sets `game-o
 
 Every body of the current room (an object with `x/y/width/height`, alive, not a held Weapon) is moved only by Forces. Processes call `applyForce(obj, fx, fy)`, which adds to `forceX/forceY` in the object state; `PhysicsWorld.step` consumes and clears them each tick:
 
-1. **integrate**: `v + F ÷ mass × dt` is capped at `max(max_velocity, the speed before the Force)`, then multiplied by `max(0, 1 − drag × dt)`. `max_velocity` only limits what a Force can add, so speed given by a Collision is kept. A body with no Force this tick and `|v| < min_velocity` is set to rest. A body with `frozen` set (an arriving Throw) is skipped for the tick.
+1. **integrate**: `v + F ÷ mass × dt` is capped at `max(max_velocity, the speed before the Force)`, then multiplied by `max(0, 1 − (drag + friction) × dt)`; ground `friction` is left out while the body has `thrown` set. `max_velocity` only limits what a Force can add, so speed given by a Collision is kept. A body with no Force this tick and `|v| < min_velocity` is set to rest. A body with `frozen` set (an arriving Throw) is skipped for the tick.
 2. **separate**: bodies that collide physically and already overlap are pushed apart along the shallowest axis; only one of each pair moves (the one with a Force or velocity, else the lighter one).
 3. **move**: each body moves by `v × dt` through `resolveMovement` against the bodies it collides with and the room bounds (`Room.bounds`). Bounds clamp the position and zero the speed into the edge, with no bounce.
 4. **collide**: each touching pair that is approaching exchanges motion with `resolveCollision` (`domain/CollisionResponse.ts`) and the `onCollision` listeners are called with `{ a, b, normal, closingSpeed }`.
 
 A Collision exchanges motion along the line between the two box centres. The restitution is the product of both bodies' (`restitution`, default 0.5). A body at rest that would gain less than `min_collide_move_velocity` (50 px/s) counts as infinitely heavy and the mover bounces off it with `−e × v`. Tangential speed is unchanged. Walking bodies take part: a player or guard that runs into the boulder pushes it if the impact is fast enough, while leaning on it from standstill does not move it.
 
-**Walking and pursuit** only apply Forces. `simulation/Drive.ts` has `accelerateToward(obj, targetVx, targetVy, maxAcceleration, tickMs)` (Force = mass × the velocity change that drag leaves at the target, limited to `maxAcceleration × dt`, so mass does not change walking speed), `steerToward`/`steerAway`, and `GUARD_ACCELERATION` (2500 px/s²). The player process (`walkingChange`) accelerates towards `input × maxSpeed` with `acceleration`/`turnaroundAcceleration`, brakes with `frictionAcceleration` without input, and leaves a speed beyond `maxSpeed` (a push) alone. Guards and behavior-tree actions steer at `speed` (times the node's multiplier) and slow down to stop at their reach; idle guards brake. A Thrown Character keeps its own walking or pursuit Force, so Forces simply add up.
+**Walking and pursuit** only apply Forces, and every drive only works up to its own top speed: a body knocked beyond `maxSpeed` (or a guard's `speed`) is not braked, turned around or pushed further, so drag and friction alone slow it until it is back below. `accelerateToward` also makes up for drag and friction so a drive reaches its target speed, and a `null` target leaves an axis alone. `simulation/Drive.ts` has `accelerateToward(obj, targetVx, targetVy, maxAcceleration, tickMs)` (Force = mass × the velocity change that drag leaves at the target, limited to `maxAcceleration × dt`, so mass does not change walking speed), `steerToward`/`steerAway`, and `GUARD_ACCELERATION` (2500 px/s²). The player process (`walkingChange`) accelerates towards `input × maxSpeed` with `acceleration`/`turnaroundAcceleration`, brakes with `frictionAcceleration` without input (both only below `maxSpeed`), and leaves a speed beyond `maxSpeed` (a push) alone. Guards and behavior-tree actions steer at `speed` (times the node's multiplier) and slow down to stop at their reach; idle guards brake (`brake`, also only below their `speed`). A Thrown Character keeps its own walking or pursuit Force, so Forces simply add up.
 
 The processes' `afterPhysics` hooks (run by `TickSimulationEngine` after the step) do what depends on the new positions: the player picks up weapons and detects the exit, and a held Weapon follows its holder.
 
@@ -119,7 +119,7 @@ The processes' `afterPhysics` hooks (run by `TickSimulationEngine` after the ste
 - Weapons collide only with Obstacles, so a thrown Weapon flies through Characters (and can hurt them) but stops its Throw against the boulder.
 - A held dagger has `thrown` cleared and its velocity zeroed by `DaggerPickupProcess`; it is re-picked up the tick after it is thrown if the player is unarmed and in reach, and a dagger in flight that comes within reach of an unarmed player is picked up in that tick's `afterPhysics` (expected behaviour).
 
-Parameters: `mv_acceleration` 5000 px/s² (`commands/mvConstants.ts`, `GAME_MV_CONFIG`). Physics defaults (`simulation/physicsConstants.ts`, `GAME_PHYSICS_CONFIG`): `drag` 0.5 /s, `mass` 1, `max_velocity` 1000 px/s, `restitution` 0.5, `min_velocity` 5 px/s, `min_collide_move_velocity` 50 px/s. An object may set its own `drag`, `mass`, `max_velocity` and `restitution` at the top level of its state (also `RoomObjectConfig`); unset fields fall back to the defaults at use time (`domain/PhysicsAttr.ts`, `resolvePhysicsAttr`). Only `mass ≥ 0.001` is enforced; other values are unrestricted (a `max_velocity` or `mv_acceleration` of 0 leaves the object unable to arrive, and there is no flight timeout).
+Parameters: `mv_acceleration` 5000 px/s² (`commands/mvConstants.ts`, `GAME_MV_CONFIG`). Physics defaults (`simulation/physicsConstants.ts`, `GAME_PHYSICS_CONFIG`): `drag` 0.5 /s, `friction` 5 /s, `mass` 1, `max_velocity` 1000 px/s, `restitution` 0.5, `min_velocity` 5 px/s, `min_collide_move_velocity` 50 px/s. An object may set its own `drag`, `friction`, `mass`, `max_velocity` and `restitution` at the top level of its state (also `RoomObjectConfig`); unset fields fall back to the defaults at use time (`domain/PhysicsAttr.ts`, `resolvePhysicsAttr`). Only `mass ≥ 0.001` is enforced; other values are unrestricted (a `max_velocity` or `mv_acceleration` of 0 leaves the object unable to arrive, and there is no flight timeout).
 
 ### Collisionbox & Collision Resolution
 
@@ -268,7 +268,7 @@ Editable configurations export directly to `room1.ts` (`ROOM1_OBJECTS`). Objects
 | **Selection** | Click sprite, panel list entry, or cycle with `Tab` / `Shift+Tab` |
 | **Character Stats** | Edit guard `max_health` & `speed`, or player `max_health` (`+/-` 10, Shift: 50, click value for prompt) |
 | **Weapon Stats** | Edit weapon `attack_dist`, `attack_dur`, `hold_offset_x`, `hold_offset_y` (`+/-` 10, Shift: 50, click value for prompt) |
-| **Physics** | Per-object `drag`, `mass`, `max_velocity`, `restitution` values (`+/-`, click value for prompt, `R` resets one to the default; unset values show the global default dimmed). Written to `room1.ts` as top-level fields, only for the fields set |
+| **Physics** | Per-object `drag`, `friction`, `mass`, `max_velocity`, `restitution` values (`+/-`, click value for prompt, `R` resets one to the default; unset values show the global default dimmed). Written to `room1.ts` as top-level fields, only for the fields set |
 | **Test Equip** | `TEST EQUIP` / `TEST UNEQUIP` button toggles preview attachment to player at hold offsets, moving with player |
 | **Test Attack** | `TEST ATTACK` button (or `Space` with weapon selected) runs attack translation animation ($d(t) = \text{round}(\sin(t \cdot \pi) \cdot \text{dist})$) |
 | **Speed Editor Access** | `OPEN SPEED EDITOR (F3)` button or **F3** shortcut |
@@ -306,7 +306,8 @@ All weapon constants, animation translation curves, and runtime configurations a
 | Parameter | Default | Unit | Description |
 |---|:---:|:---:|---|
 | `mv_acceleration` | 5000 | px/s² | Pull toward the target (global; the Force is mass × this, so mass does not change it) |
-| `drag` | 0.5 | 1/s | Default velocity loss per second for objects without their own value |
+| `drag` | 0.5 | 1/s | Default air loss of speed per second for objects without their own value |
+| `friction` | 5 | 1/s | Default ground loss of speed per second; not applied while Thrown |
 | `mass` | 1 | - | Default mass (minimum 0.001) |
 | `max_velocity` | 1000 | px/s | Default speed cap |
 | `restitution` | 0.5 | - | Default bounce; a Collision uses the product of both objects' values |
@@ -318,7 +319,7 @@ All weapon constants, animation translation curves, and runtime configurations a
 ### Features & Runtime Behavior
 
 - **Live Tuning While Moving**: Keyboard movement (Arrows) runs continuously during mouse interaction, giving immediate tactile feedback on physics changes.
-- **MV Command Tuning & Testing**: Dedicated controls for `mv_acceleration` and the six physics defaults, paired with an interactive `TEST MV (THROW DAGGER)` button to test the throw in real time. The session runs without the contact resolver, so the thrown dagger does not hurt the static guards; the physics step stays on.
+- **MV Command Tuning & Testing**: Dedicated controls for `mv_acceleration` and the seven physics defaults, paired with an interactive `TEST MV (THROW DAGGER)` button to test the throw in real time. The session runs without the contact resolver, so the thrown dagger does not hurt the static guards; the physics step stays on.
 - **Step & Direct Input**: Parameter buttons (`+` / `−` with step sizes, Shift: 5x multiplier) or click value for exact number prompt. Clamped to minimum safe values.
 - **Live Telemetry**: Displays real-time player speed (`px/s`), velocity vectors (`vx`, `vy`), input direction (`moveX`, `moveY`), dynamic visual speedometer gauge, and active `mv` thrown entity telemetry.
 - **Reset Position**: **R** (or `RESET POSITIONS (R)` button) snaps player and dagger back to start coordinates with zero velocity for clean trials.

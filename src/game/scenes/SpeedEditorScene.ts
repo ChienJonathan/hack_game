@@ -28,6 +28,7 @@ import {
 import { DEFAULT_MV_ACCELERATION } from '../commands/mvConstants.ts'
 import {
   DEFAULT_DRAG,
+  DEFAULT_FRICTION,
   DEFAULT_MASS,
   DEFAULT_MAX_VELOCITY,
   DEFAULT_MIN_COLLIDE_MOVE_VELOCITY,
@@ -250,13 +251,14 @@ export class SpeedEditorScene extends Phaser.Scene {
       .setOrigin(0.5, 0)
     items.push(mvTitle)
 
-    this.buildMvControlRow('mv_acceleration', 'ACCELERATION (px/s²)', 'mv pull toward target (any mass)', 34, [-250, -50, 50, 250], items)
-    this.buildMvControlRow('drag', 'DRAG (1/s)', 'Default velocity loss per second', 72, [-0.5, -0.1, 0.1, 0.5], items)
-    this.buildMvControlRow('mass', 'MASS', 'Default mass (force ÷ mass)', 110, [-1, -0.1, 0.1, 1], items)
-    this.buildMvControlRow('max_velocity', 'MAX VELOCITY (px/s)', 'Default speed cap', 148, [-100, -50, 50, 100], items)
-    this.buildMvControlRow('restitution', 'RESTITUTION', 'Default bounce (pair = product)', 186, [-0.25, -0.05, 0.05, 0.25], items)
-    this.buildMvControlRow('min_velocity', 'MIN VELOCITY (px/s)', 'Below this, unpushed bodies rest', 224, [-5, -1, 1, 5], items)
-    this.buildMvControlRow('min_collide_move_velocity', 'MIN MOVE (px/s)', 'Rest bodies gaining less stay put', 262, [-50, -10, 10, 50], items)
+    this.buildMvControlRow('mv_acceleration', 'ACCELERATION (px/s²)', 'mv pull toward target (any mass)', 32, [-250, -50, 50, 250], items)
+    this.buildMvControlRow('drag', 'DRAG (1/s)', 'Default air loss per second', 65, [-0.5, -0.1, 0.1, 0.5], items)
+    this.buildMvControlRow('friction', 'FRICTION (1/s)', 'Ground loss, off while Thrown', 98, [-1, -0.5, 0.5, 1], items)
+    this.buildMvControlRow('mass', 'MASS', 'Default mass (collisions only)', 131, [-1, -0.1, 0.1, 1], items)
+    this.buildMvControlRow('max_velocity', 'MAX VELOCITY (px/s)', 'Cap on speed a force adds', 164, [-100, -50, 50, 100], items)
+    this.buildMvControlRow('restitution', 'RESTITUTION', 'Default bounce (pair = product)', 197, [-0.25, -0.05, 0.05, 0.25], items)
+    this.buildMvControlRow('min_velocity', 'MIN VELOCITY (px/s)', 'Below this, unpushed bodies rest', 230, [-5, -1, 1, 5], items)
+    this.buildMvControlRow('min_collide_move_velocity', 'MIN MOVE (px/s)', 'Rest bodies gaining less stay put', 263, [-50, -10, 10, 50], items)
 
     const testMvBtn = this.createButton(
       795,
@@ -735,6 +737,7 @@ export class SpeedEditorScene extends Phaser.Scene {
       mass: DEFAULT_MASS,
       max_velocity: DEFAULT_MAX_VELOCITY,
       restitution: DEFAULT_RESTITUTION,
+      friction: DEFAULT_FRICTION,
       min_velocity: DEFAULT_MIN_VELOCITY,
       min_collide_move_velocity: DEFAULT_MIN_COLLIDE_MOVE_VELOCITY,
     })

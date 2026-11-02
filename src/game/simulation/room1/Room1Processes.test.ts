@@ -213,3 +213,66 @@ describe('Room1Processes collisionbox overlap prevention', () => {
     expect(collisionWorld.overlaps(guardBox, boulderBox)).toBe(false)
   })
 })
+
+describe('Room1Processes braking only below the top speed', () => {
+  const FRICTION = 5
+  const DRAG = 0.5
+  const DT = 1000 / 60 / 1000
+
+  function setup() {
+    const state = createInitialWorldState()
+    const get = (id: string) => getMutableWorldObjectState<MutableWorldObjectState>(
+      state.worldObjects.find((o) => o.id === id)!,
+    )
+    for (const id of ['boulder', 'guard', 'guard-2', 'guard-3']) {
+      get(id).alive = false
+    }
+    const player = get(WORLD_OBJECT_IDS.player)
+    player.x = 300
+    player.y = 300
+    player.moveX = 0
+    player.moveY = 0
+    return { state, player, get, engine: new TickSimulationEngine(ROOM1_PROCESSES) }
+  }
+
+  it('does not brake a player who was knocked faster than maxSpeed: only friction and drag slow it', () => {
+    const { state, player, engine } = setup()
+    player.vx = 800
+
+    engine.advance(state, 16.67)
+
+    expect(player.vx as number).toBeCloseTo(800 * (1 - (DRAG + FRICTION) * DT), 3)
+  })
+
+  it('does not turn a knocked player around with turnaroundAcceleration either', () => {
+    const { state, player, engine } = setup()
+    player.vx = 800
+    player.moveX = -1
+
+    engine.advance(state, 16.67)
+
+    expect(player.vx as number).toBeCloseTo(800 * (1 - (DRAG + FRICTION) * DT), 3)
+  })
+
+  it('brakes the player again once friction has slowed it below maxSpeed', () => {
+    const { state, player, engine } = setup()
+    player.vx = 800
+
+    for (let i = 0; i < 40; i++) engine.advance(state, 16.67)
+
+    expect(player.vx as number).toBe(0)
+  })
+
+  it('does not brake a knocked idle guard until it is below its own speed', () => {
+    const { state, get, engine } = setup()
+    const guard = get(WORLD_OBJECT_IDS.guard)
+    guard.alive = true
+    guard.x = 1500
+    guard.y = 300
+    guard.vx = 800
+
+    engine.advance(state, 16.67)
+
+    expect(guard.vx as number).toBeCloseTo(800 * (1 - (DRAG + FRICTION) * DT), 3)
+  })
+})

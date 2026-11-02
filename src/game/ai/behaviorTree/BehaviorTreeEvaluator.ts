@@ -350,6 +350,7 @@ export class BehaviorTreeEvaluator {
         (dashY / dashLength) * chargeSpeed,
         GUARD_ACCELERATION,
         context.tickDurationMs,
+        chargeSpeed,
       )
     }
 

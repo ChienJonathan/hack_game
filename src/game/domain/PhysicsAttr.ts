@@ -6,12 +6,13 @@ export interface PhysicsAttr {
   mass: number
   max_velocity: number
   restitution: number
+  friction: number
 }
 
 /** Per-object physics values; unset fields fall back to the global defaults. */
 export type PhysicsAttrOverride = Partial<PhysicsAttr>
 
-export const PHYSICS_ATTR_KEYS: readonly (keyof PhysicsAttr)[] = ['drag', 'mass', 'max_velocity', 'restitution']
+export const PHYSICS_ATTR_KEYS: readonly (keyof PhysicsAttr)[] = ['drag', 'mass', 'max_velocity', 'restitution', 'friction']
 
 export function readPhysicsAttrOverride(state: unknown): PhysicsAttrOverride {
   if (typeof state !== 'object' || state === null) {
@@ -39,5 +40,15 @@ export function resolvePhysicsAttr(
     mass: Math.max(MIN_MASS, override.mass ?? config.mass),
     max_velocity: override.max_velocity ?? config.max_velocity,
     restitution: override.restitution ?? config.restitution,
+    friction: override.friction ?? config.friction,
   }
+}
+
+/**
+ * How fast the object loses speed (share of its speed per second): drag always, ground friction as well
+ * unless the object is Thrown, which keeps it off the ground.
+ */
+export function velocityDecay(worldObject: WorldObject, attr: PhysicsAttr): number {
+  const thrown = (worldObject.state as Record<string, unknown> | null)?.thrown
+  return attr.drag + (thrown ? 0 : attr.friction)
 }

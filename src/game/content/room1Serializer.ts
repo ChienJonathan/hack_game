@@ -77,6 +77,7 @@ export interface PhysicsAttrConfig {
   mass?: number
   max_velocity?: number
   restitution?: number
+  friction?: number
 }
 
 export type WorldObjectRole = 'player' | 'enemy' | 'weapon' | 'object' | 'guard'

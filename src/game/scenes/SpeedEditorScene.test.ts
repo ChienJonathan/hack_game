@@ -299,6 +299,7 @@ describe('SpeedEditorScene', () => {
         mass: 2,
         max_velocity: 450,
         restitution: 0.3,
+        friction: 7,
         min_velocity: 4,
         min_collide_move_velocity: 60,
       })
@@ -307,6 +308,7 @@ describe('SpeedEditorScene', () => {
       expect(source).toContain('export const DEFAULT_MASS = 2')
       expect(source).toContain('export const DEFAULT_MAX_VELOCITY = 450')
       expect(source).toContain('export const DEFAULT_RESTITUTION = 0.3')
+      expect(source).toContain('export const DEFAULT_FRICTION = 7')
       expect(source).toContain('export const DEFAULT_MIN_VELOCITY = 4')
       expect(source).toContain('export const DEFAULT_MIN_COLLIDE_MOVE_VELOCITY = 60')
       expect(source).toContain('export const GAME_PHYSICS_CONFIG: PhysicsConfig = {')

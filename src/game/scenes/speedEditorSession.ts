@@ -42,6 +42,7 @@ export function getTuningConfig(config?: Partial<TuningConfig>): TuningConfig {
     mass: config?.mass ?? GAME_PHYSICS_CONFIG.mass,
     max_velocity: config?.max_velocity ?? GAME_PHYSICS_CONFIG.max_velocity,
     restitution: config?.restitution ?? GAME_PHYSICS_CONFIG.restitution,
+    friction: config?.friction ?? GAME_PHYSICS_CONFIG.friction,
     min_velocity: config?.min_velocity ?? GAME_PHYSICS_CONFIG.min_velocity,
     min_collide_move_velocity: config?.min_collide_move_velocity ?? GAME_PHYSICS_CONFIG.min_collide_move_velocity,
   }

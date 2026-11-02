@@ -68,6 +68,10 @@ _Avoid_: Wall, solid
 A push applied to a World Object for one tick. All movement of a World Object (walking, pursuing, an `mv` Throw) is made of Forces, which add up.
 _Avoid_: Speed (when referring to the cause of movement)
 
+**Friction**:
+The slowing of a World Object by the ground, as a share of its speed per second. It does not act while the object is in a Throw. Characters' own braking (`frictionAcceleration`) is not Friction.
+_Avoid_: Drag (when referring to the ground; drag acts in the air too)
+
 **Collision**:
 A touch in which two World Objects push each other apart and exchange motion according to their mass and Restitution. A touch that only triggers an effect, such as Impact Damage, is not a Collision.
 _Avoid_: Contact (when the objects exchange motion)

@@ -29,7 +29,7 @@ function createWorld(
     simulationTick: 0,
     outcome: 'playing',
   }
-  const physics = new PhysicsWorld(() => ({ ...GAME_PHYSICS_CONFIG, ...config }) as PhysicsConfig)
+  const physics = new PhysicsWorld(() => ({ ...GAME_PHYSICS_CONFIG, friction: 0, ...config }) as PhysicsConfig)
   const add = (id: string, role: Role, fields: Record<string, unknown> = {}) => {
     const object = new BasicWorldObject(
       id,
@@ -102,6 +102,35 @@ describe('PhysicsWorld motion', () => {
 
     expect(Math.hypot(free.body.vx, free.body.vy)).toBeCloseTo(500, 6)
     expect(Math.hypot(capped.body.vx, capped.body.vy)).toBeCloseTo(80, 6)
+  })
+
+  it('slows a body with ground friction on top of drag', () => {
+    const { add, step } = createWorld({ drag: 0.5, friction: 5, min_velocity: 0 })
+    const { body } = add('guard', 'enemy', { vx: 300 })
+
+    step()
+
+    expect(body.vx).toBeCloseTo(300 * (1 - (0.5 + 5) * DT), 6)
+  })
+
+  it('prefers the friction of the object over the default', () => {
+    const { add, step } = createWorld({ drag: 0, friction: 5, min_velocity: 0 })
+    const slippery = add('a', 'enemy', { y: 100, vx: 300, friction: 0 })
+    const rough = add('b', 'enemy', { y: 300, vx: 300, friction: 10 })
+
+    step()
+
+    expect(slippery.body.vx).toBe(300)
+    expect(rough.body.vx).toBeCloseTo(300 * (1 - 10 * DT), 6)
+  })
+
+  it('ignores ground friction while the body is Thrown, but not drag', () => {
+    const { add, step } = createWorld({ drag: 0.5, friction: 5, min_velocity: 0 })
+    const { body } = add('dagger', 'weapon', { vx: 300, thrown: { targetX: 900, targetY: 500, hitIds: [] } })
+
+    step()
+
+    expect(body.vx).toBeCloseTo(300 * (1 - 0.5 * DT), 6)
   })
 
   it('does not cap a speed that did not come from a Force, such as one a Collision gave', () => {

@@ -1,7 +1,7 @@
 import { collidesPhysically } from '../domain/ColliderTag.ts'
 import { AabbCollisionWorld, type Bounds, type CollisionWorld } from '../domain/CollisionWorld.ts'
 import { resolveCollision } from '../domain/CollisionResponse.ts'
-import { resolvePhysicsAttr, type PhysicsAttr } from '../domain/PhysicsAttr.ts'
+import { resolvePhysicsAttr, velocityDecay, type PhysicsAttr } from '../domain/PhysicsAttr.ts'
 import type { WorldObject } from '../domain/WorldObject.ts'
 import type { WorldState } from '../domain/WorldState.ts'
 import { GAME_PHYSICS_CONFIG, type PhysicsConfig } from './physicsConstants.ts'
@@ -156,7 +156,7 @@ export class PhysicsWorld {
       vy *= scale
     }
 
-    const damping = Math.max(0, 1 - attr.drag * dt)
+    const damping = Math.max(0, 1 - velocityDecay(body.object, attr) * dt)
     vx *= damping
     vy *= damping
     if ((forceX === 0 && forceY === 0) && Math.hypot(vx, vy) < config.min_velocity) {

@@ -84,6 +84,7 @@ export interface ScalableMovableObject {
   mass?: number
   max_velocity?: number
   restitution?: number
+  friction?: number
 }
 
 export interface MoveChange {

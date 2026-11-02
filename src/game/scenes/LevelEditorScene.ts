@@ -1026,7 +1026,7 @@ export class LevelEditorScene extends Phaser.Scene {
 
     // MV attributes: per-object overrides of the global mv defaults (set in the Speed Editor)
     const mvTitle = this.add
-      .text(1260, 172, 'PHYSICS (dim = default)', {
+      .text(1260, 152, 'PHYSICS (dim = default)', {
         fontFamily: FONT_FAMILY,
         fontSize: 11,
         color: ACCENT_COLOR,
@@ -1037,10 +1037,11 @@ export class LevelEditorScene extends Phaser.Scene {
     this.mvAttrValues.clear()
 
     const mvRows: { key: PhysicsAttrKey; label: string; y: number; step: number; shiftStep: number }[] = [
-      { key: 'drag', label: 'drag', y: 190, step: 0.1, shiftStep: 0.5 },
-      { key: 'mass', label: 'mass', y: 220, step: 0.1, shiftStep: 1 },
-      { key: 'max_velocity', label: 'max_vel', y: 250, step: 50, shiftStep: 100 },
-      { key: 'restitution', label: 'restit', y: 280, step: 0.1, shiftStep: 0.5 },
+      { key: 'drag', label: 'drag', y: 168, step: 0.1, shiftStep: 0.5 },
+      { key: 'friction', label: 'friction', y: 193, step: 0.5, shiftStep: 2 },
+      { key: 'mass', label: 'mass', y: 218, step: 0.1, shiftStep: 1 },
+      { key: 'max_velocity', label: 'max_vel', y: 243, step: 50, shiftStep: 100 },
+      { key: 'restitution', label: 'restit', y: 268, step: 0.1, shiftStep: 0.5 },
     ]
     for (const row of mvRows) {
       const label = this.add

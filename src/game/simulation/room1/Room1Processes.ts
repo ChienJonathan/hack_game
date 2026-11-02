@@ -24,7 +24,7 @@ import { PICKUP_REACH, PickUpService } from '../../domain/PickUpService.ts'
 import { applyPlayerDefeat } from '../../domain/PlayerDefeat.ts'
 import { weaponFor } from '../../domain/WeaponDefinition.ts'
 import { getMutableWorldObjectState, type MutableWorldObjectState } from '../../domain/WorldObjectState.ts'
-import { accelerateToward, GUARD_ACCELERATION, steerToward } from '../Drive.ts'
+import { accelerateToward, brake, GUARD_ACCELERATION, steerToward } from '../Drive.ts'
 import type { ProcessTickContext, WorldObjectProcess } from '../TickSimulationEngine.ts'
 
 interface PlayerState extends CharacterState {
@@ -89,31 +89,40 @@ const DEFAULT_PLAYER_SPEED: PlayerSpeedConfig = {
   maxSpeed: 240,
 }
 
+/** Speed above a drive's top speed that still counts as being at it, against rounding error. */
+const TOP_SPEED_TOLERANCE = 0.01
+
 /**
- * Applies the Force that walks one axis: speeds up towards `input × maxSpeed` (reversing is quicker),
- * brakes with friction when there is no input, and leaves a speed beyond `maxSpeed` (a push) alone.
+ * The velocity one axis should have after this tick's drive, or null when the drive does not act:
+ * it speeds up towards `input × maxSpeed` (`turnaroundAcceleration` when reversing), brakes with
+ * `frictionAcceleration` without input, and, like any drive, only works up to `maxSpeed`. A body
+ * knocked beyond it is neither braked, turned around nor pushed further; ground friction slows it.
  */
-function walkingChange(
+function walkingTarget(
   velocity: number,
   input: number,
   speed: PlayerSpeedConfig,
   dt: number,
-): number {
-  const friction = speed.frictionAcceleration ?? speed.acceleration
-  const turnaround = speed.turnaroundAcceleration ?? speed.acceleration * 2
-
+  belowTopSpeed: boolean,
+): number | null {
   if (input === 0) {
-    return velocity > 0 ? -Math.min(velocity, friction * dt) : Math.min(-velocity, friction * dt)
+    if (!belowTopSpeed) {
+      return null
+    }
+    const friction = (speed.frictionAcceleration ?? speed.acceleration) * dt
+    return velocity > 0 ? Math.max(0, velocity - friction) : Math.min(0, velocity + friction)
   }
 
   const target = input * speed.maxSpeed
-  const alreadyFast = input > 0 ? velocity >= target : velocity <= target
-  if (alreadyFast) {
-    return 0
-  }
+  const beyondTarget = input > 0 ? velocity > target + TOP_SPEED_TOLERANCE : velocity < target - TOP_SPEED_TOLERANCE
   const isOpposing = (input > 0 && velocity < 0) || (input < 0 && velocity > 0)
+  if (beyondTarget || (isOpposing && !belowTopSpeed)) {
+    return null
+  }
+
+  const turnaround = speed.turnaroundAcceleration ?? speed.acceleration * 2
   const limit = (isOpposing ? turnaround : speed.acceleration) * dt
-  return Math.sign(target - velocity) * Math.min(Math.abs(target - velocity), limit)
+  return velocity + Math.sign(target - velocity) * Math.min(Math.abs(target - velocity), limit)
 }
 
 export class PlayerMovementProcess implements WorldObjectProcess {
@@ -146,10 +155,11 @@ export class PlayerMovementProcess implements WorldObjectProcess {
     const vy = (player.vy as number) ?? 0
 
     // Walking is a Force that adds to whatever else is pushing the player (a Throw, a Collision).
+    const belowTopSpeed = Math.hypot(vx, vy) <= speed.maxSpeed + TOP_SPEED_TOLERANCE
     accelerateToward(
       context.worldObject,
-      vx + walkingChange(vx, player.moveX, speed, dt),
-      vy + walkingChange(vy, player.moveY, speed, dt),
+      walkingTarget(vx, player.moveX, speed, dt, belowTopSpeed),
+      walkingTarget(vy, player.moveY, speed, dt, belowTopSpeed),
       Number.POSITIVE_INFINITY,
       context.tickDurationMs,
     )
@@ -278,7 +288,7 @@ export class GuardResponseProcess implements WorldObjectProcess {
     if (player.x < ROOM_LAYOUT.rightHalfStartX) {
       guard.chasing = false
       guard.attacking = false
-      accelerateToward(context.worldObject, 0, 0, GUARD_ACCELERATION, context.tickDurationMs)
+      brake(context.worldObject, guard.speed, GUARD_ACCELERATION, context.tickDurationMs)
       return
     }
 
@@ -292,7 +302,7 @@ export class GuardResponseProcess implements WorldObjectProcess {
       const stopDistance = Math.hypot(player.x - guard.x, player.y - guard.y) - (gap - reach)
       steerToward(context.worldObject, player, guard.speed, GUARD_ACCELERATION, context.tickDurationMs, stopDistance)
     } else {
-      accelerateToward(context.worldObject, 0, 0, GUARD_ACCELERATION, context.tickDurationMs)
+      brake(context.worldObject, guard.speed, GUARD_ACCELERATION, context.tickDurationMs)
     }
 
     const attack = combat.attack(context.state, context.worldObject.id)

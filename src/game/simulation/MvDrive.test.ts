@@ -15,7 +15,7 @@ type Body = { x: number; y: number; vx?: number; vy?: number; thrown?: unknown; 
 
 function setup(mv: Partial<MvConfig> = {}, physics: Partial<PhysicsConfig> = {}) {
   const state = createInitialWorldState()
-  const physicsConfig = { ...GAME_PHYSICS_CONFIG, drag: 0, ...physics } as PhysicsConfig
+  const physicsConfig = { ...GAME_PHYSICS_CONFIG, drag: 0, friction: 0, ...physics } as PhysicsConfig
   const world = new PhysicsWorld(() => physicsConfig)
   const drive = new MvDrive(() => ({ ...GAME_MV_CONFIG, ...mv }) as MvConfig, () => physicsConfig)
   drive.attach(world)
