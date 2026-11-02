@@ -197,3 +197,27 @@ describe('generateRoom1Source physics values', () => {
     expect(source).not.toContain('mv_attr')
   })
 })
+
+describe('room1Serializer collider shape', () => {
+  const rock: RoomObjectConfig = {
+    id: 'boulder',
+    role: 'object',
+    x: 800,
+    y: 280,
+    displayWidth: 154,
+    displayHeight: 154,
+    colliderWidth: 128,
+    colliderHeight: 128,
+    colliderShape: 'circle',
+  }
+
+  it('writes a circle collider shape and the type that allows it', () => {
+    const source = generateRoom1Source([rock])
+    expect(source).toContain('    colliderShape: "circle",')
+    expect(source).toContain("colliderShape?: 'box' | 'circle'")
+  })
+
+  it('leaves the default box shape out', () => {
+    expect(generateRoom1Source([{ ...rock, colliderShape: 'box' }])).not.toContain('colliderShape: "')
+  })
+})

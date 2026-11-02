@@ -188,7 +188,8 @@ describe('tick order: move, contacts, then velocity update', () => {
     // Keep the guard idle and the player away from the line of flight
     player.x = 150
     player.y = 150
-    dagger.x = 800
+    // Start clear of the boulder (centred at x = 800) so the dagger flies straight at the guard
+    dagger.x = 1000
     dagger.y = guard.y
     guard.health = 100
     dagger.thrown = { targetX: 1700, targetY: guard.y, targetObjectId: null, hitIds: [] }

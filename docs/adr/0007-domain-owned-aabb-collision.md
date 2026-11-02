@@ -2,6 +2,8 @@
 status: accepted
 ---
 
+> ADR 0011 adds circle colliders behind the same seam; `AabbCollisionWorld` is now `ShapeCollisionWorld`. Box pairs keep the rules below.
+
 # Domain-owned AABB collision behind a seam
 
 Collision, Reach checks, and nearest-target selection use axis-aligned boxes computed in the domain layer behind a `CollisionWorld` interface, not Phaser Arcade Physics. Arcade bodies live on Phaser Game Objects, which would force two-way position syncing each tick against the Phaser-independent world state of ADR 0001, duplicate the Time Scale of ADR 0005, and make logic tests start Phaser. Arcade also offers overlap but not the edge-gap distance that Reach needs. Phaser remains the renderer for sprites, effects, animation, and input.

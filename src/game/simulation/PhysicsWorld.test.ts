@@ -328,3 +328,41 @@ describe('PhysicsWorld collisions', () => {
     expect(light.body.x).toBe(600)
   })
 })
+
+describe('PhysicsWorld with a circle collider', () => {
+  // A heavy round rock of diameter 100 at (500, 500) and a 40 px character walking right towards it.
+  function walkTowardsRock(y: number) {
+    const { add, step } = createWorld({ drag: 0 })
+    add('rock', 'object', { mass: 1e9, shape: 'circle' })
+    const walker = add('walker', 'enemy', { x: 380, y, width: 40, height: 40, mass: 1 })
+    for (let i = 0; i < 120; i++) {
+      applyForce(walker.object, 400, 0)
+      step()
+    }
+    return walker.body
+  }
+
+  it('stops a character that walks straight into the middle of the rock', () => {
+    expect(walkTowardsRock(500).x).toBeLessThanOrEqual(430 + 1e-6) // flush against the rock's left side
+  })
+
+  it('lets a character grazing the rock slide around its curve and carry on', () => {
+    // Top edge at 547: inside the rock's bounding square (bottom 550), but only clipping the round rock.
+    const walker = walkTowardsRock(567)
+    expect(walker.x).toBeGreaterThan(600)
+    expect(walker.y).toBeGreaterThan(567) // nudged down around the curve
+  })
+
+  it('pushes overlapping bodies apart along the contact normal', () => {
+    const { add, step } = createWorld({ drag: 0 })
+    add('rock', 'object', { mass: 1e9, shape: 'circle' })
+    // Placed overlapping the rock diagonally (down-right).
+    const crate = add('crate', 'enemy', { x: 545, y: 545, width: 40, height: 40, mass: 1 })
+    step()
+    const gap = Math.hypot(Math.max(0, crate.body.x - 20 - 500), Math.max(0, crate.body.y - 20 - 500)) - 50
+    expect(gap).toBeGreaterThanOrEqual(-1e-6)
+    // Moved diagonally, not just along one axis.
+    expect(crate.body.x).toBeGreaterThan(545)
+    expect(crate.body.y).toBeGreaterThan(545)
+  })
+})

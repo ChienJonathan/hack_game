@@ -19,7 +19,7 @@ import {
   type RoomObjectConfig,
   type WorldObjectRole,
 } from '../content/room1.ts'
-import { rolesCollide } from '../domain/ColliderTag.ts'
+import type { ColliderShape } from '../domain/CollisionWorld.ts'
 import { PHYSICS_ATTR_KEYS, readPhysicsAttrOverride } from '../domain/PhysicsAttr.ts'
 import { GAME_PHYSICS_CONFIG, MIN_MASS } from '../simulation/physicsConstants.ts'
 import { generateRoom1Source } from '../content/room1Serializer.ts'
@@ -35,6 +35,7 @@ import type { WorldObject } from '../domain/WorldObject.ts'
 import {
   EditorHistory,
   computeEditorCollisionBox,
+  computeEditorColliderSize,
   wouldOverlapAnyEditorObject,
   generateNextObjectId,
   type ScalableMovableObject,
@@ -74,13 +75,17 @@ export interface SpawnObjectConfig extends PhysicsAttrConfig {
   holdOffsetY?: number
   colliderWidth?: number
   colliderHeight?: number
+  colliderShape?: ColliderShape
 }
+
+/** The green collider outline: a rectangle for boxes, an ellipse (drawn as a circle) for circles. */
+type ColliderOutline = Phaser.GameObjects.Rectangle | Phaser.GameObjects.Ellipse
 
 export interface EditorObject extends ScalableMovableObject {
   role: WorldObjectRole
   sprite: Phaser.GameObjects.Image
   outline: Phaser.GameObjects.Rectangle
-  collisionBox?: Phaser.GameObjects.Rectangle
+  collisionBox?: ColliderOutline
   colliderHandle?: Phaser.GameObjects.Rectangle
   scaleHandle: Phaser.GameObjects.Rectangle
   label: Phaser.GameObjects.Text
@@ -460,16 +465,15 @@ export class LevelEditorScene extends Phaser.Scene {
             ? (state.colliderHeight as number)
             : undefined
 
+    const colliderShape: ColliderShape | undefined =
+      roomObj?.colliderShape ?? (state.shape === 'circle' ? 'circle' : undefined)
+
     // Collision box (added for all world objects besides weapon)
-    let collisionBox: Phaser.GameObjects.Rectangle | undefined
+    let collisionBox: ColliderOutline | undefined
     let colliderHandle: Phaser.GameObjects.Rectangle | undefined
     if (role !== 'weapon') {
-      const collSize = computeCollisionSize(role, scaleX, scaleY, colliderWidth, colliderHeight)
-      collisionBox = this.add
-        .rectangle(x, y, collSize.width, collSize.height)
-        .setStrokeStyle(2, 0x00e676, 0.9)
-        .setFillStyle(0x00e676, 0.12)
-        .setDepth(2)
+      const collSize = computeEditorColliderSize(role, scaleX, scaleY, colliderWidth, colliderHeight, colliderShape)
+      collisionBox = this.createColliderOutline(x, y, collSize.width, collSize.height, colliderShape)
 
       colliderHandle = this.add
         .rectangle(
@@ -518,6 +522,7 @@ export class LevelEditorScene extends Phaser.Scene {
       label,
       colliderWidth: role !== 'weapon' ? (colliderWidth ?? computeCollisionSize(role, scaleX, scaleY).width) : undefined,
       colliderHeight: role !== 'weapon' ? (colliderHeight ?? computeCollisionSize(role, scaleX, scaleY).height) : undefined,
+      ...(colliderShape ? { colliderShape } : {}),
       x,
       y,
       displayWidth,
@@ -1583,7 +1588,7 @@ export class LevelEditorScene extends Phaser.Scene {
     const sY = scaleY ?? targetObj?.scaleY ?? 1
     const cW = colliderWidth ?? targetObj?.colliderWidth
     const cH = colliderHeight ?? targetObj?.colliderHeight
-    return wouldOverlapAnyEditorObject(objectId, role, x, y, sX, sY, this.editorObjects, cW, cH)
+    return wouldOverlapAnyEditorObject(objectId, role, x, y, sX, sY, this.editorObjects, cW, cH, targetObj?.colliderShape)
   }
 
   public adjustColliderSize(property: 'colliderWidth' | 'colliderHeight', delta: number): void {
@@ -1594,8 +1599,12 @@ export class LevelEditorScene extends Phaser.Scene {
     const prevWidth = selected.colliderWidth ?? defaultSize.width
     const prevHeight = selected.colliderHeight ?? defaultSize.height
 
-    const nextWidth = property === 'colliderWidth' ? Math.max(16, prevWidth + delta) : prevWidth
-    const nextHeight = property === 'colliderHeight' ? Math.max(16, prevHeight + delta) : prevHeight
+    let nextWidth = property === 'colliderWidth' ? Math.max(16, prevWidth + delta) : prevWidth
+    let nextHeight = property === 'colliderHeight' ? Math.max(16, prevHeight + delta) : prevHeight
+    if (selected.colliderShape === 'circle') {
+      // A circle has one size, its diameter: either field changes both.
+      nextWidth = nextHeight = property === 'colliderWidth' ? nextWidth : nextHeight
+    }
 
     if (nextWidth === prevWidth && nextHeight === prevHeight) return
 
@@ -1688,8 +1697,11 @@ export class LevelEditorScene extends Phaser.Scene {
     const parsed = parseInt(input.trim(), 10)
     if (isNaN(parsed) || parsed < 16) return
 
-    const nextWidth = property === 'colliderWidth' ? parsed : prevWidth
-    const nextHeight = property === 'colliderHeight' ? parsed : prevHeight
+    let nextWidth = property === 'colliderWidth' ? parsed : prevWidth
+    let nextHeight = property === 'colliderHeight' ? parsed : prevHeight
+    if (selected.colliderShape === 'circle') {
+      nextWidth = nextHeight = parsed
+    }
 
     if (nextWidth === prevWidth && nextHeight === prevHeight) return
 
@@ -1723,18 +1735,31 @@ export class LevelEditorScene extends Phaser.Scene {
     this.updatePropertyPanel()
   }
 
+  private createColliderOutline(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    shape: ColliderShape | undefined,
+  ): ColliderOutline {
+    const outline =
+      shape === 'circle' ? this.add.ellipse(x, y, width, height) : this.add.rectangle(x, y, width, height)
+    return outline.setStrokeStyle(2, 0x00e676, 0.9).setFillStyle(0x00e676, 0.12).setDepth(2)
+  }
+
   private updateObjectVisuals(obj: EditorObject): void {
     obj.sprite.setPosition(obj.x, obj.y)
     obj.sprite.setDisplaySize(obj.displayWidth, obj.displayHeight)
     obj.outline.setPosition(obj.x, obj.y)
     obj.outline.setSize(obj.displayWidth + 8, obj.displayHeight + 8)
     if (obj.collisionBox) {
-      const collSize = computeCollisionSize(
+      const collSize = computeEditorColliderSize(
         obj.role,
         obj.scaleX,
         obj.scaleY,
         obj.colliderWidth,
         obj.colliderHeight,
+        obj.colliderShape,
       )
       obj.collisionBox.setPosition(obj.x, obj.y)
       obj.collisionBox.setSize(collSize.width, collSize.height)
@@ -2099,8 +2124,12 @@ export class LevelEditorScene extends Phaser.Scene {
       if (!selected) return
       const dx = (pointer.worldX - this.colliderStartPointerX) * 2
       const dy = (pointer.worldY - this.colliderStartPointerY) * 2
-      const candW = Math.max(16, snap(this.colliderStartWidth + dx))
-      const candH = Math.max(16, snap(this.colliderStartHeight + dy))
+      let candW = Math.max(16, snap(this.colliderStartWidth + dx))
+      let candH = Math.max(16, snap(this.colliderStartHeight + dy))
+      if (selected.colliderShape === 'circle') {
+        // Drag the diameter by whichever way the pointer moved further.
+        candW = candH = Math.abs(dx) >= Math.abs(dy) ? candW : candH
+      }
 
       if (
         !this.wouldOverlapAny(
@@ -2291,6 +2320,7 @@ export class LevelEditorScene extends Phaser.Scene {
           scaleY: reversed.snapshot.scaleY,
           colliderWidth: reversed.snapshot.colliderWidth,
           colliderHeight: reversed.snapshot.colliderHeight,
+          colliderShape: reversed.snapshot.colliderShape,
           speed: reversed.snapshot.speed,
           maxHealth: reversed.snapshot.maxHealth,
           attackDistance: reversed.snapshot.attackDistance,
@@ -2380,6 +2410,7 @@ export class LevelEditorScene extends Phaser.Scene {
         ...(obj.holdOffsetY !== undefined ? { holdOffsetY: obj.holdOffsetY } : {}),
         ...(obj.colliderWidth !== undefined ? { colliderWidth: Math.round(obj.colliderWidth) } : {}),
         ...(obj.colliderHeight !== undefined ? { colliderHeight: Math.round(obj.colliderHeight) } : {}),
+        ...(obj.colliderShape === 'circle' ? { colliderShape: obj.colliderShape } : {}),
         ...this.physicsAttrFields(obj),
       }
     })
@@ -2558,27 +2589,20 @@ export class LevelEditorScene extends Phaser.Scene {
     const colliderHeight = config.colliderHeight
 
     {
-      const collSize = computeCollisionSize(role, scaleX, scaleY, colliderWidth, colliderHeight)
       let offset = 0
       while (offset < 800) {
-        let collides = false
-        for (const other of this.editorObjects) {
-          if (!rolesCollide(role, other.role)) continue
-          const otherSize = computeCollisionSize(
-            other.role,
-            other.scaleX,
-            other.scaleY,
-            other.colliderWidth,
-            other.colliderHeight,
-          )
-          if (
-            Math.abs(x - other.x) < (collSize.width + otherSize.width) / 2 &&
-            Math.abs(y - other.y) < (collSize.height + otherSize.height) / 2
-          ) {
-            collides = true
-            break
-          }
-        }
+        const collides = wouldOverlapAnyEditorObject(
+          '',
+          role,
+          x,
+          y,
+          scaleX,
+          scaleY,
+          this.editorObjects,
+          colliderWidth,
+          colliderHeight,
+          config.colliderShape,
+        )
         if (!collides) break
         offset += 60
         x = (config.x !== undefined ? config.x : defaultX) + offset
@@ -2599,15 +2623,11 @@ export class LevelEditorScene extends Phaser.Scene {
       .setVisible(false)
 
     // Collision box (added for all world objects besides weapon)
-    let collisionBox: Phaser.GameObjects.Rectangle | undefined
+    let collisionBox: ColliderOutline | undefined
     let colliderHandle: Phaser.GameObjects.Rectangle | undefined
     if (role !== 'weapon') {
-      const collSize = computeCollisionSize(role, scaleX, scaleY, colliderWidth, colliderHeight)
-      collisionBox = this.add
-        .rectangle(x, y, collSize.width, collSize.height)
-        .setStrokeStyle(2, 0x00e676, 0.9)
-        .setFillStyle(0x00e676, 0.12)
-        .setDepth(2)
+      const collSize = computeEditorColliderSize(role, scaleX, scaleY, colliderWidth, colliderHeight, config.colliderShape)
+      collisionBox = this.createColliderOutline(x, y, collSize.width, collSize.height, config.colliderShape)
 
       colliderHandle = this.add
         .rectangle(
@@ -2664,6 +2684,7 @@ export class LevelEditorScene extends Phaser.Scene {
       scaleY,
       colliderWidth,
       colliderHeight,
+      ...(config.colliderShape ? { colliderShape: config.colliderShape } : {}),
       maxHealth,
       speed,
       maxSpeed,
@@ -2806,6 +2827,7 @@ export class LevelEditorScene extends Phaser.Scene {
       scaleY: obj.scaleY,
       colliderWidth: obj.colliderWidth,
       colliderHeight: obj.colliderHeight,
+      colliderShape: obj.colliderShape,
       speed: obj.speed,
       maxHealth: obj.maxHealth,
       attackDistance: obj.attackDistance,

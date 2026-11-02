@@ -76,6 +76,10 @@ _Avoid_: Drag (when referring to the ground; drag acts in the air too)
 A touch in which two World Objects push each other apart and exchange motion according to their mass and Restitution. A touch that only triggers an effect, such as Impact Damage, is not a Collision.
 _Avoid_: Contact (when the objects exchange motion)
 
+**Collider Shape**:
+The outline a World Object collides with: a box (the default) or a circle. A circle matches a round object, so others slide around it instead of catching on corners.
+_Avoid_: Hitbox (when referring to the outline's form)
+
 **Restitution**:
 How much of the speed with which two objects approach each other is returned after they Collide. The value for a Collision is the product of both objects' values.
 _Avoid_: Bounciness, elasticity

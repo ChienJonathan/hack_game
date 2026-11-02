@@ -6,7 +6,7 @@ import {
 } from './room1WorldState.ts'
 import { CHARACTER_SIZE, DAGGER_SIZE, CHARACTER_BASE_SIZE } from './room1Constants.ts'
 import type { RoomObjectConfig } from './room1.ts'
-import { AabbCollisionWorld } from '../domain/CollisionWorld.ts'
+import { ShapeCollisionWorld } from '../domain/CollisionWorld.ts'
 import { readPhysicsAttrOverride } from '../domain/PhysicsAttr.ts'
 import { collidesPhysically, colliderTagsOf } from '../domain/ColliderTag.ts'
 
@@ -168,7 +168,7 @@ describe('room1WorldState scaled collision AABB', () => {
   })
 
   it('alters collision gap calculation when character scale changes', () => {
-    const collisionWorld = new AabbCollisionWorld()
+    const collisionWorld = new ShapeCollisionWorld()
 
     // Two characters with centers separated by 120 px on x axis
     const playerBox = { x: 100, y: 100, width: 110, height: 160 }
@@ -208,7 +208,7 @@ describe('room1WorldState scaled collision AABB', () => {
 
   it('guarantees no two initial world objects that collide physically overlap each other', () => {
     const state = createInitialWorldState()
-    const collisionWorld = new AabbCollisionWorld()
+    const collisionWorld = new ShapeCollisionWorld()
     const nonWeaponObjects = state.worldObjects
 
     for (let i = 0; i < nonWeaponObjects.length; i++) {
@@ -286,5 +286,38 @@ describe('createInitialWorldState physics attributes and collider tags', () => {
     expect(tags.player).toEqual([{ class: 'character' }])
     expect(tags.guard).toEqual([{ class: 'character' }])
     expect(tags.boulder).toEqual([{ class: 'obstacle' }])
+  })
+})
+
+describe('circle collider shape', () => {
+  const rock: RoomObjectConfig = {
+    id: 'rock',
+    role: 'object',
+    x: 800,
+    y: 280,
+    displayWidth: 154,
+    displayHeight: 154,
+    colliderWidth: 128,
+    colliderHeight: 90,
+    colliderShape: 'circle',
+  }
+
+  it('stores the shape and uses colliderWidth as the diameter', () => {
+    const state = createInitialWorldState([rock])
+    const body = state.worldObjects[0].state as Record<string, unknown>
+    expect(body.shape).toBe('circle')
+    expect(body.width).toBe(128)
+    expect(body.height).toBe(128)
+    expect(body.colliderHeight).toBe(128)
+  })
+
+  it('stores no shape for ordinary box colliders', () => {
+    const state = createInitialWorldState([{ ...rock, colliderShape: undefined }])
+    expect((state.worldObjects[0].state as Record<string, unknown>).shape).toBeUndefined()
+  })
+
+  it('gives the shipped Room 1 boulder a circle collider', () => {
+    const boulder = createInitialWorldState().worldObjects.find((object) => object.id === 'boulder')!
+    expect((boulder.state as Record<string, unknown>).shape).toBe('circle')
   })
 })
