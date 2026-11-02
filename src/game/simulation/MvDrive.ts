@@ -64,6 +64,13 @@ export class MvDrive {
       this.endThrowOnCollision(a, b)
       this.endThrowOnCollision(b, a)
     })
+    // Running into a wall ends a Throw like any Collision; nothing is discovered.
+    physics.onWallHit((worldObject) => {
+      const body = driveStateOf(worldObject)
+      if (body?.thrown) {
+        body.thrown = null
+      }
+    })
   }
 
   /** Before the physics step: tracks the target, then applies the pull or places an arriving object. */

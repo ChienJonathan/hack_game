@@ -40,6 +40,8 @@ export interface RoomObjectConfig extends PhysicsAttrConfig {
   name?: string
   /** An enemy that never moves or attacks, such as a training dummy. */
   passive?: boolean
+  /** A special object: a pushable `crate`, a pressure `plate`, or an `archer` enemy. */
+  kind?: 'crate' | 'plate' | 'archer'
 }
 
 export const ROOM1_OBJECTS: RoomObjectConfig[] = [

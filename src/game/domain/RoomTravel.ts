@@ -1,5 +1,7 @@
 import { ShapeCollisionWorld, boxFromState, type Box } from './CollisionWorld.ts'
-import type { Room, RoomExit } from './Room.ts'
+import type { ExitRequirement, Room, RoomExit } from './Room.ts'
+import { colliderTagsOf } from './ColliderTag.ts'
+import { isPlatePressed } from './PressurePlate.ts'
 import type { WorldObject } from './WorldObject.ts'
 import type { WorldState } from './WorldState.ts'
 
@@ -44,23 +46,45 @@ function objectsIn(state: WorldState, room: Room): WorldObject[] {
   return state.worldObjects.filter((worldObject) => worldObject.roomId === room.id && room.objectIds.includes(worldObject.id))
 }
 
-/** Whether the Exit's requirement (if any) is met in its room right now. */
-export function isExitOpen(state: WorldState, room: Room, exit: RoomExit): boolean {
-  const requirement = exit.requires
-  if (!requirement) {
-    return true
-  }
+function isRequirementMet(state: WorldState, room: Room, requirement: ExitRequirement): boolean {
   const inRoom = objectsIn(state, room)
-  if (requirement.kind === 'defeat') {
-    return requirement.objectIds.every((id) => {
-      const target = inRoom.find((worldObject) => worldObject.id === id)
-      return !target || (target.state as { alive?: unknown }).alive === false
-    })
+  switch (requirement.kind) {
+    case 'defeat':
+      return requirement.objectIds.every((id) => {
+        const target = inRoom.find((worldObject) => worldObject.id === id)
+        return !target || (target.state as { alive?: unknown }).alive === false
+      })
+    case 'discover-all':
+      return inRoom.every(
+        (worldObject) =>
+          worldObject.metadata.discoverable !== true || (worldObject.state as { discovered?: unknown }).discovered === true,
+      )
+    case 'pressed':
+      return requirement.plateIds.every((id) => {
+        const plate = inRoom.find((worldObject) => worldObject.id === id)
+        return plate !== undefined && isPlatePressed(state, plate)
+      })
   }
-  return inRoom.every(
-    (worldObject) =>
-      worldObject.metadata.discoverable !== true || (worldObject.state as { discovered?: unknown }).discovered === true,
-  )
+}
+
+/** Whether the Exit's requirements (if any) are all met in its room right now. */
+export function isExitOpen(state: WorldState, room: Room, exit: RoomExit): boolean {
+  const requirements = exit.requires === undefined ? [] : Array.isArray(exit.requires) ? exit.requires : [exit.requires]
+  return (requirements as readonly ExitRequirement[]).every((requirement) => isRequirementMet(state, room, requirement))
+}
+
+/** Whether an Obstacle (a crate, a boulder) stands in the Exit's doorway, so nobody can get through it. */
+export function isExitBlocked(state: WorldState, room: Room, exit: RoomExit): boolean {
+  const zone = exitZoneOf(exit)
+  return objectsIn(state, room).some((worldObject) => {
+    const objectState = worldObject.state as { x?: unknown; y?: unknown; width?: unknown; height?: unknown; alive?: unknown }
+    return (
+      colliderTagsOf(worldObject).some((tag) => tag.class === 'obstacle') &&
+      objectState.alive !== false &&
+      typeof objectState.x === 'number' &&
+      collision.overlaps(boxFromState(objectState as { x: number; y: number; width: number; height: number }), zone)
+    )
+  })
 }
 
 /** Why the Exit is locked, or `null` if it is open. */

@@ -2,7 +2,7 @@ import type { ParsedCommand } from '../ParsedCommand.ts'
 import type { CommandResult } from '../CommandResult.ts'
 import type { WorldState } from '../../domain/WorldState.ts'
 import type { CommandExecutor } from './base.ts'
-import { CD_REACH, currentRoomOf, isPlayerAtExit, travelThroughExit } from '../../domain/RoomTravel.ts'
+import { CD_REACH, currentRoomOf, isExitBlocked, isPlayerAtExit, travelThroughExit } from '../../domain/RoomTravel.ts'
 
 function reject(text: string): CommandResult {
   return { status: 'rejected', feedback: { kind: 'popup', text } }
@@ -42,6 +42,9 @@ export class CdCommandExecutor implements CommandExecutor {
     }
     if (!isPlayerAtExit(state, exit, CD_REACH, this.playerId)) {
       return reject(`cd: walk up to the ${exit.label} exit first.`)
+    }
+    if (isExitBlocked(state, room, exit)) {
+      return reject(`cd: something is blocking the way to ${exit.label}.`)
     }
 
     const result = travelThroughExit(state, exit, this.playerId)

@@ -8,6 +8,11 @@ import guardStepB from '../../assets/game/characters/guard/step-b.png'
 import { drawRoomBackdrop } from './drawRoomBackdrop.ts'
 import type Phaser from 'phaser'
 import guardImageUrl from '../../assets/game/characters/guard/idle-retro.png'
+import archerImageUrl from '../../assets/game/characters/archer/idle.png'
+import arrowImageUrl from '../../assets/game/items/arrow.png'
+import crateImageUrl from '../../assets/game/objects/crate.png'
+import plateImageUrl from '../../assets/game/objects/plate.png'
+import platePressedImageUrl from '../../assets/game/objects/plate-pressed.png'
 import playerImageUrl from '../../assets/game/characters/player/idle-retro.png'
 import daggerImageUrl from '../../assets/game/items/weapons/dagger-horizontal.png'
 import boulderImageUrl from '../../assets/game/objects/boulder.png'
@@ -15,6 +20,7 @@ import type { WorldObject } from '../domain/WorldObject.ts'
 import type { WorldState } from '../domain/WorldState.ts'
 import { WORLD_OBJECT_IDS, ROOM_LAYOUT, ROOM_NAMES } from '../content/room1Constants.ts'
 import { isExitOpen } from '../domain/RoomTravel.ts'
+import { isPlatePressed } from '../domain/PressurePlate.ts'
 import { WorldObjectViewRegistry } from './WorldObjectViewRegistry.ts'
 
 export const PLAYER_TEXTURE_KEY = 'player-idle'
@@ -46,7 +52,15 @@ export const WORLD_OBJECT_TEXTURE_URLS = {
   [GUARD_TEXTURE_KEY]: guardImageUrl,
   [DAGGER_TEXTURE_KEY]: daggerImageUrl,
   [BOULDER_TEXTURE_KEY]: boulderImageUrl,
+  archer: archerImageUrl,
+  arrow: arrowImageUrl,
+  crate: crateImageUrl,
+  plate: plateImageUrl,
+  'plate-pressed': platePressedImageUrl,
 } as const
+
+/** Objects with a `kind` draw with its own texture and no walking animation. */
+const KIND_TEXTURES: Readonly<Record<string, string>> = { archer: 'archer', arrow: 'arrow', crate: 'crate', plate: 'plate' }
 
 interface DisplayState {
   x?: unknown
@@ -69,6 +83,7 @@ interface DisplayState {
   holdOffsetX?: unknown
   holdOffsetY?: unknown
   weaponAttackDistance?: unknown
+  angle?: unknown
 }
 
 const TEXT_COLOR = '#d6d6d6'
@@ -96,6 +111,9 @@ export class PhaserRoomView {
   private readonly doorLabels: Phaser.GameObjects.Text[] = []
   /** What the doors were last drawn for: the room, its exits and whether each is open. */
   private doorKey = ''
+  private wallGraphics: Phaser.GameObjects.Graphics | undefined
+  /** The room whose walls are drawn. */
+  private wallRoomId: string | null | undefined
   private scene: Phaser.Scene | undefined
   private readonly combatFeedback = new CombatFeedback()
   private combatParticles: Phaser.GameObjects.Graphics | undefined
@@ -112,6 +130,8 @@ export class PhaserRoomView {
     this.scene = scene
     this.doorFrame = scene.add.graphics().setDepth(1)
     this.doorKey = ''
+    this.wallGraphics = scene.add.graphics().setDepth(1)
+    this.wallRoomId = undefined
 
     if (showRoomTitle) {
       this.roomTitle = scene.add
@@ -130,7 +150,8 @@ export class PhaserRoomView {
         continue
       }
 
-      const sprite = scene.add.image(0, 0, textureKey).setDepth(3)
+      // Pressure plates lie on the floor, under everything that stands on them.
+      const sprite = scene.add.image(0, 0, textureKey).setDepth(worldObject.metadata.kind === 'plate' ? 2 : 3)
       const objState = displayState(worldObject)
       const isWeapon = worldObject.metadata.role === 'weapon' || worldObject.id === WORLD_OBJECT_IDS.dagger
       const dw = typeof objState.displayWidth === 'number' ? objState.displayWidth : (isWeapon ? 72 : 176)
@@ -174,6 +195,7 @@ export class PhaserRoomView {
     const currentRoom = state.rooms.find((room) => room.id === state.currentRoomId)
     this.roomTitle?.setText(currentRoom ? ROOM_NAMES[currentRoom.id] ?? currentRoom.id : 'NO ROOM')
     this.drawDoors(state)
+    this.drawWalls(state)
 
     this.healthBars?.clear()
     for (const worldObject of state.worldObjects) {
@@ -239,7 +261,14 @@ export class PhaserRoomView {
       }
 
       const role = worldObject.metadata.role === 'enemy' ? 'guard' : worldObject.metadata.role
-      if (role === 'player' || role === 'guard') {
+      const kind = typeof worldObject.metadata.kind === 'string' ? worldObject.metadata.kind : undefined
+      if (kind === 'plate') {
+        this.setTexturePreservingSize(sprite, isPlatePressed(state, worldObject) ? 'plate-pressed' : 'plate')
+      }
+      if (kind === 'arrow' && typeof sprite.setAngle === 'function') {
+        sprite.setAngle(typeof objectState.angle === 'number' ? objectState.angle : 0)
+      }
+      if ((role === 'player' || role === 'guard') && kind === undefined) {
         const previous = this.lastPositionById.get(worldObject.id)
         const moving = previous !== undefined && Math.hypot(x - previous.x, y - previous.y) > 0.01
         const step = moving ? [0, 1, 0, 2][Math.floor(state.simulationTick / 7) % 4] : 0
@@ -265,7 +294,7 @@ export class PhaserRoomView {
       sprite.setVisible(visible)
 
       if (typeof sprite.setFlipX === 'function') {
-        sprite.setFlipX(shouldFlip)
+        sprite.setFlipX(kind === 'arrow' ? false : shouldFlip)
       }
 
       const isWeapon = worldObject.metadata.role === 'weapon' || worldObject.id === WORLD_OBJECT_IDS.dagger
@@ -316,7 +345,7 @@ export class PhaserRoomView {
           label.setAlpha(1)
         }
         label.setPosition(renderX, renderY - labelOffsetY)
-        label.setVisible(visible)
+        label.setVisible(visible && worldObject.metadata.hidden !== true)
       }
     }
   }
@@ -344,12 +373,48 @@ export class PhaserRoomView {
     }
     this.doorLabels.length = 0
     this.doorKey = ''
+    this.wallGraphics?.destroy()
+    this.wallGraphics = undefined
+    this.wallRoomId = undefined
     this.scene = undefined
     this.roomTitle = undefined
     this.healthBars?.destroy()
     this.healthBars = undefined
     this.roomFrame = undefined
     this.doorFrame = undefined
+  }
+
+  private setTexturePreservingSize(sprite: Phaser.GameObjects.Image, texture: string): void {
+    if (typeof sprite.setTexture === 'function' && sprite.texture.key !== texture) {
+      const w = sprite.displayWidth
+      const h = sprite.displayHeight
+      sprite.setTexture(texture).setDisplaySize(w, h)
+    }
+  }
+
+  /** Draws the current room's walls as stone blocks with a lit top edge and mortar lines, once per room. */
+  private drawWalls(state: WorldState): void {
+    if (!this.wallGraphics || this.wallRoomId === state.currentRoomId) {
+      return
+    }
+    this.wallRoomId = state.currentRoomId
+    const graphics = this.wallGraphics.clear()
+    const room = state.rooms.find((candidate) => candidate.id === state.currentRoomId)
+    for (const wall of room?.walls ?? []) {
+      const left = wall.x - wall.width / 2
+      const top = wall.y - wall.height / 2
+      graphics.fillStyle(0x1b2529, 1).fillRect(left - 3, top - 3, wall.width + 6, wall.height + 6)
+      graphics.fillStyle(0x3a4c53, 1).fillRect(left, top, wall.width, wall.height)
+      graphics.fillStyle(0x56707a, 1).fillRect(left, top, wall.width, Math.min(8, wall.height))
+      graphics.fillStyle(0x2b3a40, 1)
+      for (let row = top + 24; row < top + wall.height - 4; row += 24) {
+        graphics.fillRect(left, row, wall.width, 3)
+        const offset = ((row - top) / 24) % 2 === 0 ? 0 : 24
+        for (let column = left + 24 + offset; column < left + wall.width - 4; column += 48) {
+          graphics.fillRect(column, row - 21, 3, 21)
+        }
+      }
+    }
   }
 
   /** Draws a door for each Exit of the current room: teal with an arrow when open, red and barred when locked. */
@@ -420,6 +485,10 @@ export class PhaserRoomView {
   }
 
   private textureKeyFor(worldObject: WorldObject): string | undefined {
+    const kind = worldObject.metadata.kind
+    if (typeof kind === 'string' && KIND_TEXTURES[kind]) {
+      return KIND_TEXTURES[kind]
+    }
     if (worldObject.id === WORLD_OBJECT_IDS.boulder || worldObject.id === 'boulder') {
       return BOULDER_TEXTURE_KEY
     }

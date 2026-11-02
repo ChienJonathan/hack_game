@@ -12,8 +12,9 @@ export function findObjectInRoom(state: WorldState, label: string): WorldObject 
   }
 
   const normalized = label.trim().toLowerCase()
+  // Hidden objects (arrows) are not things the player can name.
   const roomObjects = state.worldObjects.filter(
-    (obj) => obj.roomId === state.currentRoomId && currentRoom.objectIds.includes(obj.id),
+    (obj) => obj.roomId === state.currentRoomId && currentRoom.objectIds.includes(obj.id) && obj.metadata.hidden !== true,
   )
 
   // 1. Exact match on metadata.name
@@ -95,6 +96,7 @@ export class MvCommandExecutor implements CommandExecutor {
         (obj) =>
           obj.roomId === state.currentRoomId &&
           currentRoom.objectIds.includes(obj.id) &&
+          obj.metadata.hidden !== true &&
           obj.id !== targetObject?.id &&
           matcher.test(displayName(obj)),
       )

@@ -1,5 +1,5 @@
-import { collidesPhysically } from '../domain/ColliderTag.ts'
-import { ShapeCollisionWorld, boxFromState, contactOf, isCircle, type Bounds, type CollisionWorld } from '../domain/CollisionWorld.ts'
+import { collidesPhysically, colliderTagsOf } from '../domain/ColliderTag.ts'
+import { ShapeCollisionWorld, boxFromState, contactOf, isCircle, type Box, type Bounds, type CollisionWorld } from '../domain/CollisionWorld.ts'
 import { resolveCollision } from '../domain/CollisionResponse.ts'
 import { resolvePhysicsAttr, velocityDecay, type PhysicsAttr } from '../domain/PhysicsAttr.ts'
 import type { WorldObject } from '../domain/WorldObject.ts'
@@ -16,6 +16,8 @@ export interface PhysicsCollision {
 }
 
 export type CollisionListener = (collision: PhysicsCollision) => void
+/** Called when a body runs into a wall of its room. */
+export type WallHitListener = (body: WorldObject) => void
 
 interface BodyState {
   x: number
@@ -63,6 +65,11 @@ export function applyForce(worldObject: WorldObject, forceX: number, forceY: num
   state.forceY = (state.forceY ?? 0) + forceY
 }
 
+/** Whether walls stop this body: anything solid does; floor objects (pressure plates) and untagged ones do not. */
+function blocksWalls(worldObject: WorldObject): boolean {
+  return colliderTagsOf(worldObject).some((tag) => tag.class !== 'floor')
+}
+
 /** Gap below which two bodies count as touching. */
 const TOUCH_EPSILON = 1e-6
 
@@ -79,6 +86,7 @@ export class PhysicsWorld {
   private readonly config: () => PhysicsConfig
   private readonly collision: CollisionWorld
   private readonly listeners: CollisionListener[] = []
+  private readonly wallListeners: WallHitListener[] = []
 
   constructor(
     config: () => PhysicsConfig = () => GAME_PHYSICS_CONFIG,
@@ -92,19 +100,25 @@ export class PhysicsWorld {
     this.listeners.push(listener)
   }
 
+  onWallHit(listener: WallHitListener): void {
+    this.wallListeners.push(listener)
+  }
+
   step(state: WorldState, tickDurationMs: number): void {
     const dt = tickDurationMs / 1000
     const config = this.config()
-    const bounds = state.rooms.find((room) => room.id === state.currentRoomId)?.bounds
+    const room = state.rooms.find((candidate) => candidate.id === state.currentRoomId)
+    const bounds = room?.bounds
+    const walls = room?.walls ?? []
     const bodies = this.bodiesOf(state, config)
 
     for (const body of bodies) {
       this.integrate(body, dt, config)
     }
-    this.separate(bodies, bounds)
+    this.separate(bodies, bounds, walls)
     for (const body of bodies) {
       if (!body.state.frozen) {
-        this.move(body, bodies, dt, bounds, config)
+        this.move(body, bodies, dt, bounds, walls, config)
       }
     }
 
@@ -174,16 +188,18 @@ export class PhysicsWorld {
     bodies: readonly Body[],
     dt: number,
     bounds: Bounds | undefined,
+    walls: readonly Box[],
     config: PhysicsConfig,
   ): void {
     const { state } = body
     const next = { ...boxOf(state), x: state.x + (state.vx ?? 0) * dt, y: state.y + (state.vy ?? 0) * dt }
     const obstacles = bodies.filter((other) => other !== body && collidesPhysically(body.object, other.object))
+    const solidWalls = blocksWalls(body.object) ? walls : []
 
     const resolved = this.collision.resolveMovement(
       boxOf(state),
       next,
-      obstacles.map((other) => boxOf(other.state)),
+      [...obstacles.map((other) => boxOf(other.state)), ...solidWalls],
       bounds,
     )
 
@@ -198,6 +214,27 @@ export class PhysicsWorld {
     }
     state.x = resolved.x
     state.y = resolved.y
+
+    // A wall is immovable: the body loses its speed into the wall, with no bounce, like at the room bounds.
+    let hitWall = false
+    for (const wall of solidWalls) {
+      const box = boxOf(state)
+      if (this.collision.gap(box, wall) > TOUCH_EPSILON) {
+        continue
+      }
+      const normal = this.collision.contactNormal(box, wall)
+      const into = (state.vx ?? 0) * normal.x + (state.vy ?? 0) * normal.y
+      if (into > 0) {
+        state.vx = (state.vx ?? 0) - into * normal.x
+        state.vy = (state.vy ?? 0) - into * normal.y
+        hitWall = true
+      }
+    }
+    if (hitWall) {
+      for (const listener of this.wallListeners) {
+        listener(body.object)
+      }
+    }
 
     for (const other of obstacles) {
       if (this.collision.gap(boxOf(state), boxOf(other.state)) <= TOUCH_EPSILON) {
@@ -233,7 +270,20 @@ export class PhysicsWorld {
   }
 
   /** Pushes bodies that already overlap apart along the shallowest axis, moving only one of each pair. */
-  private separate(bodies: readonly Body[], bounds: Bounds | undefined): void {
+  private separate(bodies: readonly Body[], bounds: Bounds | undefined, walls: readonly Box[]): void {
+    // Walls never move: a body caught inside one (placed there, or arriving from a Throw) is pushed straight out.
+    for (const body of bodies) {
+      if (!blocksWalls(body.object)) {
+        continue
+      }
+      for (const wall of walls) {
+        const contact = contactOf(boxOf(body.state), wall)
+        if (contact.distance < 0) {
+          body.state.x += contact.normal.x * contact.distance
+          body.state.y += contact.normal.y * contact.distance
+        }
+      }
+    }
     for (let i = 0; i < bodies.length; i++) {
       for (let j = i + 1; j < bodies.length; j++) {
         const first = bodies[i]

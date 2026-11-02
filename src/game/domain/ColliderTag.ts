@@ -17,7 +17,12 @@ export type ObstacleColliderTag = {
   readonly class: 'obstacle'
 }
 
-export type ColliderTag = WeaponColliderTag | CharacterColliderTag | ObstacleColliderTag
+/** Something lying flat on the floor, such as a pressure plate: everything passes over it. */
+export type FloorColliderTag = {
+  readonly class: 'floor'
+}
+
+export type ColliderTag = WeaponColliderTag | CharacterColliderTag | ObstacleColliderTag | FloorColliderTag
 
 /** Players and enemies are Characters, weapons are Weapons, other objects (the boulder) are Obstacles. */
 export function defaultColliderTags(role: 'player' | 'enemy' | 'weapon' | 'object'): ColliderTag[] {
@@ -42,6 +47,9 @@ function parseTag(raw: JsonValue): ColliderTag | undefined {
   }
   if (record.class === 'obstacle') {
     return { class: 'obstacle' }
+  }
+  if (record.class === 'floor') {
+    return { class: 'floor' }
   }
   if (record.class === 'weapon' && typeof record.impactDamageRate === 'number') {
     return { class: 'weapon', impactDamageRate: record.impactDamageRate }

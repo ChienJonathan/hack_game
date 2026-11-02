@@ -77,7 +77,7 @@ describe('tutorial rooms', () => {
     expect(new Set(state.worldObjects.map((worldObject) => worldObject.id)).size).toBe(state.worldObjects.length)
   })
 
-  it('plays through every tutorial room into room1 using the taught mechanics', () => {
+  it('plays through every tutorial room into the home area using the taught mechanics', () => {
     const session = newGame()
 
     // tutorial1: pick up the dagger, beat the dummy, walk into the exit.
@@ -140,13 +140,12 @@ describe('tutorial rooms', () => {
     expect(body(session, 'runner').alive).toBe(false)
     walk(session, { x: EXIT.x, y: EXIT.y })
 
-    // room1, with full Health and the original guards waiting.
+    // The tutorial leads into the home area, with full Health.
     const state = session.getWorldState()
-    expect(state.currentRoomId).toBe(ROOM_IDS.first)
+    expect(state.currentRoomId).toBe('home')
     expect(body(session, 'player').health).toBe(body(session, 'player').maxHealth)
-    expect(state.rooms.find((candidate) => candidate.id === ROOM_IDS.first)!.objectIds).toContain('player')
+    expect(state.rooms.find((candidate) => candidate.id === 'home')!.objectIds).toContain('player')
     expect(state.rooms.find((candidate) => candidate.id === TUTORIAL_ROOM_IDS.slowTime)!.objectIds).not.toContain('player')
-    expect(body(session, 'guard').alive).toBe(true)
   })
 
   it('shows the current room tip in help', () => {
