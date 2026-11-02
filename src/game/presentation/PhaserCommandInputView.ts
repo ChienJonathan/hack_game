@@ -7,24 +7,24 @@ import type {
 
 export const COMMAND_INPUT_TEXTURE_KEY = 'command-input-textbox'
 
-const TEXTBOX_WIDTH = 1850
-const TEXTBOX_HEIGHT = 300
+const TEXTBOX_WIDTH = 800
+const TEXTBOX_HEIGHT = 288
 const BOTTOM_MARGIN = 32
-const HORIZONTAL_PADDING = 60
-const VERTICAL_PADDING = 32
+const HORIZONTAL_PADDING = 24
+const VERTICAL_PADDING = 56
 const SCROLLBAR_WIDTH = 14
 const SCROLLBAR_GAP = 14
 const MIN_SCROLLBAR_THUMB_HEIGHT = 24
-const FONT_FAMILY = '"Press Start 2P", monospace'
-const FONT_SIZE = 36
+const FONT_FAMILY = 'Consolas, monospace'
+const FONT_SIZE = 24
 const LINE_SPACING = 4
 const VISIBLE_LINE_COUNT = 6
-const TEXT_COLOR = '#d6d6d6'
+const TEXT_COLOR = '#d6e8e5'
 const PLACEHOLDER_COLOR = '#777777'
 const CURSOR_COLOR = 0xd6d6d6
 const FIELD_COLOR = '#101010'
 const CURSOR_BLINK_MS = 500
-const DISABLED_ALPHA = 0.45
+const DISABLED_ALPHA = 0.85
 const ENABLE_HINT = 'Type a command'
 const COMPLETION_HINT = 'help'
 
@@ -34,7 +34,8 @@ export class PhaserCommandInputView implements CommandInputView {
   private completionProvider: CommandCompletionProvider | undefined
   private historyProvider: CommandHistoryProvider | undefined
   private reverseColorTexts: Phaser.GameObjects.Text[] = []
-  private background: Phaser.GameObjects.Image | undefined
+  private background: Phaser.GameObjects.Rectangle | undefined
+  private heading: Phaser.GameObjects.Text | undefined
   private commandText: Phaser.GameObjects.Text | undefined
   private placeholderText: Phaser.GameObjects.Text | undefined
   private cursorBlock: Phaser.GameObjects.Rectangle | undefined
@@ -79,12 +80,12 @@ export class PhaserCommandInputView implements CommandInputView {
     this.historyProvider = historyProvider
 
     const camera = scene.cameras.main
-    const left = (camera.width - TEXTBOX_WIDTH) / 2
+    const left = camera.width - BOTTOM_MARGIN - TEXTBOX_WIDTH
     const top = camera.height - BOTTOM_MARGIN - TEXTBOX_HEIGHT
     const centerX = left + TEXTBOX_WIDTH / 2
     const centerY = top + TEXTBOX_HEIGHT / 2
     const contentWidth = TEXTBOX_WIDTH - HORIZONTAL_PADDING * 2 - SCROLLBAR_WIDTH - SCROLLBAR_GAP
-    const contentHeight = TEXTBOX_HEIGHT - VERTICAL_PADDING * 2
+    const contentHeight = TEXTBOX_HEIGHT - VERTICAL_PADDING - 24
 
     this.textLeft = left + HORIZONTAL_PADDING
     this.textTop = top + VERTICAL_PADDING
@@ -96,10 +97,13 @@ export class PhaserCommandInputView implements CommandInputView {
     this.charactersPerLine = Math.max(1, Math.floor(contentWidth / this.characterWidth))
     this.visibleLineCount = VISIBLE_LINE_COUNT
     this.background = scene.add
-      .image(centerX, centerY, COMMAND_INPUT_TEXTURE_KEY)
-      .setDisplaySize(TEXTBOX_WIDTH, TEXTBOX_HEIGHT)
+      .rectangle(centerX, centerY, TEXTBOX_WIDTH, TEXTBOX_HEIGHT, 0x101d26, 0.96)
+      .setStrokeStyle(2, 0x547e82)
       .setDepth(10)
       .setInteractive()
+    this.heading = scene.add.text(left + HORIZONTAL_PADDING, top + 18, '', {
+      fontFamily: FONT_FAMILY, fontSize: 18, color: '#8fd6c5',
+    }).setDepth(11)
 
     this.commandText = scene.add
       .text(this.textLeft, this.textTop, '', {
@@ -220,6 +224,8 @@ export class PhaserCommandInputView implements CommandInputView {
     this.scene?.input.off('pointerupoutside', this.handlePointerUp)
     this.cursorBlinkEvent?.remove()
     this.background?.destroy()
+    this.heading?.destroy()
+    this.heading = undefined
     this.commandText?.destroy()
     this.placeholderText?.destroy()
     this.cursorBlock?.destroy()
@@ -618,6 +624,7 @@ export class PhaserCommandInputView implements CommandInputView {
     this.activeCursorVisible = cursorVisible
     const fieldAlpha = this.inputEnabled ? 1 : DISABLED_ALPHA
     this.background?.setAlpha(fieldAlpha)
+    this.heading?.setText(this.inputEnabled ? 'COMMAND  /  TIME ×0.25' : 'COMMAND  /  Type letters to cast')
     this.commandText.setAlpha(fieldAlpha)
 
     this.commandText.setFontSize(fontSize)

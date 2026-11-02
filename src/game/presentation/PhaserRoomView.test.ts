@@ -38,6 +38,13 @@ interface MockText {
 }
 
 interface MockImage {
+  originX: number
+  originY: number
+  setOrigin(x: number, y: number): MockImage
+  angle: number
+  setAngle(angle: number): MockImage
+  texture: { key: string }
+  setTexture(key: string): MockImage
   x: number
   y: number
   displayWidth: number
@@ -122,8 +129,14 @@ function createMockScene() {
         texts.push(t)
         return t
       },
-      image: (x: number, y: number): MockImage => {
+      image: (x: number, y: number, key: string): MockImage => {
         const img: MockImage = {
+          originX: 0.5, originY: 0.5,
+          setOrigin(x: number, y: number) { img.originX = x; img.originY = y; return img },
+          angle: 0,
+          setAngle(angle: number) { img.angle = angle; return img },
+          texture: { key },
+          setTexture(key: string) { img.texture.key = key; return img },
           x,
           y,
           displayWidth: 0,
@@ -148,6 +161,52 @@ function createMockScene() {
 }
 
 describe('PhaserRoomView', () => {
+  it('shows a guard strike and recovery before returning to idle', () => {
+    const view = new PhaserRoomView()
+    const { mockScene, images } = createMockScene()
+    const state = createInitialWorldState()
+    view.mount(mockScene, state)
+    const guard = state.worldObjects.find(o => o.id === 'guard')!
+    const data = guard.state as { attackSequence?: number }
+    const image = images[state.worldObjects.indexOf(guard)]
+    const size = [image.displayWidth, image.displayHeight]
+    data.attackSequence = 1
+    view.update(state)
+    expect(image.texture.key).toBe('guard-attack')
+    state.simulationTick += 8
+    view.update(state)
+    expect(image.texture.key).toBe('guard-recover')
+    state.simulationTick += 8
+    view.update(state)
+    expect(image.texture.key).toBe('guard-idle')
+    expect([image.displayWidth, image.displayHeight]).toEqual(size)
+  })
+
+  it('cycles walking poses during movement and restores idle when stationary without resizing', () => {
+    const view = new PhaserRoomView()
+    const { mockScene, images } = createMockScene()
+    const state = createInitialWorldState()
+    view.mount(mockScene, state)
+    const player = state.worldObjects.find(o => o.metadata.role === 'player')!
+    const image = images[state.worldObjects.indexOf(player)]
+    const dimensions = [image.displayWidth, image.displayHeight]
+    const data = player.state as { x: number }
+    state.simulationTick = 7
+    data.x += 5
+    view.update(state)
+    expect(image.texture.key).toBe('player-step-a')
+    state.simulationTick = 21
+    data.x += 5
+    view.update(state)
+    expect(image.texture.key).toBe('player-step-b')
+    expect([image.displayWidth, image.displayHeight]).toEqual(dimensions)
+    view.update(state)
+    expect(image.texture.key).toBe('player-idle')
+    view.destroy()
+    view.mount(mockScene, state)
+    expect(images.at(-state.worldObjects.length)?.texture.key).toBe('player-idle')
+  })
+
   it('shows sprites by default with ? for undiscovered objects and hacker for player', () => {
     const view = new PhaserRoomView()
     const { mockScene, images, texts } = createMockScene()
@@ -294,6 +353,8 @@ describe('PhaserRoomView', () => {
 
     // When holder faces right: local offset (+44, +38), flipX is false
     view.update(worldState)
+    expect(daggerImage.angle).toBe(0)
+    expect(daggerImage.originX).toBe(0.25)
     expect(daggerImage.x).toBe(444)
     expect(daggerImage.y).toBe(338)
     expect(daggerImage.flipX).toBe(false)
@@ -301,6 +362,8 @@ describe('PhaserRoomView', () => {
     // When holder faces left: mirrored local offset (-44, +38), flipX is true
     playerState.facing = 'left'
     view.update(worldState)
+    expect(daggerImage.angle).toBe(0)
+    expect(daggerImage.originX).toBe(0.75)
     expect(daggerImage.x).toBe(356)
     expect(daggerImage.y).toBe(338)
     expect(daggerImage.flipX).toBe(true)
@@ -359,6 +422,8 @@ describe('PhaserRoomView', () => {
     // After animation completes, returns to resting position
     daggerState.attackElapsedMs = DAGGER_ATTACK_DURATION_MS
     view.update(worldState)
+    expect(daggerImage.angle).toBe(0)
+    expect(daggerImage.originX).toBe(0.75)
     expect(daggerImage.x).toBe(356) // 400 - 44 + 0
   })
 

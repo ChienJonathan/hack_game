@@ -12,6 +12,7 @@ const BACKGROUND_COLOR = '#101010'
 export function createGame(parent: HTMLElement): Phaser.Game {
   const game = new Phaser.Game({
     type: Phaser.AUTO,
+    pixelArt: true,
     parent,
     width: SCENE_WIDTH,
     height: SCENE_HEIGHT,
