@@ -336,6 +336,42 @@ describe('commands', () => {
     expect(candidates).toContain('sword')
   })
 
+  it('includes player label "hacker" in tab completion candidates', () => {
+    const session = newSession()
+
+    // hacker should be tab-completable at command position
+    const cmdCandidates = session.getCommandCompletionCandidates('ha', 2)
+    expect(cmdCandidates).toContain('hacker')
+
+    // hacker should be tab-completable when typing arguments to mv
+    const argCandidates = session.getCommandCompletionCandidates('mv dagger h', 11)
+    expect(argCandidates).toContain('hacker')
+    expect(argCandidates).not.toContain('help')
+
+    const mvCandidates = session.getCommandCompletionCandidates('mv h', 4)
+    expect(mvCandidates).toContain('hacker')
+    expect(mvCandidates).not.toContain('help')
+  })
+
+  it('does not list player label "hacker" in ls output', () => {
+    const session = newSession()
+    const lsResult = session.submitCommand('ls')
+    expect(lsResult.status).toBe('success')
+    if (lsResult.status === 'success') {
+      expect(lsResult.feedback[0].text).not.toContain('hacker')
+    }
+  })
+
+  it('updates tab completion candidates when player is renamed', () => {
+    const session = newSession()
+    const renameResult = session.submitCommand('mv hacker neo')
+    expect(renameResult.status).toBe('success')
+
+    const candidates = session.getCommandCompletionCandidates('ne', 2)
+    expect(candidates).toContain('neo')
+    expect(candidates).not.toContain('hacker')
+  })
+
   it('throws an object towards target with speed across simulation ticks until arrival', () => {
     const session = newSession()
     const dagger = stateOf(session, 'dagger')

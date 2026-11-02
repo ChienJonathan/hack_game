@@ -46,16 +46,28 @@ export class CommandSubmissionService {
     return registeredCommand.executor.execute(parseResult.command, state)
   }
 
-  getCompletionCandidates(_rawText: string, _cursorIndex: number, state: WorldState): readonly string[] {
+  getCompletionCandidates(rawText: string, cursorIndex: number, state: WorldState): readonly string[] {
     const currentRoom = state.rooms.find((room) => room.id === state.currentRoomId)
     if (!currentRoom) {
       return this.registry.names()
     }
 
-    const directoryEntries = getRoomDirectoryEntries(state, currentRoom, false)
+    const directoryEntries = getRoomDirectoryEntries(state, currentRoom, false, true)
     const roomEntries = directoryEntries.map((entry) =>
       currentRoom.exits.some((exit) => exit.label === entry) ? `${entry}/` : entry,
     )
-    return [...this.registry.names(), ...roomEntries]
+
+    const textBeforeCursor = rawText.slice(0, cursorIndex)
+    const commandMatch = textBeforeCursor.match(/^\s*(\S+)/)
+    const textAfterCommand = commandMatch
+      ? textBeforeCursor.slice(commandMatch[0].length)
+      : ''
+    const isCompletingArgument = Boolean(commandMatch && /\s/.test(textAfterCommand))
+
+    if (isCompletingArgument) {
+      return [...new Set(roomEntries)]
+    }
+
+    return [...new Set([...this.registry.names(), ...roomEntries])]
   }
 }

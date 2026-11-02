@@ -6,16 +6,19 @@ export function getRoomDirectoryEntries(
   state: WorldState,
   room: Room,
   discoverObjects: boolean,
+  includePlayer = false,
 ): string[] {
   const entries: string[] = []
 
   for (const objectId of room.objectIds) {
     const worldObject = state.worldObjects.find((candidate) => candidate.id === objectId)
-    if (!worldObject || worldObject.metadata.role === 'player') {
+    if (!worldObject || (!includePlayer && (worldObject.metadata.role === 'player' || worldObject.id === 'player'))) {
       continue
     }
 
-    const name = worldObject.metadata.name
+    const name = typeof worldObject.metadata.name === 'string'
+      ? worldObject.metadata.name
+      : (worldObject.metadata.role === 'player' || worldObject.id === 'player' ? worldObject.id : undefined)
     if (typeof name !== 'string') {
       continue
     }
@@ -31,6 +34,22 @@ export function getRoomDirectoryEntries(
 
     if (!discoverable || objectState.discovered === true) {
       entries.push(name)
+    }
+  }
+
+  if (includePlayer) {
+    const playerObject = state.worldObjects.find(
+      (candidate) =>
+        (candidate.roomId === room.id || room.objectIds.includes(candidate.id)) &&
+        (candidate.metadata.role === 'player' || candidate.id === 'player'),
+    )
+    if (playerObject) {
+      const playerName = typeof playerObject.metadata.name === 'string'
+        ? playerObject.metadata.name
+        : playerObject.id
+      if (!entries.includes(playerName)) {
+        entries.push(playerName)
+      }
     }
   }
 
