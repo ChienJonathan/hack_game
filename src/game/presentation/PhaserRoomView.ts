@@ -249,7 +249,7 @@ export class PhaserRoomView {
         }
       }
 
-      const role = worldObject.metadata.role
+      const role = worldObject.metadata.role === 'enemy' ? 'guard' : worldObject.metadata.role
       if (role === 'player' || role === 'guard') {
         const previous = this.lastPositionById.get(worldObject.id)
         const moving = previous !== undefined && Math.hypot(x - previous.x, y - previous.y) > 0.01
@@ -382,11 +382,11 @@ export class PhaserRoomView {
     switch (worldObject.metadata.role) {
       case 'player':
         return PLAYER_TEXTURE_KEY
+      case 'enemy':
       case 'guard':
         return GUARD_TEXTURE_KEY
       case 'weapon':
         return DAGGER_TEXTURE_KEY
-      case 'obejct':
       case 'object':
         return BOULDER_TEXTURE_KEY
       default:

@@ -58,7 +58,7 @@ Synchronous submission pipeline:
 
 - `WorldState`: Root aggregate for rooms, world objects, active process instances, current room, simulation tick, outcome, and command history.
 - `Room`: Enterable area owning exits.
-- `WorldObject`: Domain entity with identity, room ID, metadata, behavior rules, and runtime state. Roles include `player`, `guard`, `weapon`, and `obejct` (such as environmental world objects like `boulder`, which execute `BoulderProcess` on simulation ticks when thrown).
+- `WorldObject`: Domain entity with identity, room ID, metadata, behavior rules, and runtime state. Roles include `player`, `enemy` (hostile characters such as guards), `weapon`, and `object` (such as environmental world objects like `boulder`, which execute `BoulderProcess` on simulation ticks when thrown).
 - `BehaviorRule`: Maps object condition to `ProcessDefinition`.
 - `VirtualWorldPathResolver`: Resolves virtual command paths to room/object IDs (no host filesystem access).
 
@@ -78,12 +78,21 @@ Characters start with 100 Health. Weapon definitions scale cooldowns with simula
 
 Attacks damage nearest character within Reach (bounding-box gap). Items (including Dagger) are automatically picked up when within `PICKUP_REACH = 10` px; both actions mark undiscovered targets discovered. Hitboxes scale proportionally via `scaleX`/`scaleY` from base dimensions (`CHARACTER_SIZE` 110×160, `DAGGER_SIZE` 72×72, `BOULDER_SIZE` 120×120).
 
+### Collisionbox & Solid Obstacle Resolution
+
+All world objects besides weapons have a domain-owned `collisionBox` (`width`, `height`) and physical collision footprint (`hasCollisionBox(role)` returns `true` for `player`, `enemy`, `object`, and `false` for `weapon`). Weapons (`dagger`) have `collisionBox: null`, allowing characters to walk over them for pickup without collision blocking.
+
+`AabbCollisionWorld` provides `overlaps(a, b)` and `resolveMovement(currentBox, targetBox, obstacles, bounds)` to guarantee that collisionboxes never overlap each other:
+- In simulation (`PlayerMovementProcess`, `GuardResponseProcess`, `BehaviorTreeEvaluator`), moving entities resolve motion axis-by-axis against obstacles (all other alive room entities with collisionboxes) and room bounds, sliding smoothly along obstacle edges without penetrating or overlapping.
+- In `LevelEditorScene`, each non-weapon world object displays a visual green collisionbox matching its scaled physical dimensions. Dragging, nudging, scaling, and spawning enforce non-overlapping constraints so collisionboxes can never be placed overlapping each other.
+- In `room1.ts`, all starting world object positions are arranged without collisionbox overlap.
+
 ### First Room Behavior
 
-Room 1 initializes with Player Character (upper-left, named `hacker`), Dagger (lower-left), Boulder (environmental world object with role `obejct`), and Guards (right). All World Object sprites are shown by default. Exiting right leads to Room 2:
+Room 1 initializes with Player Character (upper-left, named `hacker`), Dagger (lower-left), Boulder (environmental world object with role `object`), and Guards (hostile characters with role `enemy`, right). All World Object sprites are shown by default. Exiting right leads to Room 2:
 - Undiscovered world objects display a `?` overhead label at the top of their sprite; the player character displays `hacker` and is never `?`.
 - `ls` discovers objects in the room and reveals their `?` labels to their respective names; direct player interaction (picking up an item or attacking a guard) also marks the target object discovered, while guard movement/pursuit and guard attacks do not discover the guard.
-- `mv <label1> <label2>` throws `<label1>` towards `<label2>` (an object or room exit) with speed `mv_speed` (`DEFAULT_MV_SPEED` 300 px/s in `src/game/commands/mvConstants.ts`, constant across all rooms), unequipping it if equipped; objects with role `obejct`/`object` (such as `boulder`) execute `BoulderProcess` on simulation ticks to update position and thrown state until arriving at the target. If `<label2>` does not exist in the room, it renames `<label1>` to `<label2>` and marks it discovered.
+- `mv <label1> <label2>` throws `<label1>` towards `<label2>` (an object or room exit) with speed `mv_speed` (`DEFAULT_MV_SPEED` 300 px/s in `src/game/commands/mvConstants.ts`, constant across all rooms), unequipping it if equipped; objects with role `object` (such as `boulder`) execute `BoulderProcess` on simulation ticks to update position and thrown state until arriving at the target. If `<label2>` does not exist in the room, it renames `<label1>` to `<label2>` and marks it discovered.
 - The player walks with Arrows (turning left or right horizontally when pressing Left or Right Arrow, flipping the sprite and equipped weapon offset in presentation), automatically picks up the Dagger (and any items) on contact/reach, and attacks with Space or left click. Equipped weapons track the holder position in domain state (`dagger.x = holder.x, dagger.y = holder.y`, translating `dagger.x` forward during attack animation) while `PhaserRoomView` handles local coordinate attachment, mirroring, and attack translation animation. Typing any alphabet key directly switches to Command Mode and begins entering a command.
 - Guard pursues player when player enters room's right half; attacks within Reach.
 - Player reaching 0 Health triggers `game-over`. Defeating guard stops pursuit. Reaching exit triggers `congratulations`.
@@ -192,9 +201,10 @@ Editable configurations export directly to `room1.ts` (`ROOM1_OBJECTS`). Objects
 
 | Action | Control |
 |---|---|
-| **Reposition** | Drag sprite, or arrow keys (1 px, Shift: 10 px) |
-| **Uniform Scale** | Drag yellow corner handle, `+`/`-` keys, or panel `×1.1` / `÷1.1` buttons |
-| **Spawn / Despawn** | `+ GUARD`, `+ DAGGER` buttons; despawn with `REMOVE SELECTED` or `Del`/`Backspace` |
+| **Reposition** | Drag sprite, or arrow keys (1 px, Shift: 10 px; blocked from collisionbox overlap) |
+| **Uniform Scale** | Drag yellow corner handle, `+`/`-` keys, or panel `×1.1` / `÷1.1` buttons (blocked from collisionbox overlap) |
+| **Spawn / Despawn** | `+ GUARD`, `+ DAGGER` buttons (spawns in non-overlapping spot); despawn with `REMOVE SELECTED` or `Del`/`Backspace` |
+| **Collisionboxes** | Non-weapon objects render green collisionbox rectangles (`110×scaleX` by `160×scaleY` for characters, `120×scaleX` by `120×scaleY` for boulders); weapons have no collisionbox |
 | **Selection** | Click sprite, panel list entry, or cycle with `Tab` / `Shift+Tab` |
 | **Character Stats** | Edit guard `max_health` & `speed`, or player `max_health` (`+/-` 10, Shift: 50, click value for prompt) |
 | **Weapon Stats** | Edit weapon `attack_dist`, `attack_dur`, `hold_offset_x`, `hold_offset_y` (`+/-` 10, Shift: 50, click value for prompt) |
@@ -347,3 +357,5 @@ Successful `CombatService.attack` calls increment optional serialized `attackSeq
 `CombatFeedback` observes counters once per view update, treating its first observation as a baseline so saved combat does not replay. It tracks a 240 ms attack, a 180 ms damage flash, and 360 ms blood bursts. Playing effects advance by simulation ticks, inheriting Command Mode slowdown and editor pause; the main scene supplies real frame delta after outcomes so lethal-hit effects finish. Resetting tick history or destroying the view clears transient feedback.
 
 `PhaserRoomView` gives guard attack/recover poses priority over walking, preserves display dimensions, mirrors poses by facing, draws nine small red pixel particles away from the attacker without tinting the character. Blood remains visible independently of defeated-character visibility, is scoped to its room, and is cleaned up on expiry or scene teardown. Blood uses procedural Phaser Graphics rather than an external image. Guard `attack.png` and `recover.png` are transparent 32×32, 16-color images from built-in ImageGen; the prompt preserves the red armored retro guard and requests a forward right-facing gauntlet strike plus a recovery pose, in two equal cells, with flat chunky pixels. Current attack poses are unarmed gauntlet strikes; equipped dagger translation remains separate.
+
+Enemy role compatibility: combat feedback accepts both the current `enemy` role and legacy `guard` snapshots. Character presentation maps `enemy` to existing guard texture keys so walking and attack/recovery animations continue after the role migration.

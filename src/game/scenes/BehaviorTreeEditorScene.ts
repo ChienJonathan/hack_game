@@ -347,7 +347,7 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
 
     // Other non-target enemies: show subtle clickable preview ring
     for (const obj of this.worldState.worldObjects) {
-      if (obj.metadata.role === 'guard' && obj.id !== targetGuard.id) {
+      if ((obj.metadata.role === 'enemy' || obj.metadata.role === 'guard') && obj.id !== targetGuard.id) {
         const oState = obj.state as Record<string, unknown>
         if (oState.alive !== false) {
           const pos = this.sessionBundle.session.getRenderPosition(obj.id) ?? {
@@ -1184,7 +1184,7 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
   }
 
   private async saveToGame(): Promise<void> {
-    const guard = ROOM1_OBJECTS.find((o) => o.role === 'guard' || o.id === this.sessionBundle.targetGuardId)
+    const guard = ROOM1_OBJECTS.find((o) => o.role === 'enemy' || o.role === 'guard' || o.id === this.sessionBundle.targetGuardId)
     if (guard) {
       ;(guard as unknown as Record<string, unknown>).behaviorTree = this.currentTree
     }
@@ -1264,7 +1264,7 @@ export class BehaviorTreeEditorScene extends Phaser.Scene {
     let minDistance = Infinity
 
     for (const obj of this.worldState.worldObjects) {
-      if (obj.metadata.role !== 'guard' && !obj.id.startsWith('guard')) {
+      if (obj.metadata.role !== 'enemy' && obj.metadata.role !== 'guard' && !obj.id.startsWith('guard')) {
         continue
       }
       const gState = obj.state as Record<string, unknown>

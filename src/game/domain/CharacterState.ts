@@ -14,7 +14,7 @@ export interface CharacterState extends MutableWorldObjectState {
   facing: 'left' | 'right'
 }
 
-export const CHARACTER_ROLES: readonly string[] = ['player', 'guard']
+export const CHARACTER_ROLES: readonly string[] = ['player', 'enemy', 'guard']
 
 export type CharacterCombatState = CharacterState & {
   attackSequence?: number

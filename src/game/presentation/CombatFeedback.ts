@@ -37,7 +37,7 @@ export class CombatFeedback {
       if (this.bursts[i].ageMs >= 360) this.bursts.splice(i, 1)
     }
     for (const object of state.worldObjects) {
-      if (object.metadata.role !== 'player' && object.metadata.role !== 'guard') continue
+      if (object.metadata.role !== 'player' && object.metadata.role !== 'guard' && object.metadata.role !== 'enemy') continue
       const data = object.state as unknown as CharacterCombatState
       const attack = data.attackSequence ?? 0
       const damage = data.damageSequence ?? 0

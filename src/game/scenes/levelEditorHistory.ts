@@ -1,5 +1,43 @@
-import type { PlayerSpeedConfig } from '../content/room1.ts'
+import type { PlayerSpeedConfig, WorldObjectRole } from '../content/room1.ts'
 import { GAME_WEAPON_CONFIG } from '../content/weaponConstants.ts'
+import { computeCollisionSize } from '../content/room1WorldState.ts'
+
+export function computeEditorCollisionBox(
+  role: WorldObjectRole,
+  x: number,
+  y: number,
+  scaleX: number,
+  scaleY: number,
+): { x: number; y: number; width: number; height: number } | null {
+  if (role === 'weapon') return null
+  const size = computeCollisionSize(role, scaleX, scaleY)
+  return { x, y, width: size.width, height: size.height }
+}
+
+export function wouldOverlapAnyEditorObject(
+  objectId: string,
+  targetRole: WorldObjectRole,
+  x: number,
+  y: number,
+  scaleX: number,
+  scaleY: number,
+  allObjects: readonly { id: string; role: WorldObjectRole; x: number; y: number; scaleX: number; scaleY: number }[],
+): boolean {
+  if (targetRole === 'weapon') return false
+  const targetSize = computeCollisionSize(targetRole, scaleX, scaleY)
+
+  for (const other of allObjects) {
+    if (other.id === objectId || other.role === 'weapon') continue
+    const otherSize = computeCollisionSize(other.role, other.scaleX, other.scaleY)
+    if (
+      Math.abs(x - other.x) < (targetSize.width + otherSize.width) / 2 &&
+      Math.abs(y - other.y) < (targetSize.height + otherSize.height) / 2
+    ) {
+      return true
+    }
+  }
+  return false
+}
 
 export interface ScalableMovableObject {
   id: string
@@ -72,14 +110,14 @@ export interface PropertyChange {
 export interface SpawnChange {
   readonly type: 'spawn'
   readonly objectId: string
-  readonly role: 'player' | 'guard' | 'weapon' | 'obejct' | 'object'
+  readonly role: WorldObjectRole
   readonly snapshot: ScalableMovableObject
 }
 
 export interface DespawnChange {
   readonly type: 'despawn'
   readonly objectId: string
-  readonly role: 'player' | 'guard' | 'weapon' | 'obejct' | 'object'
+  readonly role: WorldObjectRole
   readonly snapshot: ScalableMovableObject
 }
 

@@ -6,7 +6,7 @@ export interface PlayerSpeedConfig {
   [key: string]: number
 }
 
-export type WorldObjectRole = 'player' | 'guard' | 'weapon' | 'obejct' | 'object'
+export type WorldObjectRole = 'player' | 'enemy' | 'weapon' | 'object' | 'guard'
 
 export interface RoomObjectConfig {
   id: string
@@ -45,7 +45,7 @@ export const ROOM1_OBJECTS: RoomObjectConfig[] = [
   },
   {
     id: "boulder",
-    role: "obejct",
+    role: "object",
     x: 800,
     y: 280,
     displayWidth: 120,
@@ -69,7 +69,7 @@ export const ROOM1_OBJECTS: RoomObjectConfig[] = [
   },
   {
     id: "guard",
-    role: "guard",
+    role: "enemy",
     x: 1490,
     y: 365,
     displayWidth: 176,
@@ -81,7 +81,7 @@ export const ROOM1_OBJECTS: RoomObjectConfig[] = [
   },
   {
     id: "guard-2",
-    role: "guard",
+    role: "enemy",
     x: 1000,
     y: 410,
     displayWidth: 176,
@@ -93,8 +93,8 @@ export const ROOM1_OBJECTS: RoomObjectConfig[] = [
   },
   {
     id: "guard-3",
-    role: "guard",
-    x: 1040,
+    role: "enemy",
+    x: 1160,
     y: 440,
     displayWidth: 87,
     displayHeight: 87,
