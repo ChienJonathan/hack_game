@@ -1,4 +1,3 @@
-import { ROOM_IDS } from '../../content/room1Constants.ts'
 import type { ProcessTickContext, WorldObjectProcess } from '../../simulation/TickSimulationEngine.ts'
 import { BehaviorTreeEvaluator } from './BehaviorTreeEvaluator.ts'
 import { STANDARD_GUARD_TREE } from './BehaviorTreePresets.ts'
@@ -30,7 +29,7 @@ export class BehaviorTreeProcess implements WorldObjectProcess {
   }
 
   tick(context: ProcessTickContext): void {
-    if (context.state.currentRoomId !== ROOM_IDS.first || context.state.outcome !== 'playing') {
+    if (context.worldObject.roomId !== context.state.currentRoomId || context.state.outcome !== 'playing') {
       return
     }
 

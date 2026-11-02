@@ -33,12 +33,13 @@ const alwaysActiveRule = (processDefinitionId: string) => ({
 })
 
 function createRoomWorldObject(
+  roomId: string,
   id: string,
   metadata: WorldObject['metadata'],
   behaviorRules: WorldObject['behaviorRules'],
   state: WorldObject['state'],
 ): WorldObject {
-  return new BasicWorldObject(id, ROOM_IDS.first, metadata, behaviorRules, state)
+  return new BasicWorldObject(id, roomId, metadata, behaviorRules, state)
 }
 
 function physicsAttrState(obj: RoomObjectConfig): PhysicsAttrOverride {
@@ -126,12 +127,14 @@ function colliderState(obj: RoomObjectConfig, width: number, height: number) {
   }
 }
 
-export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJECTS): WorldState {
-  const worldObjects: WorldObject[] = objects.map((obj) => {
+/** Builds the World Objects described by `objects`, all placed in `roomId`. */
+export function createRoomObjects(objects: readonly RoomObjectConfig[], roomId: string): WorldObject[] {
+  return objects.map((obj) => {
     if (obj.role === 'player') {
       const { scaleX, scaleY } = resolveScale(obj, CHARACTER_BASE_SIZE.width, CHARACTER_BASE_SIZE.height)
       const { width, height } = computeColliderSize('player', scaleX, scaleY, obj)
       return createRoomWorldObject(
+        roomId,
         obj.id,
         { name: 'hacker', role: 'player', discoverable: false, colliderTags: defaultColliderTags('player') },
         [alwaysActiveRule(PROCESS_IDS.player)],
@@ -186,8 +189,9 @@ export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJE
       const { scaleX, scaleY } = resolveScale(obj, DAGGER_SIZE.width, DAGGER_SIZE.height)
       const { width, height } = computeCollisionSize('weapon', scaleX, scaleY, obj.colliderWidth, obj.colliderHeight)
       return createRoomWorldObject(
+        roomId,
         obj.id,
-        { name: obj.id, role: 'weapon', weaponId: 'dagger', discoverable: true, colliderTags: defaultColliderTags('weapon') },
+        { name: obj.name ?? obj.id, role: 'weapon', weaponId: 'dagger', discoverable: true, colliderTags: defaultColliderTags('weapon') },
         [alwaysActiveRule(PROCESS_IDS.dagger)],
         {
           x: obj.x,
@@ -215,8 +219,9 @@ export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJE
       const { scaleX, scaleY } = resolveScale(obj, BOULDER_BASE_SIZE.width, BOULDER_BASE_SIZE.height)
       const { width, height } = computeColliderSize('object', scaleX, scaleY, obj)
       return createRoomWorldObject(
+        roomId,
         obj.id,
-        { name: obj.id, role: 'object', discoverable: true, colliderTags: defaultColliderTags('object') },
+        { name: obj.name ?? obj.id, role: 'object', discoverable: true, colliderTags: defaultColliderTags('object') },
         [alwaysActiveRule(PROCESS_IDS.boulder)],
         {
           x: obj.x,
@@ -238,8 +243,9 @@ export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJE
     const resolvedRole = obj.role === 'guard' ? 'enemy' : (obj.role ?? 'enemy')
     const { width, height } = computeColliderSize(resolvedRole, scaleX, scaleY, obj)
     return createRoomWorldObject(
+      roomId,
       obj.id,
-      { name: obj.id, role: resolvedRole, discoverable: true, colliderTags: defaultColliderTags('enemy') },
+      { name: obj.name ?? obj.id, role: resolvedRole, discoverable: true, colliderTags: defaultColliderTags('enemy') },
       [alwaysActiveRule(PROCESS_IDS.guard)],
       {
         x: obj.x,
@@ -261,14 +267,19 @@ export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJE
         chasing: false,
         attacking: false,
         facing: 'right',
+        ...(obj.passive ? { passive: true } : {}),
       },
     )
   })
+}
+
+export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJECTS): WorldState {
+  const worldObjects = createRoomObjects(objects, ROOM_IDS.first)
 
   const firstRoom: Room = {
     id: ROOM_IDS.first,
     objectIds: worldObjects.map((o) => o.id),
-    exits: [{ targetRoomId: ROOM_IDS.second, label: ROOM_NAMES[ROOM_IDS.second], ...ROOM_LAYOUT.exit }],
+    exits: [{ targetRoomId: ROOM_IDS.second, label: ROOM_NAMES[ROOM_IDS.second], ...ROOM_LAYOUT.exit, endsGame: true }],
     state: { name: ROOM_NAMES[ROOM_IDS.first], width: ROOM_LAYOUT.width, height: ROOM_LAYOUT.height },
     bounds: ROOM_BOUNDS,
   }

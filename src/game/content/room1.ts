@@ -36,6 +36,10 @@ export interface RoomObjectConfig extends PhysicsAttrConfig {
   colliderHeight?: number
   /** Outline of the collider; a `circle` uses `colliderWidth` as its diameter. Defaults to `box`. */
   colliderShape?: 'box' | 'circle'
+  /** Shown and typed name when it differs from `id` (ids are unique across all rooms). */
+  name?: string
+  /** An enemy that never moves or attacks, such as a training dummy. */
+  passive?: boolean
 }
 
 export const ROOM1_OBJECTS: RoomObjectConfig[] = [

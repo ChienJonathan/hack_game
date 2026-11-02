@@ -13,7 +13,8 @@ import daggerImageUrl from '../../assets/game/items/weapons/dagger-horizontal.pn
 import boulderImageUrl from '../../assets/game/objects/boulder.png'
 import type { WorldObject } from '../domain/WorldObject.ts'
 import type { WorldState } from '../domain/WorldState.ts'
-import { WORLD_OBJECT_IDS, ROOM_IDS, ROOM_LAYOUT, ROOM_NAMES } from '../content/room1Constants.ts'
+import { WORLD_OBJECT_IDS, ROOM_LAYOUT, ROOM_NAMES } from '../content/room1Constants.ts'
+import { isExitOpen } from '../domain/RoomTravel.ts'
 import { WorldObjectViewRegistry } from './WorldObjectViewRegistry.ts'
 
 export const PLAYER_TEXTURE_KEY = 'player-idle'
@@ -92,7 +93,10 @@ export class PhaserRoomView {
   private roomTitle: Phaser.GameObjects.Text | undefined
   private roomFrame: Phaser.GameObjects.Graphics | undefined
   private doorFrame: Phaser.GameObjects.Graphics | undefined
-  private doorLabel: Phaser.GameObjects.Text | undefined
+  private readonly doorLabels: Phaser.GameObjects.Text[] = []
+  /** What the doors were last drawn for: the room, its exits and whether each is open. */
+  private doorKey = ''
+  private scene: Phaser.Scene | undefined
   private readonly combatFeedback = new CombatFeedback()
   private combatParticles: Phaser.GameObjects.Graphics | undefined
   private healthBars: Phaser.GameObjects.Graphics | undefined
@@ -105,27 +109,9 @@ export class PhaserRoomView {
     this.combatParticles = scene.add.graphics().setDepth(5)
     drawRoomBackdrop(this.roomFrame)
 
+    this.scene = scene
     this.doorFrame = scene.add.graphics().setDepth(1)
-    this.doorFrame.fillStyle(0x0b1620, 1).fillRect(ROOM_LAYOUT.exit.x - 42, ROOM_LAYOUT.exit.y - 84, 84, 168)
-    this.doorFrame.lineStyle(6, 0x799594, 1).strokeRect(
-      ROOM_LAYOUT.exit.x - 42,
-      ROOM_LAYOUT.exit.y - 84,
-      84,
-      168,
-    )
-    this.doorFrame.fillStyle(0x7fc5b3, 0.12).fillRect(ROOM_LAYOUT.exit.x - 34, ROOM_LAYOUT.exit.y - 76, 68, 152)
-    this.doorFrame.fillStyle(0xa7dcc5, 1).fillRect(ROOM_LAYOUT.exit.x - 20, ROOM_LAYOUT.exit.y - 3, 40, 6)
-    this.doorFrame.lineStyle(3, 0xa7dcc5, 1)
-      .lineBetween(ROOM_LAYOUT.exit.x + 20, ROOM_LAYOUT.exit.y, ROOM_LAYOUT.exit.x + 8, ROOM_LAYOUT.exit.y - 12)
-      .lineBetween(ROOM_LAYOUT.exit.x + 20, ROOM_LAYOUT.exit.y, ROOM_LAYOUT.exit.x + 8, ROOM_LAYOUT.exit.y + 12)
-    this.doorLabel = scene.add
-      .text(ROOM_LAYOUT.exit.x, ROOM_LAYOUT.exit.y + 100, ROOM_NAMES[ROOM_IDS.second], {
-        fontFamily: '"Press Start 2P", monospace',
-        fontSize: 20,
-        color: TEXT_COLOR,
-      })
-      .setOrigin(0.5)
-      .setDepth(2)
+    this.doorKey = ''
 
     if (showRoomTitle) {
       this.roomTitle = scene.add
@@ -187,8 +173,7 @@ export class PhaserRoomView {
     }
     const currentRoom = state.rooms.find((room) => room.id === state.currentRoomId)
     this.roomTitle?.setText(currentRoom ? ROOM_NAMES[currentRoom.id] ?? currentRoom.id : 'NO ROOM')
-    this.doorFrame?.setVisible(state.currentRoomId === ROOM_IDS.first)
-    this.doorLabel?.setVisible(state.currentRoomId === ROOM_IDS.first)
+    this.drawDoors(state)
 
     this.healthBars?.clear()
     for (const worldObject of state.worldObjects) {
@@ -354,13 +339,68 @@ export class PhaserRoomView {
     this.roomTitle?.destroy()
     this.roomFrame?.destroy()
     this.doorFrame?.destroy()
-    this.doorLabel?.destroy()
+    for (const label of this.doorLabels) {
+      label.destroy()
+    }
+    this.doorLabels.length = 0
+    this.doorKey = ''
+    this.scene = undefined
     this.roomTitle = undefined
     this.healthBars?.destroy()
     this.healthBars = undefined
     this.roomFrame = undefined
     this.doorFrame = undefined
-    this.doorLabel = undefined
+  }
+
+  /** Draws a door for each Exit of the current room: teal with an arrow when open, red and barred when locked. */
+  private drawDoors(state: WorldState): void {
+    const room = state.rooms.find((candidate) => candidate.id === state.currentRoomId)
+    const exits = room?.exits ?? []
+    const open = exits.map((exit) => (room ? isExitOpen(state, room, exit) : true))
+    const key = `${room?.id}|${exits.map((exit, i) => `${exit.label}@${exit.x},${exit.y}:${open[i]}`).join(';')}`
+    if (key === this.doorKey || !this.doorFrame) {
+      return
+    }
+    this.doorKey = key
+
+    const frame = this.doorFrame.clear()
+    exits.forEach((exit, index) => {
+      const { x, y } = exit
+      const isOpen = open[index]
+      const edge = isOpen ? 0x799594 : 0xa0484c
+      const accent = isOpen ? 0xa7dcc5 : 0xe07a72
+      frame.fillStyle(0x0b1620, 1).fillRect(x - 42, y - 84, 84, 168)
+      frame.lineStyle(6, edge, 1).strokeRect(x - 42, y - 84, 84, 168)
+      frame.fillStyle(isOpen ? 0x7fc5b3 : 0xc0504d, 0.12).fillRect(x - 34, y - 76, 68, 152)
+      if (isOpen) {
+        frame.fillStyle(accent, 1).fillRect(x - 20, y - 3, 40, 6)
+        frame.lineStyle(3, accent, 1)
+          .lineBetween(x + 20, y, x + 8, y - 12)
+          .lineBetween(x + 20, y, x + 8, y + 12)
+      } else {
+        for (const barX of [x - 20, x - 4, x + 12]) {
+          frame.fillStyle(accent, 1).fillRect(barX, y - 70, 8, 140)
+        }
+      }
+
+      let label = this.doorLabels[index]
+      if (!label && this.scene) {
+        label = this.scene.add
+          .text(x, y + 100, '', { fontFamily: '"Press Start 2P", monospace', fontSize: 16, color: TEXT_COLOR, align: 'center' })
+          .setOrigin(0.5, 0)
+          .setDepth(2)
+        this.doorLabels[index] = label
+      }
+      if (label) {
+        label.setText(isOpen ? exit.label : `${exit.label}\nLOCKED`).setVisible(true)
+        // Keep long room names inside the room's right wall.
+        const centreX = Math.min(x, ROOM_LAYOUT.right - label.width / 2)
+        label.setPosition(centreX, y + 92)
+      }
+    })
+    for (const label of this.doorLabels.slice(exits.length)) {
+      label.setVisible(false)
+    }
   }
 
   private drawHealthBar(

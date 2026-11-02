@@ -55,6 +55,12 @@ export function generateRoom1Source(objects: RoomObjectConfig[]): string {
     if (obj.colliderHeight !== undefined) {
       lines.push(`    colliderHeight: ${Math.round(obj.colliderHeight)},`)
     }
+    if (obj.name !== undefined) {
+      lines.push(`    name: ${JSON.stringify(obj.name)},`)
+    }
+    if (obj.passive) {
+      lines.push(`    passive: true,`)
+    }
     if (obj.colliderShape !== undefined && obj.colliderShape !== 'box') {
       lines.push(`    colliderShape: ${JSON.stringify(obj.colliderShape)},`)
     }
@@ -104,6 +110,10 @@ export interface RoomObjectConfig extends PhysicsAttrConfig {
   colliderHeight?: number
   /** Outline of the collider; a \`circle\` uses \`colliderWidth\` as its diameter. Defaults to \`box\`. */
   colliderShape?: 'box' | 'circle'
+  /** Shown and typed name when it differs from \`id\` (ids are unique across all rooms). */
+  name?: string
+  /** An enemy that never moves or attacks, such as a training dummy. */
+  passive?: boolean
 }
 
 export const ROOM1_OBJECTS: RoomObjectConfig[] = [
