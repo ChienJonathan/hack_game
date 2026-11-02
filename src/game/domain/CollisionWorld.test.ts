@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { AabbCollisionWorld } from './CollisionWorld.ts'
+import { ShapeCollisionWorld } from './CollisionWorld.ts'
 
-const world = new AabbCollisionWorld()
+const world = new ShapeCollisionWorld()
 
 describe('gap', () => {
   it('is the edge-to-edge distance between horizontally separated boxes', () => {

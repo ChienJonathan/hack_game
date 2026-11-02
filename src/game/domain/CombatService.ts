@@ -1,4 +1,4 @@
-import { AabbCollisionWorld } from './CollisionWorld.ts'
+import { ShapeCollisionWorld, boxFromState } from './CollisionWorld.ts'
 import type { CollisionWorld } from './CollisionWorld.ts'
 import { CHARACTER_ROLES } from './CharacterState.ts'
 import type { CharacterCombatState } from './CharacterState.ts'
@@ -17,14 +17,13 @@ function characterState(worldObject: WorldObject): CharacterCombatState {
 }
 
 function boxOf(worldObject: WorldObject) {
-  const { x, y, width, height } = characterState(worldObject)
-  return { x, y, width, height }
+  return boxFromState(characterState(worldObject))
 }
 
 export class CombatService {
   private readonly collision: CollisionWorld
 
-  constructor(collision: CollisionWorld = new AabbCollisionWorld()) {
+  constructor(collision: CollisionWorld = new ShapeCollisionWorld()) {
     this.collision = collision
   }
 

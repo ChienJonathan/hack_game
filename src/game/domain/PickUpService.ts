@@ -1,4 +1,4 @@
-import { AabbCollisionWorld } from './CollisionWorld.ts'
+import { ShapeCollisionWorld, boxFromState } from './CollisionWorld.ts'
 import type { CollisionWorld } from './CollisionWorld.ts'
 import type { WorldObject } from './WorldObject.ts'
 import { getMutableWorldObjectState } from './WorldObjectState.ts'
@@ -28,14 +28,13 @@ export type PickUpResult =
   | { readonly status: 'already-armed' }
 
 function boxOf(worldObject: WorldObject) {
-  const { x, y, width, height } = getMutableWorldObjectState<PositionedState>(worldObject)
-  return { x, y, width, height }
+  return boxFromState(getMutableWorldObjectState<PositionedState>(worldObject))
 }
 
 export class PickUpService {
   private readonly collision: CollisionWorld
 
-  constructor(collision: CollisionWorld = new AabbCollisionWorld()) {
+  constructor(collision: CollisionWorld = new ShapeCollisionWorld()) {
     this.collision = collision
   }
 

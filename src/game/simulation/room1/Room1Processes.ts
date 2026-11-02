@@ -18,7 +18,7 @@ import {
 } from '../../content/weaponConstants.ts'
 import type { PlayerSpeedConfig } from '../../content/room1.ts'
 import type { CharacterState } from '../../domain/CharacterState.ts'
-import { AabbCollisionWorld } from '../../domain/CollisionWorld.ts'
+import { ShapeCollisionWorld, boxFromState } from '../../domain/CollisionWorld.ts'
 import { CombatService } from '../../domain/CombatService.ts'
 import { PICKUP_REACH, PickUpService } from '../../domain/PickUpService.ts'
 import { applyPlayerDefeat } from '../../domain/PlayerDefeat.ts'
@@ -55,7 +55,7 @@ interface GuardState extends CharacterState {
   attacking: boolean
 }
 
-const collision = new AabbCollisionWorld()
+const collision = new ShapeCollisionWorld()
 const combat = new CombatService(collision)
 const pickUp = new PickUpService(collision)
 
@@ -77,8 +77,8 @@ function objectState<T extends MutableWorldObjectState>(
   return getMutableWorldObjectState<T>(worldObject)
 }
 
-function boxOf(entity: { x: number; y: number; width: number; height: number }) {
-  return { x: entity.x, y: entity.y, width: entity.width, height: entity.height }
+function boxOf(entity: { x: number; y: number; width: number; height: number; shape?: unknown }) {
+  return boxFromState(entity)
 }
 
 /** Default walking physics for a player whose speed is only a number or has no config. */

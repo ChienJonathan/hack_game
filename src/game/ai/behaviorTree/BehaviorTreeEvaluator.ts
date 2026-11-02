@@ -1,6 +1,6 @@
 import { ROOM_LAYOUT, WORLD_OBJECT_IDS } from '../../content/room1Constants.ts'
 import type { CharacterState } from '../../domain/CharacterState.ts'
-import { AabbCollisionWorld } from '../../domain/CollisionWorld.ts'
+import { ShapeCollisionWorld, boxFromState } from '../../domain/CollisionWorld.ts'
 import type { WorldObject } from '../../domain/WorldObject.ts'
 import { CombatService } from '../../domain/CombatService.ts'
 import { weaponFor } from '../../domain/WeaponDefinition.ts'
@@ -13,7 +13,7 @@ import type {
   BehaviorTreeStatus,
 } from './BehaviorTreeTypes.ts'
 
-const collision = new AabbCollisionWorld()
+const collision = new ShapeCollisionWorld()
 const combat = new CombatService(collision)
 
 interface Box {
@@ -23,8 +23,8 @@ interface Box {
   height: number
 }
 
-function boxOf(entity: { x: number; y: number; width: number; height: number }): Box {
-  return { x: entity.x, y: entity.y, width: entity.width, height: entity.height }
+function boxOf(entity: { x: number; y: number; width: number; height: number; shape?: unknown }): Box {
+  return boxFromState(entity)
 }
 
 function distance(a: { x: number; y: number }, b: { x: number; y: number }): number {

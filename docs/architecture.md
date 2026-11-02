@@ -14,7 +14,7 @@ Architecture specification for the command-driven RTS game and initial room (Vit
 - **Execution & Simulation**: Commands run synchronously; autonomous behavior advances in fixed simulation ticks (input mode sets Time Scale, ADR 0005).
 - **Process Model**: `ProcessDefinition` is reusable behavior; `ProcessInstance` tracks runtime state per world object.
 - **Tick Engine**: `TickSimulationEngine` accumulates time into fixed 60 Hz (`1000/60` ms) ticks. A tick runs the processes (which apply Forces), `MvDrive`, the physics step, the processes' `afterPhysics` hooks, contacts, and `MvDrive.settle`, in stable object order.
-- **Collision & Reach**: Domain AABB logic (`CollisionWorld`) handles overlap, reach, and targeting without Phaser physics (ADR 0007). Interaction ignores Discovery (ADR 0006).
+- **Collision & Reach**: Domain collision logic (`CollisionWorld`, axis-aligned boxes plus circles) handles overlap, reach, and targeting without Phaser physics (ADR 0007, ADR 0011). Interaction ignores Discovery (ADR 0006).
 - **Contacts**: Collider Tags on objects and a generic `ContactResolver` decide what a touch triggers (ADR 0008); whether two objects Collide is decided by the same tags (`collidesPhysically`).
 - **Physics & Throws**: all movement is Forces integrated by `PhysicsWorld` (drag, speed cap, Collisions with restitution); `mv` only applies a pull through `MvDrive` (ADR 0010, superseding the flight rules of ADR 0009).
 - **Persistence**: `SaveRepository` (`LocalStorageSaveRepository`) stores snapshots with domain state and command history.
@@ -78,7 +78,7 @@ Characters start with 100 Health. Weapon definitions scale cooldowns with simula
 | Dagger | 35 | 0.5s | 10 px | Single-target |
 | Guard | 20 | 1.0s | 5 px | Hostile guard attack |
 
-Attacks damage nearest character within Reach (bounding-box gap). Items (including Dagger) are automatically picked up when within `PICKUP_REACH = 10` px; both actions mark undiscovered targets discovered. Hitboxes scale proportionally via `scaleX`/`scaleY` from base dimensions (`CHARACTER_SIZE` 110×160, `DAGGER_SIZE` 72×72, `BOULDER_SIZE` 120×120).
+Attacks damage nearest character within Reach (bounding-box gap). Items (including Dagger) are automatically picked up when within `PICKUP_REACH = 10` px; both actions mark undiscovered targets discovered. Hitboxes scale proportionally via `scaleX`/`scaleY` from base dimensions (`CHARACTER_SIZE` 110×160, `DAGGER_SIZE` 72×72, `BOULDER_SIZE` 120×120); Reach and pick-up gaps are measured to a circle's edge for circle colliders.
 
 #### Collider Tags and Impact Damage
 
@@ -99,11 +99,11 @@ After the rules run, `applyPlayerDefeat` (`domain/PlayerDefeat.ts`) sets `game-o
 Every body of the current room (an object with `x/y/width/height`, alive, not a held Weapon) is moved only by Forces. Processes call `applyForce(obj, fx, fy)`, which adds to `forceX/forceY` in the object state; `PhysicsWorld.step` consumes and clears them each tick:
 
 1. **integrate**: `v + F ÷ mass × dt` is capped at `max(max_velocity, the speed before the Force)`, then multiplied by `max(0, 1 − (drag + friction) × dt)`; ground `friction` is left out while the body has `thrown` set. `max_velocity` only limits what a Force can add, so speed given by a Collision is kept. A body with no Force this tick and `|v| < min_velocity` is set to rest. A body with `frozen` set (an arriving Throw) is skipped for the tick.
-2. **separate**: bodies that collide physically and already overlap are pushed apart along the shallowest axis; only one of each pair moves (the one with a Force or velocity, else the lighter one).
+2. **separate**: bodies that collide physically and already overlap are pushed apart along the shallowest axis (along the contact normal when a circle is involved); only one of each pair moves (the one with a Force or velocity, else the lighter one).
 3. **move**: each body moves by `v × dt` through `resolveMovement` against the bodies it collides with and the room bounds (`Room.bounds`). Bounds clamp the position and zero the speed into the edge, with no bounce.
 4. **collide**: each touching pair that is approaching exchanges motion with `resolveCollision` (`domain/CollisionResponse.ts`) and the `onCollision` listeners are called with `{ a, b, normal, closingSpeed }`.
 
-A Collision exchanges motion along the line between the two box centres. The restitution is the product of both bodies' (`restitution`, default 0.5). A body at rest that would gain less than `min_collide_move_velocity` (50 px/s) counts as infinitely heavy and the mover bounces off it with `−e × v`. Tangential speed is unchanged. Walking bodies take part: a player or guard that runs into the boulder pushes it if the impact is fast enough, while leaning on it from standstill does not move it.
+A Collision exchanges motion along the line between the two box centres, or along the contact normal (`contactNormal`, the circle's surface normal) when either body is a circle. The restitution is the product of both bodies' (`restitution`, default 0.5). A body at rest that would gain less than `min_collide_move_velocity` (50 px/s) counts as infinitely heavy and the mover bounces off it with `−e × v`. Tangential speed is unchanged. Walking bodies take part: a player or guard that runs into the boulder pushes it if the impact is fast enough, while leaning on it from standstill does not move it.
 
 **Walking and pursuit** only apply Forces, and every drive only works up to its own top speed: a body knocked beyond `maxSpeed` (or a guard's `speed`) is not braked, turned around or pushed further, so drag and friction alone slow it until it is back below. `accelerateToward` also makes up for drag and friction so a drive reaches its target speed, and a `null` target leaves an axis alone. `simulation/Drive.ts` has `accelerateToward(obj, targetVx, targetVy, maxAcceleration, tickMs)` (Force = mass × the velocity change that drag leaves at the target, limited to `maxAcceleration × dt`, so mass does not change walking speed), `steerToward`/`steerAway`, and `GUARD_ACCELERATION` (2500 px/s²). The player process (`walkingChange`) accelerates towards `input × maxSpeed` with `acceleration`/`turnaroundAcceleration`, brakes with `frictionAcceleration` without input (both only below `maxSpeed`), and leaves a speed beyond `maxSpeed` (a push) alone. Guards and behavior-tree actions steer at `speed` (times the node's multiplier) and slow down to stop at their reach; idle guards brake (`brake`, also only below their `speed`). A Thrown Character keeps its own walking or pursuit Force, so Forces simply add up.
 
@@ -125,8 +125,13 @@ Parameters: `mv_acceleration` 5000 px/s² (`commands/mvConstants.ts`, `GAME_MV_C
 
 Every world object, weapons included, has a domain-owned `collisionBox` (`width`, `height`) and physical footprint; a Weapon's defaults to its scaled `DAGGER_SIZE` and `colliderWidth`/`colliderHeight` in `room1.ts` override it. Which pairs actually collide is decided by the Collider Tags (see above). A held Weapon and a defeated Character take no part in the physics.
 
-`AabbCollisionWorld` provides `overlaps(a, b)`, `gap` and `resolveMovement(currentBox, targetBox, obstacles, bounds)`, which `PhysicsWorld` uses to guarantee that bodies that collide never overlap each other: movement is resolved axis-by-axis against the other bodies, sliding along edges. Processes no longer resolve movement themselves.
-- In `LevelEditorScene`, each non-weapon world object displays a visual green collisionbox matching its physical dimensions. Non-weapon collisionboxes are directly editable via handle dragging (green handle at bottom-right of the collider box), inspector panel dimension controls (`box_w`, `box_h`), scale buttons (`BOX +` / `BOX -`), and hotkeys (`[` / `]`). Dragging, nudging, scaling, collider resizing, and spawning refuse positions where two objects that collide physically (`rolesCollide`) would overlap, so a Dagger can sit over a Guard but not over the boulder. Weapon collider boxes are not editable in the editor yet.
+**Collider shape** (ADR 0011): a collider is a `box` (default) or a `circle`. `RoomObjectConfig.colliderShape: 'circle'` makes `createInitialWorldState` store `shape: 'circle'` in the object state and use `colliderWidth` as the diameter (`computeColliderSize`; `width = height = colliderHeight = diameter`). Box objects store no `shape`. In Room 1 only the boulder is a circle (diameter 128, the visible rock in its 154 px sprite). `Box` (in `domain/CollisionWorld.ts`) carries the optional `shape`, and `boxFromState(state)` is how every caller (physics, combat, pick-up, room processes, behavior trees) builds one, so the shape is never dropped.
+
+`ShapeCollisionWorld` provides `overlaps(a, b)`, `gap`, `contactNormal`, `clampToBounds` and `resolveMovement(currentBox, targetBox, obstacles, bounds)`, which `PhysicsWorld` uses to guarantee that bodies that collide never overlap each other. `contactOf(a, b)` returns `{ normal, distance }` for any pair (signed: positive is the gap, negative the overlap depth; circle–circle, circle–box including a centre inside the box, and box–box).
+- **Box with box**: unchanged AABB rules. Movement is resolved axis-by-axis against the other bodies, sliding along edges; overlap is strict, gap is the edge-gap distance, and the Collision normal is the line between centres.
+- **Any pair with a circle**: the body moves to its target (after axis-by-axis resolution against plain boxes, if the mover is a box), then is pushed out of each circle-involved obstacle along the contact normal (up to four passes), so it slides around the curve. It may not move deeper into an obstacle it already overlapped at the start of the step. Room bounds clamp a circle by its bounding square. A final check falls back to keeping only the x or only the y move, or not moving, so a step never ends inside something it was clear of.
+- Processes no longer resolve movement themselves.
+- In `LevelEditorScene`, each non-weapon world object displays a visual green collider matching its physical dimensions: a rectangle for boxes, a circle (`Phaser.GameObjects.Ellipse`) for circle colliders. Non-weapon collisionboxes are directly editable via handle dragging (green handle at bottom-right of the collider box), inspector panel dimension controls (`box_w`, `box_h`), scale buttons (`BOX +` / `BOX -`), and hotkeys (`[` / `]`). Dragging, nudging, scaling, collider resizing, and spawning refuse positions where two objects that collide physically (`rolesCollide`) would overlap, using the same shape-aware overlap as the game (`wouldOverlapAnyEditorObject`), so a Dagger can sit over a Guard but not over the boulder. A circle collider's width and height are one diameter: `box_w`, `box_h`, the prompts, `BOX +`/`BOX -`, `[`/`]` and the handle drag change both together. `SAVE TO ROOM1.TS` writes `colliderShape` for circles, and undoing a despawn restores the shape. When the collider is about as large as the sprite, the yellow scale handle overlaps the green collider handle and takes the drag. Weapon collider boxes are not editable in the editor yet.
 - In `room1.ts`, all starting world object positions are arranged without overlap of objects that collide.
 
 ### First Room Behavior
@@ -142,7 +147,7 @@ Room 1 initializes with Player Character (upper-left, named `hacker`), Dagger (l
 
 ### Persistence
 
-`WorldStateCodec` converts between `WorldState` and `WorldStateSnapshot`. `SaveSnapshot` (`schemaVersion` 2; a save from an older schema reads as no save) bundles domain state and raw command history into `LocalStorageSaveRepository`, which holds exactly one Save Slot (default key `hack-game.save`; Speed and AI editor sessions use `hack-game.editor-save` so they never touch the game's slot).
+`WorldStateCodec` converts between `WorldState` and `WorldStateSnapshot`. `SaveSnapshot` (`schemaVersion` 3; a save from an older schema reads as no save) bundles domain state and raw command history into `LocalStorageSaveRepository`, which holds exactly one Save Slot (default key `hack-game.save`; Speed and AI editor sessions use `hack-game.editor-save` so they never touch the game's slot).
 
 #### Save API (`GameSession`)
 
@@ -235,7 +240,7 @@ src/
   persistence/  SaveSnapshot.ts, SaveRepository.ts, LocalStorageSaveRepository.ts, WorldStateCodec.ts, JsonWorldStateCodec.ts
   presentation/ GameOverMenu.ts, CommandInputView.ts, PhaserCommandInputView.ts, FeedbackView.ts, PhaserFeedbackView.ts, PhaserRoomView.ts, PhaserGameOutcomePanel.ts, InputBindings.ts, WorldObjectViewRegistry.ts
 assets/         fonts/, ui/, characters/{player, guard}/, items/weapons/
-docs/           architecture.md, adr/0001..0010
+docs/           architecture.md, adr/0001..0011
 ```
 
 ### Character Animations & Spritesheets
@@ -263,8 +268,8 @@ Editable configurations export directly to `room1.ts` (`ROOM1_OBJECTS`). Objects
 | **Reposition** | Drag sprite, or arrow keys (1 px, Shift: 10 px; blocked from collisionbox overlap) |
 | **Uniform Scale** | Drag yellow corner handle, `+`/`-` keys, or panel `×1.1` / `÷1.1` buttons (blocked from collisionbox overlap) |
 | **Spawn / Despawn** | `+ GUARD`, `+ DAGGER` buttons (spawns in non-overlapping spot using `<name><num>` naming for multi-instances such as `guard2`, `guard3`, `dagger2`); despawn with `REMOVE SELECTED` or `Del`/`Backspace` |
-| **Collisionboxes** | Non-weapon objects render green collisionbox rectangles (`110×scaleX` by `160×scaleY` for characters, `120×scaleX` by `120×scaleY` for boulders, or custom `colliderWidth`×`colliderHeight`); weapons have no collisionbox |
-| **Collider Box Editing** | Drag green corner handle, hotkeys `[` / `]`, panel `BOX +` / `BOX -` buttons, or inspector `box_w` / `box_h` fields (+/- 10, Shift: 50, click for prompt; blocked from collisionbox overlap) |
+| **Collisionboxes** | Non-weapon objects render green collider outlines: rectangles (`110×scaleX` by `160×scaleY` for characters, or custom `colliderWidth`×`colliderHeight`), or circles of diameter `colliderWidth` for `colliderShape: 'circle'` (the boulder); weapons have no collisionbox |
+| **Collider Box Editing** | Drag green corner handle, hotkeys `[` / `]`, panel `BOX +` / `BOX -` buttons, or inspector `box_w` / `box_h` fields (+/- 10, Shift: 50, click for prompt; blocked from collisionbox overlap). For a circle, either field sets the diameter |
 | **Selection** | Click sprite, panel list entry, or cycle with `Tab` / `Shift+Tab` |
 | **Character Stats** | Edit guard `max_health` & `speed`, or player `max_health` (`+/-` 10, Shift: 50, click value for prompt) |
 | **Weapon Stats** | Edit weapon `attack_dist`, `attack_dur`, `hold_offset_x`, `hold_offset_y` (`+/-` 10, Shift: 50, click value for prompt) |

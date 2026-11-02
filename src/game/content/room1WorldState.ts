@@ -100,11 +100,37 @@ export function computeCollisionSize(
   }
 }
 
+/**
+ * The collider size an object gets in the world. A circle uses `colliderWidth` as its diameter, so its
+ * box is square; everything else is `computeCollisionSize`.
+ */
+export function computeColliderSize(
+  role: WorldObjectRole,
+  scaleX: number,
+  scaleY: number,
+  obj: Pick<RoomObjectConfig, 'colliderShape' | 'colliderWidth' | 'colliderHeight'>,
+): { width: number; height: number } {
+  const size = computeCollisionSize(role, scaleX, scaleY, obj.colliderWidth, obj.colliderHeight)
+  return obj.colliderShape === 'circle' ? { width: size.width, height: size.width } : size
+}
+
+/** State fields for a collider; `shape` is only stored for non-box shapes so box objects keep their saved form. */
+function colliderState(obj: RoomObjectConfig, width: number, height: number) {
+  return {
+    width,
+    height,
+    ...(obj.colliderShape === 'circle' ? { shape: 'circle' as const } : {}),
+    collisionBox: { width, height },
+    colliderWidth: obj.colliderWidth ?? width,
+    colliderHeight: obj.colliderShape === 'circle' ? (obj.colliderWidth ?? width) : (obj.colliderHeight ?? height),
+  }
+}
+
 export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJECTS): WorldState {
   const worldObjects: WorldObject[] = objects.map((obj) => {
     if (obj.role === 'player') {
       const { scaleX, scaleY } = resolveScale(obj, CHARACTER_BASE_SIZE.width, CHARACTER_BASE_SIZE.height)
-      const { width, height } = computeCollisionSize('player', scaleX, scaleY, obj.colliderWidth, obj.colliderHeight)
+      const { width, height } = computeColliderSize('player', scaleX, scaleY, obj)
       return createRoomWorldObject(
         obj.id,
         { name: 'hacker', role: 'player', discoverable: false, colliderTags: defaultColliderTags('player') },
@@ -113,11 +139,7 @@ export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJE
           x: obj.x,
           y: obj.y,
           ...physicsAttrState(obj),
-          width,
-          height,
-          collisionBox: { width, height },
-          colliderWidth: obj.colliderWidth ?? width,
-          colliderHeight: obj.colliderHeight ?? height,
+          ...colliderState(obj, width, height),
           displayWidth: obj.displayWidth,
           displayHeight: obj.displayHeight,
           scaleX,
@@ -171,11 +193,7 @@ export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJE
           x: obj.x,
           y: obj.y,
           ...physicsAttrState(obj),
-          width,
-          height,
-          collisionBox: { width, height },
-          colliderWidth: obj.colliderWidth ?? width,
-          colliderHeight: obj.colliderHeight ?? height,
+          ...colliderState(obj, width, height),
           displayWidth: obj.displayWidth,
           displayHeight: obj.displayHeight,
           scaleX,
@@ -195,7 +213,7 @@ export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJE
 
     if (obj.role === 'object') {
       const { scaleX, scaleY } = resolveScale(obj, BOULDER_BASE_SIZE.width, BOULDER_BASE_SIZE.height)
-      const { width, height } = computeCollisionSize('object', scaleX, scaleY, obj.colliderWidth, obj.colliderHeight)
+      const { width, height } = computeColliderSize('object', scaleX, scaleY, obj)
       return createRoomWorldObject(
         obj.id,
         { name: obj.id, role: 'object', discoverable: true, colliderTags: defaultColliderTags('object') },
@@ -204,11 +222,7 @@ export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJE
           x: obj.x,
           y: obj.y,
           ...physicsAttrState(obj),
-          width,
-          height,
-          collisionBox: { width, height },
-          colliderWidth: obj.colliderWidth ?? width,
-          colliderHeight: obj.colliderHeight ?? height,
+          ...colliderState(obj, width, height),
           displayWidth: obj.displayWidth,
           displayHeight: obj.displayHeight,
           scaleX,
@@ -222,7 +236,7 @@ export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJE
     // Default to enemy/guard
     const { scaleX, scaleY } = resolveScale(obj, CHARACTER_BASE_SIZE.width, CHARACTER_BASE_SIZE.height)
     const resolvedRole = obj.role === 'guard' ? 'enemy' : (obj.role ?? 'enemy')
-    const { width, height } = computeCollisionSize(resolvedRole, scaleX, scaleY, obj.colliderWidth, obj.colliderHeight)
+    const { width, height } = computeColliderSize(resolvedRole, scaleX, scaleY, obj)
     return createRoomWorldObject(
       obj.id,
       { name: obj.id, role: resolvedRole, discoverable: true, colliderTags: defaultColliderTags('enemy') },
@@ -231,11 +245,7 @@ export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJE
         x: obj.x,
         y: obj.y,
         ...physicsAttrState(obj),
-        width,
-        height,
-        collisionBox: { width, height },
-        colliderWidth: obj.colliderWidth ?? width,
-        colliderHeight: obj.colliderHeight ?? height,
+        ...colliderState(obj, width, height),
         displayWidth: obj.displayWidth,
         displayHeight: obj.displayHeight,
         scaleX,

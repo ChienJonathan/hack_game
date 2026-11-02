@@ -1,4 +1,4 @@
-import { AabbCollisionWorld } from '../domain/CollisionWorld.ts'
+import { ShapeCollisionWorld } from '../domain/CollisionWorld.ts'
 import type { CollisionWorld } from '../domain/CollisionWorld.ts'
 import { colliderTagsOf, type ColliderTag, type WeaponColliderTag } from '../domain/ColliderTag.ts'
 import type { CharacterState } from '../domain/CharacterState.ts'
@@ -56,7 +56,7 @@ export class ContactResolver {
   private readonly rules: readonly ContactRule<never, never>[]
 
   constructor(
-    collision: CollisionWorld = new AabbCollisionWorld(),
+    collision: CollisionWorld = new ShapeCollisionWorld(),
     rules: readonly ContactRule<never, never>[] = [weaponHitsCharacter as ContactRule<never, never>],
   ) {
     this.collision = collision

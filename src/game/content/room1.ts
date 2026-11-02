@@ -34,6 +34,8 @@ export interface RoomObjectConfig extends PhysicsAttrConfig {
   holdOffsetY?: number
   colliderWidth?: number
   colliderHeight?: number
+  /** Outline of the collider; a `circle` uses `colliderWidth` as its diameter. Defaults to `box`. */
+  colliderShape?: 'box' | 'circle'
 }
 
 export const ROOM1_OBJECTS: RoomObjectConfig[] = [
@@ -65,8 +67,9 @@ export const ROOM1_OBJECTS: RoomObjectConfig[] = [
     displayHeight: 154,
     scaleX: 1.28,
     scaleY: 1.28,
-    colliderWidth: 132,
-    colliderHeight: 138,
+    colliderWidth: 128,
+    colliderHeight: 128,
+    colliderShape: "circle",
     mass: 100,
   },
   {
