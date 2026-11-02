@@ -544,6 +544,17 @@ describe('saved state', () => {
     const session = createRoom1Session({ movementBindings: bindings, storage })
     expect(session.hasSavedState()).toBe(false)
   })
+
+  it('treats a save from an older schema (with mv_attr and no physics fields) as no save', () => {
+    const storage = storageStub()
+    const session = createRoom1Session({ movementBindings: bindings, storage })
+    session.saveCurrentState()
+    const record = JSON.parse(storage.getItem('hack-game.save') as string)
+    storage.setItem('hack-game.save', JSON.stringify({ ...record, schemaVersion: 1 }))
+
+    expect(session.hasSavedState()).toBe(false)
+    expect(session.loadSavedState()).toBe(false)
+  })
 })
 
 describe('player facing and turning', () => {

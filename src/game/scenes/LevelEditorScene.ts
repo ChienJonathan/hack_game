@@ -19,6 +19,7 @@ import {
   type RoomObjectConfig,
   type WorldObjectRole,
 } from '../content/room1.ts'
+import { rolesCollide } from '../domain/ColliderTag.ts'
 import { PHYSICS_ATTR_KEYS, readPhysicsAttrOverride } from '../domain/PhysicsAttr.ts'
 import { GAME_PHYSICS_CONFIG, MIN_MASS } from '../simulation/physicsConstants.ts'
 import { generateRoom1Source } from '../content/room1Serializer.ts'
@@ -1871,7 +1872,7 @@ export class LevelEditorScene extends Phaser.Scene {
     const nextDisplayWidth = Math.max(16, Math.round(selected.baseWidth * nextScaleX))
     const nextDisplayHeight = Math.max(16, Math.round(selected.baseHeight * nextScaleY))
 
-    if (selected.role !== 'weapon' && this.wouldOverlapAny(selected.id, selected.x, selected.y, nextScaleX, nextScaleY)) {
+    if (this.wouldOverlapAny(selected.id, selected.x, selected.y, nextScaleX, nextScaleY)) {
       return
     }
 
@@ -1910,7 +1911,7 @@ export class LevelEditorScene extends Phaser.Scene {
     const prevY = selected.y
     const nextX = snap(selected.x + dx)
     const nextY = snap(selected.y + dy)
-    if (selected.role !== 'weapon' && this.wouldOverlapAny(selected.id, nextX, nextY)) {
+    if (this.wouldOverlapAny(selected.id, nextX, nextY)) {
       return
     }
     const actualDx = nextX - prevX
@@ -2079,7 +2080,7 @@ export class LevelEditorScene extends Phaser.Scene {
       const candScaleX = candDisplayW / selected.baseWidth
       const candScaleY = candDisplayH / selected.baseHeight
 
-      if (selected.role !== 'weapon' && this.wouldOverlapAny(selected.id, selected.x, selected.y, candScaleX, candScaleY)) {
+      if (this.wouldOverlapAny(selected.id, selected.x, selected.y, candScaleX, candScaleY)) {
         return
       }
 
@@ -2554,13 +2555,13 @@ export class LevelEditorScene extends Phaser.Scene {
     const colliderWidth = config.colliderWidth
     const colliderHeight = config.colliderHeight
 
-    if (role !== 'weapon') {
+    {
       const collSize = computeCollisionSize(role, scaleX, scaleY, colliderWidth, colliderHeight)
       let offset = 0
       while (offset < 800) {
         let collides = false
         for (const other of this.editorObjects) {
-          if (other.role === 'weapon') continue
+          if (!rolesCollide(role, other.role)) continue
           const otherSize = computeCollisionSize(
             other.role,
             other.scaleX,

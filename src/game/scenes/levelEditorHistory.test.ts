@@ -846,10 +846,17 @@ describe('levelEditorHistory', () => {
       { id: 'dagger-1', role: 'weapon' as const, x: 300, y: 200, scaleX: 1, scaleY: 1 },
     ]
 
-    it('returns false for weapons even if placed inside another object', () => {
-      // Weapon at guard position: should not collide
-      const result = wouldOverlapAnyEditorObject('dagger-2', 'weapon', 200, 200, 1, 1, existing)
-      expect(result).toBe(false)
+    it('lets a weapon overlap a character or another weapon, since they pass through each other', () => {
+      expect(wouldOverlapAnyEditorObject('dagger-2', 'weapon', 200, 200, 1, 1, existing)).toBe(false)
+      expect(wouldOverlapAnyEditorObject('dagger-2', 'weapon', 300, 200, 1, 1, existing)).toBe(false)
+    })
+
+    it('does not let a weapon overlap an obstacle, which it collides with', () => {
+      expect(wouldOverlapAnyEditorObject('dagger-2', 'weapon', 500, 200, 1, 1, existing)).toBe(true)
+    })
+
+    it('does not let an obstacle overlap a weapon', () => {
+      expect(wouldOverlapAnyEditorObject('boulder-2', 'object', 300, 200, 1, 1, existing)).toBe(true)
     })
 
     it('returns false when testing against weapons', () => {

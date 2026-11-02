@@ -72,10 +72,19 @@ function pairKey(first: ColliderTag['class'], second: ColliderTag['class']): str
   return first < second ? `${first}|${second}` : `${second}|${first}`
 }
 
+function tagsCollide(tagsA: readonly ColliderTag[], tagsB: readonly ColliderTag[]): boolean {
+  return tagsA.some((tagA) => tagsB.some((tagB) => PHYSICAL_COLLISIONS.has(pairKey(tagA.class, tagB.class))))
+}
+
 /** Whether two objects collide, decided by their Collider Tags alone. */
 export function collidesPhysically(a: WorldObject, b: WorldObject): boolean {
-  const tagsB = colliderTagsOf(b)
-  return colliderTagsOf(a).some((tagA) =>
-    tagsB.some((tagB) => PHYSICAL_COLLISIONS.has(pairKey(tagA.class, tagB.class))),
-  )
+  return tagsCollide(colliderTagsOf(a), colliderTagsOf(b))
+}
+
+type TaggedRole = Parameters<typeof defaultColliderTags>[0]
+
+/** Whether objects built from these roles (a `guard` is an `enemy`) would collide. */
+export function rolesCollide(roleA: TaggedRole | 'guard', roleB: TaggedRole | 'guard'): boolean {
+  const asRole = (role: TaggedRole | 'guard'): TaggedRole => (role === 'guard' ? 'enemy' : role)
+  return tagsCollide(defaultColliderTags(asRole(roleA)), defaultColliderTags(asRole(roleB)))
 }

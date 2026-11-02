@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BasicWorldObject } from './BasicWorldObject.ts'
-import { collidesPhysically, defaultColliderTags } from './ColliderTag.ts'
+import { collidesPhysically, defaultColliderTags, rolesCollide } from './ColliderTag.ts'
 
 function objectWithRole(role: 'player' | 'enemy' | 'weapon' | 'object', alive?: boolean) {
   return new BasicWorldObject(
@@ -39,5 +39,19 @@ describe('collidesPhysically', () => {
   it('does not collide with an object that carries no tag', () => {
     const untagged = new BasicWorldObject('x', 'room1', { name: 'x', role: 'object' }, [], { x: 0, y: 0 })
     expect(collidesPhysically(untagged, player)).toBe(false)
+  })
+})
+
+describe('rolesCollide', () => {
+  it('answers like collidesPhysically for objects built from those roles', () => {
+    expect(rolesCollide('player', 'enemy')).toBe(true)
+    expect(rolesCollide('object', 'weapon')).toBe(true)
+    expect(rolesCollide('weapon', 'player')).toBe(false)
+    expect(rolesCollide('weapon', 'weapon')).toBe(false)
+  })
+
+  it('treats a guard like an enemy', () => {
+    expect(rolesCollide('guard', 'object')).toBe(true)
+    expect(rolesCollide('guard', 'weapon')).toBe(false)
   })
 })

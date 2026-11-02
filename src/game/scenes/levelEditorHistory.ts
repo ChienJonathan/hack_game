@@ -1,6 +1,7 @@
 import type { PhysicsAttrConfig, PlayerSpeedConfig, WorldObjectRole } from '../content/room1.ts'
 import { GAME_WEAPON_CONFIG } from '../content/weaponConstants.ts'
 import { computeCollisionSize } from '../content/room1WorldState.ts'
+import { rolesCollide } from '../domain/ColliderTag.ts'
 
 export function computeEditorCollisionBox(
   role: WorldObjectRole,
@@ -36,11 +37,10 @@ export function wouldOverlapAnyEditorObject(
   colliderWidth?: number,
   colliderHeight?: number,
 ): boolean {
-  if (targetRole === 'weapon') return false
   const targetSize = computeCollisionSize(targetRole, scaleX, scaleY, colliderWidth, colliderHeight)
 
   for (const other of allObjects) {
-    if (other.id === objectId || other.role === 'weapon') continue
+    if (other.id === objectId || !rolesCollide(targetRole, other.role)) continue
     const otherSize = computeCollisionSize(
       other.role,
       other.scaleX,
