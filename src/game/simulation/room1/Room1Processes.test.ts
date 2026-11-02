@@ -17,10 +17,10 @@ describe('Room1Processes collisionbox overlap prevention', () => {
     const playerState = getMutableWorldObjectState<MutableWorldObjectState>(player)
     const boulderState = getMutableWorldObjectState<MutableWorldObjectState>(boulder)
 
-    // Position player just to the left of the boulder
-    // Boulder at (800, 280), width 120, height 120 (left edge = 740)
-    // Player width 78 (half width 39)
-    playerState.x = 690
+    // Position player just to the left of the boulder, which is pushed along instead of walked through
+    boulderState.x = 740
+    boulderState.y = 280
+    playerState.x = 650
     playerState.y = 280
     playerState.vx = 0
     playerState.vy = 0
@@ -33,9 +33,6 @@ describe('Room1Processes collisionbox overlap prevention', () => {
     for (let i = 0; i < 10; i++) {
       engine.advance(state, 16.67)
     }
-
-    // Player should stop at boulder's left edge (740 - 39 = 701)
-    expect(playerState.x as number).toBeLessThanOrEqual(740 - (playerState.width as number) / 2)
 
     const playerBox = {
       x: playerState.x as number,
@@ -51,6 +48,28 @@ describe('Room1Processes collisionbox overlap prevention', () => {
     }
 
     expect(collisionWorld.overlaps(playerBox, boulderBox)).toBe(false)
+  })
+
+  it('pushes the boulder along when the player runs into it at speed', () => {
+    const state = createInitialWorldState()
+    const player = state.worldObjects.find((o) => o.id === WORLD_OBJECT_IDS.player)!
+    const boulder = state.worldObjects.find((o) => o.id === WORLD_OBJECT_IDS.boulder)!
+    const playerState = getMutableWorldObjectState<MutableWorldObjectState>(player)
+    const boulderState = getMutableWorldObjectState<MutableWorldObjectState>(boulder)
+    boulderState.x = 740
+    boulderState.y = 280
+    playerState.x = 450
+    playerState.y = 280
+    playerState.moveX = 1
+    playerState.moveY = 0
+
+    const engine = new TickSimulationEngine(ROOM1_PROCESSES)
+    for (let i = 0; i < 90; i++) {
+      engine.advance(state, 16.67)
+    }
+
+    expect(boulderState.x as number).toBeGreaterThan(740 + 20)
+    expect(playerState.x as number).toBeLessThan(boulderState.x as number)
   })
 
   it('prevents player from walking into or through a guard', () => {
@@ -192,5 +211,68 @@ describe('Room1Processes collisionbox overlap prevention', () => {
     }
 
     expect(collisionWorld.overlaps(guardBox, boulderBox)).toBe(false)
+  })
+})
+
+describe('Room1Processes braking only below the top speed', () => {
+  const FRICTION = 5
+  const DRAG = 0.5
+  const DT = 1000 / 60 / 1000
+
+  function setup() {
+    const state = createInitialWorldState()
+    const get = (id: string) => getMutableWorldObjectState<MutableWorldObjectState>(
+      state.worldObjects.find((o) => o.id === id)!,
+    )
+    for (const id of ['boulder', 'guard', 'guard-2', 'guard-3']) {
+      get(id).alive = false
+    }
+    const player = get(WORLD_OBJECT_IDS.player)
+    player.x = 300
+    player.y = 300
+    player.moveX = 0
+    player.moveY = 0
+    return { state, player, get, engine: new TickSimulationEngine(ROOM1_PROCESSES) }
+  }
+
+  it('does not brake a player who was knocked faster than maxSpeed: only friction and drag slow it', () => {
+    const { state, player, engine } = setup()
+    player.vx = 800
+
+    engine.advance(state, 16.67)
+
+    expect(player.vx as number).toBeCloseTo(800 * (1 - (DRAG + FRICTION) * DT), 3)
+  })
+
+  it('does not turn a knocked player around with turnaroundAcceleration either', () => {
+    const { state, player, engine } = setup()
+    player.vx = 800
+    player.moveX = -1
+
+    engine.advance(state, 16.67)
+
+    expect(player.vx as number).toBeCloseTo(800 * (1 - (DRAG + FRICTION) * DT), 3)
+  })
+
+  it('brakes the player again once friction has slowed it below maxSpeed', () => {
+    const { state, player, engine } = setup()
+    player.vx = 800
+
+    for (let i = 0; i < 40; i++) engine.advance(state, 16.67)
+
+    expect(player.vx as number).toBe(0)
+  })
+
+  it('does not brake a knocked idle guard until it is below its own speed', () => {
+    const { state, get, engine } = setup()
+    const guard = get(WORLD_OBJECT_IDS.guard)
+    guard.alive = true
+    guard.x = 1500
+    guard.y = 300
+    guard.vx = 800
+
+    engine.advance(state, 16.67)
+
+    expect(guard.vx as number).toBeCloseTo(800 * (1 - (DRAG + FRICTION) * DT), 3)
   })
 })

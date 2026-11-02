@@ -282,7 +282,9 @@ describe('commands', () => {
     runFor(session, 1000)
     const fastDistance = startX - slowDistance - guard.x
 
-    expect(slowDistance).toBeCloseTo(210 * 0.25, 0)
+    // 250 ms of game time at 210 px/s, less the short time the guard needs to pick up speed
+    expect(slowDistance).toBeGreaterThan(210 * 0.25 * 0.8)
+    expect(slowDistance).toBeLessThanOrEqual(210 * 0.25)
     expect(fastDistance).toBeGreaterThan(slowDistance * 3)
   })
 
@@ -395,22 +397,21 @@ describe('commands', () => {
     expect(guard.discovered).toBe(true)
   })
 
-  it('moves thrown object at constant mv_speed across simulation ticks', () => {
+  it('accelerates a thrown object from rest across simulation ticks', () => {
     const session = newSession()
     const dagger = stateOf(session, 'dagger')
 
     session.submitCommand('mv dagger guard')
     const daggerRecord = dagger as unknown as Record<string, unknown>
-    const thrown = daggerRecord.thrown as { speed: number }
-    expect(thrown).toBeDefined()
-    expect(thrown.speed).toBe(300)
+    expect(daggerRecord.thrown).toMatchObject({ targetObjectId: 'guard', hitIds: [] })
+    expect(Math.hypot((dagger.vx as number) ?? 0, (dagger.vy as number) ?? 0)).toBe(0)
 
-    // Velocity is immediately at throw speed in direction of target
-    expect(Math.hypot(dagger.vx as number, dagger.vy as number)).toBeCloseTo(300, 1)
-
-    // Advance 1 simulation tick (~16.67ms): velocity remains constant at throw speed
     session.update(SIMULATION_TICK_MS)
-    expect(Math.hypot(dagger.vx as number, dagger.vy as number)).toBeCloseTo(300, 1)
+    const first = Math.hypot(dagger.vx as number, dagger.vy as number)
+    expect(first).toBeGreaterThan(0)
+
+    session.update(SIMULATION_TICK_MS)
+    expect(Math.hypot(dagger.vx as number, dagger.vy as number)).toBeGreaterThan(first)
   })
 
   it('unequips weapon when thrown and allows pickup when in reach', () => {
@@ -438,6 +439,10 @@ describe('commands', () => {
 
   it('throws player to exit zone and triggers congratulations upon reaching exit', () => {
     const session = newSession()
+    // Thrown characters are blocked by solid objects, so clear the path first.
+    for (const id of ['guard', 'guard-2', 'guard-3', 'boulder']) {
+      ;(stateOf(session, id) as unknown as { alive: boolean }).alive = false
+    }
     const result = session.submitCommand('mv hacker room2')
     expect(result.status).toBe('success')
 
@@ -538,6 +543,17 @@ describe('saved state', () => {
     storage.setItem('hack-game.save', '{not json')
     const session = createRoom1Session({ movementBindings: bindings, storage })
     expect(session.hasSavedState()).toBe(false)
+  })
+
+  it('treats a save from an older schema (with mv_attr and no physics fields) as no save', () => {
+    const storage = storageStub()
+    const session = createRoom1Session({ movementBindings: bindings, storage })
+    session.saveCurrentState()
+    const record = JSON.parse(storage.getItem('hack-game.save') as string)
+    storage.setItem('hack-game.save', JSON.stringify({ ...record, schemaVersion: 1 }))
+
+    expect(session.hasSavedState()).toBe(false)
+    expect(session.loadSavedState()).toBe(false)
   })
 })
 

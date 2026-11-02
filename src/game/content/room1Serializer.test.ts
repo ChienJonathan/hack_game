@@ -176,3 +176,24 @@ describe('room1Serializer', () => {
   })
 })
 
+describe('generateRoom1Source physics values', () => {
+  it('writes only the physics values that are set', () => {
+    const source = generateRoom1Source([
+      {
+        id: 'dagger',
+        role: 'weapon',
+        x: 1,
+        y: 2,
+        displayWidth: 72,
+        displayHeight: 72,
+        drag: 1.5,
+        max_velocity: 80,
+        restitution: 0.25,
+      },
+      { id: 'guard', role: 'enemy', x: 1, y: 2, displayWidth: 72, displayHeight: 72 },
+    ])
+    expect(source).toContain('    drag: 1.5,\n    max_velocity: 80,\n    restitution: 0.25,\n')
+    expect(source).not.toContain('mass: ')
+    expect(source).not.toContain('mv_attr')
+  })
+})

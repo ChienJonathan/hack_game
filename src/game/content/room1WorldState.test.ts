@@ -3,11 +3,12 @@ import {
   createInitialWorldState,
   computeCollisionSize,
   resolveScale,
-  hasCollisionBox,
 } from './room1WorldState.ts'
 import { CHARACTER_SIZE, DAGGER_SIZE, CHARACTER_BASE_SIZE } from './room1Constants.ts'
 import type { RoomObjectConfig } from './room1.ts'
 import { AabbCollisionWorld } from '../domain/CollisionWorld.ts'
+import { readPhysicsAttrOverride } from '../domain/PhysicsAttr.ts'
+import { collidesPhysically, colliderTagsOf } from '../domain/ColliderTag.ts'
 
 describe('room1WorldState scaled collision AABB', () => {
   it('resolves scale from explicit scaleX and scaleY', () => {
@@ -187,15 +188,7 @@ describe('room1WorldState scaled collision AABB', () => {
     expect(collisionWorld.gap(playerBox, scaledOtherBox)).toBe(37.5)
   })
 
-  it('identifies collisionbox presence with hasCollisionBox for world object roles', () => {
-    expect(hasCollisionBox('player')).toBe(true)
-    expect(hasCollisionBox('enemy')).toBe(true)
-    expect(hasCollisionBox('guard')).toBe(true)
-    expect(hasCollisionBox('object')).toBe(true)
-    expect(hasCollisionBox('weapon')).toBe(false)
-  })
-
-  it('assigns collisionBox to all world objects except weapon', () => {
+  it('assigns collisionBox to every world object, weapons included', () => {
     const state = createInitialWorldState()
     const player = state.worldObjects.find((o) => o.id === 'player')!
     const guard = state.worldObjects.find((o) => o.id === 'guard')!
@@ -210,13 +203,13 @@ describe('room1WorldState scaled collision AABB', () => {
     expect(playerState.collisionBox).toEqual({ width: playerState.width, height: playerState.height })
     expect(guardState.collisionBox).toEqual({ width: guardState.width, height: guardState.height })
     expect(boulderState.collisionBox).toEqual({ width: boulderState.width, height: boulderState.height })
-    expect(daggerState.collisionBox).toBeNull()
+    expect(daggerState.collisionBox).toEqual({ width: daggerState.width, height: daggerState.height })
   })
 
-  it('guarantees no initial world object collisionboxes overlap each other', () => {
+  it('guarantees no two initial world objects that collide physically overlap each other', () => {
     const state = createInitialWorldState()
     const collisionWorld = new AabbCollisionWorld()
-    const nonWeaponObjects = state.worldObjects.filter((o) => hasCollisionBox(o.metadata.role as any))
+    const nonWeaponObjects = state.worldObjects
 
     for (let i = 0; i < nonWeaponObjects.length; i++) {
       for (let j = i + 1; j < nonWeaponObjects.length; j++) {
@@ -227,6 +220,9 @@ describe('room1WorldState scaled collision AABB', () => {
         const boxA = { x: stateA.x, y: stateA.y, width: stateA.width, height: stateA.height }
         const boxB = { x: stateB.x, y: stateB.y, width: stateB.width, height: stateB.height }
 
+        if (!collidesPhysically(objA, objB)) {
+          continue
+        }
         const overlaps = collisionWorld.overlaps(boxA, boxB)
         expect(overlaps).toBe(false)
       }
@@ -260,5 +256,35 @@ describe('room1WorldState scaled collision AABB', () => {
     expect(playerState.collisionBox).toEqual({ width: 80, height: 120 })
     expect(playerState.colliderWidth).toBe(80)
     expect(playerState.colliderHeight).toBe(120)
+  })
+})
+
+describe('createInitialWorldState physics attributes and collider tags', () => {
+  const dagger: RoomObjectConfig = {
+    id: 'dagger',
+    role: 'weapon',
+    x: 10,
+    y: 20,
+    displayWidth: 72,
+    displayHeight: 72,
+  }
+
+  it('copies the configured physics values into the object state', () => {
+    const state = createInitialWorldState([{ ...dagger, mass: 2, restitution: 0.2 }])
+    expect(readPhysicsAttrOverride(state.worldObjects[0].state)).toEqual({ mass: 2, restitution: 0.2 })
+  })
+
+  it('leaves state free of physics values when nothing is overridden', () => {
+    const state = createInitialWorldState([dagger])
+    expect(readPhysicsAttrOverride(state.worldObjects[0].state)).toEqual({})
+  })
+
+  it('derives collider tags from the role of every object', () => {
+    const state = createInitialWorldState()
+    const tags = Object.fromEntries(state.worldObjects.map((o) => [o.id, colliderTagsOf(o)]))
+    expect(tags.dagger).toEqual([{ class: 'weapon', impactDamageRate: 0.05 }])
+    expect(tags.player).toEqual([{ class: 'character' }])
+    expect(tags.guard).toEqual([{ class: 'character' }])
+    expect(tags.boulder).toEqual([{ class: 'obstacle' }])
   })
 })

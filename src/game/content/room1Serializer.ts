@@ -1,3 +1,4 @@
+import { PHYSICS_ATTR_KEYS } from '../domain/PhysicsAttr.ts'
 import type { RoomObjectConfig } from './room1.ts'
 
 /**
@@ -54,6 +55,11 @@ export function generateRoom1Source(objects: RoomObjectConfig[]): string {
     if (obj.colliderHeight !== undefined) {
       lines.push(`    colliderHeight: ${Math.round(obj.colliderHeight)},`)
     }
+    for (const key of PHYSICS_ATTR_KEYS) {
+      if (obj[key] !== undefined) {
+        lines.push(`    ${key}: ${obj[key]},`)
+      }
+    }
     return `  {\n${lines.join('\n')}\n  },`
   })
 
@@ -65,9 +71,18 @@ export function generateRoom1Source(objects: RoomObjectConfig[]): string {
   [key: string]: number
 }
 
+/** Per-object physics values; unset fields fall back to the global defaults. */
+export interface PhysicsAttrConfig {
+  drag?: number
+  mass?: number
+  max_velocity?: number
+  restitution?: number
+  friction?: number
+}
+
 export type WorldObjectRole = 'player' | 'enemy' | 'weapon' | 'object' | 'guard'
 
-export interface RoomObjectConfig {
+export interface RoomObjectConfig extends PhysicsAttrConfig {
   id: string
   role: WorldObjectRole
   x: number

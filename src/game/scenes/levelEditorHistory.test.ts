@@ -846,10 +846,17 @@ describe('levelEditorHistory', () => {
       { id: 'dagger-1', role: 'weapon' as const, x: 300, y: 200, scaleX: 1, scaleY: 1 },
     ]
 
-    it('returns false for weapons even if placed inside another object', () => {
-      // Weapon at guard position: should not collide
-      const result = wouldOverlapAnyEditorObject('dagger-2', 'weapon', 200, 200, 1, 1, existing)
-      expect(result).toBe(false)
+    it('lets a weapon overlap a character or another weapon, since they pass through each other', () => {
+      expect(wouldOverlapAnyEditorObject('dagger-2', 'weapon', 200, 200, 1, 1, existing)).toBe(false)
+      expect(wouldOverlapAnyEditorObject('dagger-2', 'weapon', 300, 200, 1, 1, existing)).toBe(false)
+    })
+
+    it('does not let a weapon overlap an obstacle, which it collides with', () => {
+      expect(wouldOverlapAnyEditorObject('dagger-2', 'weapon', 500, 200, 1, 1, existing)).toBe(true)
+    })
+
+    it('does not let an obstacle overlap a weapon', () => {
+      expect(wouldOverlapAnyEditorObject('boulder-2', 'object', 300, 200, 1, 1, existing)).toBe(true)
     })
 
     it('returns false when testing against weapons', () => {
@@ -906,5 +913,51 @@ describe('levelEditorHistory', () => {
       expect(result).toBe(true)
     })
   })
-})
 
+  describe('physics_attr changes', () => {
+    it('inverts by swapping prev and next, including "no override"', () => {
+      expect(
+        invertChange({ type: 'physics_attr', objectId: 'o', key: 'drag', prevValue: undefined, nextValue: 2 }),
+      ).toEqual({ type: 'physics_attr', objectId: 'o', key: 'drag', prevValue: 2, nextValue: undefined })
+    })
+
+    it('sets a value, then clears it on undo', () => {
+      const obj = createTestObject({ id: 'o' })
+      const change: EditorChange = {
+        type: 'physics_attr',
+        objectId: 'o',
+        key: 'mass',
+        prevValue: undefined,
+        nextValue: 3,
+      }
+      applyChange(obj, change)
+      expect(obj.mass).toBe(3)
+
+      applyChange(obj, invertChange(change))
+      expect(obj.mass).toBeUndefined()
+      expect('mass' in obj).toBe(false)
+    })
+
+    it('keeps other values when one is cleared', () => {
+      const obj = createTestObject({ id: 'o', drag: 1, mass: 2 })
+      applyChange(obj, { type: 'physics_attr', objectId: 'o', key: 'drag', prevValue: 1, nextValue: undefined })
+      expect(obj.drag).toBeUndefined()
+      expect(obj.mass).toBe(2)
+    })
+
+    it('handles restitution like the other values', () => {
+      const obj = createTestObject({ id: 'o' })
+      applyChange(obj, { type: 'physics_attr', objectId: 'o', key: 'restitution', prevValue: undefined, nextValue: 0.8 })
+      expect(obj.restitution).toBe(0.8)
+    })
+
+    it('is undone through EditorHistory', () => {
+      const obj = createTestObject({ id: 'o' })
+      const history = new EditorHistory()
+      applyChange(obj, { type: 'physics_attr', objectId: 'o', key: 'max_velocity', prevValue: undefined, nextValue: 80 })
+      history.push({ type: 'physics_attr', objectId: 'o', key: 'max_velocity', prevValue: undefined, nextValue: 80 })
+      history.undo((id) => (id === 'o' ? obj : undefined))
+      expect(obj.max_velocity).toBeUndefined()
+    })
+  })
+})

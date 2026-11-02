@@ -6,12 +6,8 @@ import {
   type PlayerSpeedConfig,
   type RoomObjectConfig,
 } from '../content/room1.ts'
-import {
-  DEFAULT_MV_SPEED,
-  GAME_MV_SPEED,
-  type MvSpeedConfig,
-} from '../commands/mvConstants.ts'
-import type { MvSpeedSource } from '../commands/executors/mv.ts'
+import { GAME_MV_CONFIG, type MvConfig } from '../commands/mvConstants.ts'
+import { GAME_PHYSICS_CONFIG, type PhysicsConfig } from '../simulation/physicsConstants.ts'
 import { createInitialWorldState } from '../content/room1WorldState.ts'
 import { createRoom1CommandSubmissionService } from '../content/room1Commands.ts'
 import { GameSession } from '../application/GameSession.ts'
@@ -34,14 +30,29 @@ export const DEFAULT_SPEED_CONFIG: PlayerSpeedConfig = {
   maxSpeed: 300,
 }
 
-export { DEFAULT_MV_SPEED, GAME_MV_SPEED, type MvSpeedConfig }
+export { GAME_MV_CONFIG, GAME_PHYSICS_CONFIG, type MvConfig, type PhysicsConfig }
 
-export function getMvSpeedConfig(speed?: number | Partial<MvSpeedConfig>): MvSpeedConfig {
-  if (typeof speed === 'number') {
-    return { mv_speed: speed }
-  }
+/** Everything the Speed Editor tunes for `mv` throws: the pull of `mv` and the global physics values. */
+export type TuningConfig = MvConfig & PhysicsConfig
+
+export function getTuningConfig(config?: Partial<TuningConfig>): TuningConfig {
   return {
-    mv_speed: speed?.mv_speed ?? GAME_MV_SPEED.mv_speed ?? DEFAULT_MV_SPEED,
+    mv_acceleration: config?.mv_acceleration ?? GAME_MV_CONFIG.mv_acceleration,
+    drag: config?.drag ?? GAME_PHYSICS_CONFIG.drag,
+    mass: config?.mass ?? GAME_PHYSICS_CONFIG.mass,
+    max_velocity: config?.max_velocity ?? GAME_PHYSICS_CONFIG.max_velocity,
+    restitution: config?.restitution ?? GAME_PHYSICS_CONFIG.restitution,
+    friction: config?.friction ?? GAME_PHYSICS_CONFIG.friction,
+    min_velocity: config?.min_velocity ?? GAME_PHYSICS_CONFIG.min_velocity,
+    min_collide_move_velocity: config?.min_collide_move_velocity ?? GAME_PHYSICS_CONFIG.min_collide_move_velocity,
+  }
+}
+
+/** Copies a tuning config into the live global configs, so the running game uses it. */
+export function applyTuningConfig(config: TuningConfig): void {
+  GAME_MV_CONFIG.mv_acceleration = config.mv_acceleration
+  for (const key of Object.keys(GAME_PHYSICS_CONFIG)) {
+    GAME_PHYSICS_CONFIG[key] = config[key]
   }
 }
 
@@ -87,7 +98,8 @@ function getStorage(storage?: Storage): Storage {
 
 export function createSpeedEditorSession(options?: {
   playerSpeed?: PlayerSpeedConfig
-  mvSpeed?: MvSpeedSource
+  mvConfig?: () => MvConfig
+  physicsConfig?: () => PhysicsConfig
   storage?: Storage
   objects?: RoomObjectConfig[]
 }): SpeedEditorSessionBundle {
@@ -131,14 +143,16 @@ export function createSpeedEditorSession(options?: {
 
   // Simulation engine runs PlayerMovementProcess, DaggerPickupProcess, and BoulderProcess:
   // guards will not pursue or attack, while player movement and thrown weapon/object physics execute.
-  const simulationEngine = new TickSimulationEngine([
-    new PlayerMovementProcess(),
-    new DaggerPickupProcess(),
-    new BoulderProcess(),
-  ])
+  // Contacts are off so a thrown dagger does not hurt the static guards while tuning.
+  const simulationEngine = new TickSimulationEngine(
+    [new PlayerMovementProcess(), new DaggerPickupProcess(), new BoulderProcess()],
+    undefined,
+    undefined,
+    { mvConfig: options?.mvConfig, physicsConfig: options?.physicsConfig, contactResolver: null },
+  )
   const session = new GameSession({
     worldState,
-    commandSubmission: createRoom1CommandSubmissionService(options?.mvSpeed),
+    commandSubmission: createRoom1CommandSubmissionService(),
     simulationClock: new RealtimeSimulationClock(),
     simulationEngine,
     saveRepository: new LocalStorageSaveRepository(getStorage(options?.storage), 'hack-game.editor-save'),

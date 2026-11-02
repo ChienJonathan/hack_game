@@ -6,9 +6,18 @@ export interface PlayerSpeedConfig {
   [key: string]: number
 }
 
+/** Per-object physics values; unset fields fall back to the global defaults. */
+export interface PhysicsAttrConfig {
+  drag?: number
+  mass?: number
+  max_velocity?: number
+  restitution?: number
+  friction?: number
+}
+
 export type WorldObjectRole = 'player' | 'enemy' | 'weapon' | 'object' | 'guard'
 
-export interface RoomObjectConfig {
+export interface RoomObjectConfig extends PhysicsAttrConfig {
   id: string
   role: WorldObjectRole
   x: number
@@ -58,6 +67,7 @@ export const ROOM1_OBJECTS: RoomObjectConfig[] = [
     scaleY: 1.28,
     colliderWidth: 132,
     colliderHeight: 138,
+    mass: 100,
   },
   {
     id: "dagger",

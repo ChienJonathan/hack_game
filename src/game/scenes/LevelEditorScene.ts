@@ -12,7 +12,16 @@ import {
   computeDaggerAttackTranslation,
 } from '../content/room1Constants.ts'
 import { createInitialWorldState, computeCollisionSize } from '../content/room1WorldState.ts'
-import { ROOM1_OBJECTS, type PlayerSpeedConfig, type RoomObjectConfig, type WorldObjectRole } from '../content/room1.ts'
+import {
+  ROOM1_OBJECTS,
+  type PhysicsAttrConfig,
+  type PlayerSpeedConfig,
+  type RoomObjectConfig,
+  type WorldObjectRole,
+} from '../content/room1.ts'
+import { rolesCollide } from '../domain/ColliderTag.ts'
+import { PHYSICS_ATTR_KEYS, readPhysicsAttrOverride } from '../domain/PhysicsAttr.ts'
+import { GAME_PHYSICS_CONFIG, MIN_MASS } from '../simulation/physicsConstants.ts'
 import { generateRoom1Source } from '../content/room1Serializer.ts'
 import {
   WORLD_OBJECT_TEXTURE_URLS,
@@ -29,6 +38,8 @@ import {
   wouldOverlapAnyEditorObject,
   type ScalableMovableObject,
   type CharacterProperty,
+  type PhysicsAttrKey,
+  setPhysicsAttrValue,
 } from './levelEditorHistory.ts'
 import { SceneManager } from './SceneManager.ts'
 
@@ -46,7 +57,7 @@ const PANEL_Y = 720
 const PANEL_WIDTH = 1728
 const PANEL_HEIGHT = 290
 
-export interface SpawnObjectConfig {
+export interface SpawnObjectConfig extends PhysicsAttrConfig {
   id?: string
   x?: number
   y?: number
@@ -104,6 +115,8 @@ export class LevelEditorScene extends Phaser.Scene {
   } | null = null
   private section3Title: Phaser.GameObjects.Text | undefined
   private naStatsText: Phaser.GameObjects.Text | undefined
+  private mvAttrElements: Phaser.GameObjects.Text[] = []
+  private mvAttrValues: Map<PhysicsAttrKey, Phaser.GameObjects.Text> = new Map()
   private headerText: Phaser.GameObjects.Text | undefined
   private isDraggingObject = false
   private isDraggingScaleHandle = false
@@ -156,6 +169,8 @@ export class LevelEditorScene extends Phaser.Scene {
     this.testAttackAnimation = null
     this.section3Title = undefined
     this.naStatsText = undefined
+    this.mvAttrElements = []
+    this.mvAttrValues.clear()
     this.objectListButtons = []
     this.objectListTitle = undefined
     this.deleteButton = undefined
@@ -292,6 +307,8 @@ export class LevelEditorScene extends Phaser.Scene {
       this.testAttackBtn = undefined
       this.section3Title = undefined
       this.naStatsText = undefined
+      this.mvAttrElements = []
+      this.mvAttrValues.clear()
       this.objectListButtons = []
       this.objectListTitle = undefined
       this.deleteButton = undefined
@@ -518,9 +535,21 @@ export class LevelEditorScene extends Phaser.Scene {
       attackDurationMs,
       holdOffsetX,
       holdOffsetY,
+      ...this.physicsAttrFields(readPhysicsAttrOverride(state)),
     }
 
     this.editorObjects.push(editorObject)
+  }
+
+  private physicsAttrFields(attr: PhysicsAttrConfig | undefined): PhysicsAttrConfig {
+    const fields: PhysicsAttrConfig = {}
+    for (const key of PHYSICS_ATTR_KEYS) {
+      const value = attr?.[key]
+      if (value !== undefined) {
+        fields[key] = value
+      }
+    }
+    return fields
   }
 
   private buildPropertyPanel(): void {
@@ -965,16 +994,16 @@ export class LevelEditorScene extends Phaser.Scene {
       .setOrigin(0.5, 0)
     items.push(section4Title)
 
-    const scalePlusBtn = this.createPanelButton(1200, 64, 'SCALE +', () =>
+    const scalePlusBtn = this.createPanelButton(1200, 50, 'SCALE +', () =>
       this.scaleSelected(1.1),
     )
-    const scaleMinusBtn = this.createPanelButton(1320, 64, 'SCALE -', () =>
+    const scaleMinusBtn = this.createPanelButton(1320, 50, 'SCALE -', () =>
       this.scaleSelected(1 / 1.1),
     )
-    const collScalePlusBtn = this.createPanelButton(1200, 106, 'BOX +', () =>
+    const collScalePlusBtn = this.createPanelButton(1200, 84, 'BOX +', () =>
       this.scaleSelectedCollider(1.1),
     )
-    const collScaleMinusBtn = this.createPanelButton(1320, 106, 'BOX -', () =>
+    const collScaleMinusBtn = this.createPanelButton(1320, 84, 'BOX -', () =>
       this.scaleSelectedCollider(1 / 1.1),
     )
     items.push(scalePlusBtn, scaleMinusBtn, collScalePlusBtn, collScaleMinusBtn)
@@ -986,7 +1015,7 @@ export class LevelEditorScene extends Phaser.Scene {
     ]
     for (let i = 0; i < hints.length; i++) {
       const hint = this.add
-        .text(1260, 155 + i * 28, hints[i], {
+        .text(1260, 120 + i * 16, hints[i], {
           fontFamily: FONT_FAMILY,
           fontSize: 11,
           color: DIM_COLOR,
@@ -994,6 +1023,60 @@ export class LevelEditorScene extends Phaser.Scene {
         .setOrigin(0.5, 0)
       items.push(hint)
     }
+
+    // MV attributes: per-object overrides of the global mv defaults (set in the Speed Editor)
+    const mvTitle = this.add
+      .text(1260, 152, 'PHYSICS (dim = default)', {
+        fontFamily: FONT_FAMILY,
+        fontSize: 11,
+        color: ACCENT_COLOR,
+      })
+      .setOrigin(0.5, 0)
+    items.push(mvTitle)
+    this.mvAttrElements = [mvTitle]
+    this.mvAttrValues.clear()
+
+    const mvRows: { key: PhysicsAttrKey; label: string; y: number; step: number; shiftStep: number }[] = [
+      { key: 'drag', label: 'drag', y: 168, step: 0.1, shiftStep: 0.5 },
+      { key: 'friction', label: 'friction', y: 193, step: 0.5, shiftStep: 2 },
+      { key: 'mass', label: 'mass', y: 218, step: 0.1, shiftStep: 1 },
+      { key: 'max_velocity', label: 'max_vel', y: 243, step: 50, shiftStep: 100 },
+      { key: 'restitution', label: 'restit', y: 268, step: 0.1, shiftStep: 0.5 },
+    ]
+    for (const row of mvRows) {
+      const label = this.add
+        .text(1112, row.y + 6, `${row.label}:`, {
+          fontFamily: FONT_FAMILY,
+          fontSize: 12,
+          color: DIM_COLOR,
+        })
+        .setOrigin(0, 0)
+      const val = this.add
+        .text(1262, row.y + 4, '--', {
+          fontFamily: FONT_FAMILY,
+          fontSize: 12,
+          color: DIM_COLOR,
+          backgroundColor: '#2a2a2a',
+          padding: { x: 6, y: 3 },
+        })
+        .setOrigin(1, 0)
+        .setInteractive({ useHandCursor: true })
+      val.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+        pointer.event?.stopPropagation?.()
+        this.promptMvAttr(row.key)
+      })
+      const minusBtn = this.createPanelButton(1292, row.y, '−', (pointer) => {
+        this.adjustMvAttr(row.key, pointer.event?.shiftKey ? -row.shiftStep : -row.step)
+      })
+      const plusBtn = this.createPanelButton(1337, row.y, '+', (pointer) => {
+        this.adjustMvAttr(row.key, pointer.event?.shiftKey ? row.shiftStep : row.step)
+      })
+      const resetBtn = this.createPanelButton(1388, row.y, 'R', () => this.resetMvAttr(row.key))
+      this.mvAttrValues.set(row.key, val)
+      this.mvAttrElements.push(label, val, minusBtn, plusBtn, resetBtn)
+      items.push(label, val, minusBtn, plusBtn, resetBtn)
+    }
+    this.mvAttrElements.forEach((el) => el.setVisible(false))
 
     // ─── Section 5: Save ───
     const section5Title = this.add
@@ -1118,8 +1201,11 @@ export class LevelEditorScene extends Phaser.Scene {
       this.playerStatsElements.forEach((el) => el.setVisible(false))
       this.weaponStatsElements.forEach((el) => el.setVisible(false))
       this.naStatsText?.setVisible(false)
+      this.mvAttrElements.forEach((el) => el.setVisible(false))
       return
     }
+
+    this.updateMvAttrFields(selected)
 
     const savedPos = this.savedWeaponPositions.get(selected.id)
     const displayX = savedPos ? savedPos.x : selected.x
@@ -1409,6 +1495,60 @@ export class LevelEditorScene extends Phaser.Scene {
     })
 
     this.updatePropertyPanel()
+  }
+
+  private updateMvAttrFields(selected: EditorObject): void {
+    this.mvAttrElements.forEach((el) => el.setVisible(true))
+    for (const [key, text] of this.mvAttrValues) {
+      const override = selected[key]
+      text.setText(String(override ?? GAME_PHYSICS_CONFIG[key]))
+      text.setColor(override === undefined ? DIM_COLOR : ACCENT_COLOR)
+    }
+  }
+
+  private commitMvAttr(key: PhysicsAttrKey, next: number | undefined): void {
+    const selected = this.getSelected()
+    if (!selected) return
+
+    const prev = selected[key]
+    if (prev === next) return
+
+    setPhysicsAttrValue(selected, key, next)
+    this.history.push({
+      type: 'physics_attr',
+      objectId: selected.id,
+      key,
+      prevValue: prev,
+      nextValue: next,
+    })
+    this.updatePropertyPanel()
+  }
+
+  private clampMvAttr(key: PhysicsAttrKey, value: number): number {
+    const rounded = Math.round(value * 1000) / 1000
+    return key === 'mass' ? Math.max(MIN_MASS, rounded) : rounded
+  }
+
+  public adjustMvAttr(key: PhysicsAttrKey, delta: number): void {
+    const selected = this.getSelected()
+    if (!selected) return
+    const current = selected[key] ?? GAME_PHYSICS_CONFIG[key]
+    this.commitMvAttr(key, this.clampMvAttr(key, current + delta))
+  }
+
+  public promptMvAttr(key: PhysicsAttrKey): void {
+    const selected = this.getSelected()
+    if (!selected) return
+    const current = selected[key] ?? GAME_PHYSICS_CONFIG[key]
+    const input = window.prompt(`Enter new ${key} for ${selected.id}:`, current.toString())
+    if (input === null) return
+    const parsed = parseFloat(input.trim())
+    if (!Number.isFinite(parsed)) return
+    this.commitMvAttr(key, this.clampMvAttr(key, parsed))
+  }
+
+  public resetMvAttr(key: PhysicsAttrKey): void {
+    this.commitMvAttr(key, undefined)
   }
 
   private getSelected(): EditorObject | undefined {
@@ -1733,7 +1873,7 @@ export class LevelEditorScene extends Phaser.Scene {
     const nextDisplayWidth = Math.max(16, Math.round(selected.baseWidth * nextScaleX))
     const nextDisplayHeight = Math.max(16, Math.round(selected.baseHeight * nextScaleY))
 
-    if (selected.role !== 'weapon' && this.wouldOverlapAny(selected.id, selected.x, selected.y, nextScaleX, nextScaleY)) {
+    if (this.wouldOverlapAny(selected.id, selected.x, selected.y, nextScaleX, nextScaleY)) {
       return
     }
 
@@ -1772,7 +1912,7 @@ export class LevelEditorScene extends Phaser.Scene {
     const prevY = selected.y
     const nextX = snap(selected.x + dx)
     const nextY = snap(selected.y + dy)
-    if (selected.role !== 'weapon' && this.wouldOverlapAny(selected.id, nextX, nextY)) {
+    if (this.wouldOverlapAny(selected.id, nextX, nextY)) {
       return
     }
     const actualDx = nextX - prevX
@@ -1941,7 +2081,7 @@ export class LevelEditorScene extends Phaser.Scene {
       const candScaleX = candDisplayW / selected.baseWidth
       const candScaleY = candDisplayH / selected.baseHeight
 
-      if (selected.role !== 'weapon' && this.wouldOverlapAny(selected.id, selected.x, selected.y, candScaleX, candScaleY)) {
+      if (this.wouldOverlapAny(selected.id, selected.x, selected.y, candScaleX, candScaleY)) {
         return
       }
 
@@ -2156,6 +2296,7 @@ export class LevelEditorScene extends Phaser.Scene {
           attackDurationMs: reversed.snapshot.attackDurationMs,
           holdOffsetX: reversed.snapshot.holdOffsetX,
           holdOffsetY: reversed.snapshot.holdOffsetY,
+          ...this.physicsAttrFields(reversed.snapshot),
         },
         false,
       )
@@ -2238,6 +2379,7 @@ export class LevelEditorScene extends Phaser.Scene {
         ...(obj.holdOffsetY !== undefined ? { holdOffsetY: obj.holdOffsetY } : {}),
         ...(obj.colliderWidth !== undefined ? { colliderWidth: Math.round(obj.colliderWidth) } : {}),
         ...(obj.colliderHeight !== undefined ? { colliderHeight: Math.round(obj.colliderHeight) } : {}),
+        ...this.physicsAttrFields(obj),
       }
     })
 
@@ -2354,6 +2496,7 @@ export class LevelEditorScene extends Phaser.Scene {
       if (config.colliderHeight !== undefined) existing.colliderHeight = config.colliderHeight
       if (config.maxHealth !== undefined) existing.maxHealth = config.maxHealth
       if (config.speed !== undefined) existing.speed = config.speed
+      Object.assign(existing, this.physicsAttrFields(config))
       if (config.attackDistance !== undefined) existing.attackDistance = config.attackDistance
       if (config.attackDurationMs !== undefined) existing.attackDurationMs = config.attackDurationMs
       if (config.holdOffsetX !== undefined) existing.holdOffsetX = config.holdOffsetX
@@ -2413,13 +2556,13 @@ export class LevelEditorScene extends Phaser.Scene {
     const colliderWidth = config.colliderWidth
     const colliderHeight = config.colliderHeight
 
-    if (role !== 'weapon') {
+    {
       const collSize = computeCollisionSize(role, scaleX, scaleY, colliderWidth, colliderHeight)
       let offset = 0
       while (offset < 800) {
         let collides = false
         for (const other of this.editorObjects) {
-          if (other.role === 'weapon') continue
+          if (!rolesCollide(role, other.role)) continue
           const otherSize = computeCollisionSize(
             other.role,
             other.scaleX,
@@ -2530,6 +2673,7 @@ export class LevelEditorScene extends Phaser.Scene {
       attackDurationMs: spawnAttackDurationMs,
       holdOffsetX: spawnHoldOffsetX,
       holdOffsetY: spawnHoldOffsetY,
+      ...this.physicsAttrFields(config),
     }
 
     this.editorObjects.push(editorObject)
@@ -2667,6 +2811,7 @@ export class LevelEditorScene extends Phaser.Scene {
       attackDurationMs: obj.attackDurationMs,
       holdOffsetX: obj.holdOffsetX,
       holdOffsetY: obj.holdOffsetY,
+      ...this.physicsAttrFields(obj),
     }
   }
 

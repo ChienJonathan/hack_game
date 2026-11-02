@@ -3,7 +3,7 @@ import { MvCommandExecutor } from './mv.ts'
 import { createInitialWorldState } from '../../content/room1WorldState.ts'
 import { ROOM_LAYOUT, WORLD_OBJECT_IDS } from '../../content/room1Constants.ts'
 import { getMutableWorldObjectState, type MutableWorldObjectState } from '../../domain/WorldObjectState.ts'
-import { TickSimulationEngine } from '../../simulation/TickSimulationEngine.ts'
+import { SIMULATION_TICK_MS, TickSimulationEngine } from '../../simulation/TickSimulationEngine.ts'
 import { ROOM1_PROCESSES } from '../../simulation/room1/Room1Processes.ts'
 
 describe('MvCommandExecutor', () => {
@@ -74,10 +74,9 @@ describe('MvCommandExecutor', () => {
       targetX: guardState.x,
       targetY: guardState.y,
       targetObjectId: guardObj.id,
-      speed: 300,
+      hitIds: [],
     })
     expect(daggerState.discovered).toBe(true)
-    expect(daggerState.vx).toBeGreaterThan(0)
   })
 
   it('rejects command if extra arguments or options are provided', () => {
@@ -111,7 +110,6 @@ describe('MvCommandExecutor', () => {
     expect(daggerState.thrown).toMatchObject({
       targetX: ROOM_LAYOUT.exit.x,
       targetY: ROOM_LAYOUT.exit.y,
-      speed: 300,
     })
   })
 
@@ -132,38 +130,30 @@ describe('MvCommandExecutor', () => {
     expect(playerState.weaponId).toBeNull()
   })
 
-  it('uses custom mv_speed configuration when provided statically or dynamically', () => {
-    let dynamicSpeed = 450
-    const customExecutor = new MvCommandExecutor(() => dynamicSpeed)
-
+  it('starts a throw at rest: the executor sets no velocity, the flight accelerates it', () => {
     const state = createInitialWorldState()
     const daggerObj = state.worldObjects.find((o) => o.id === WORLD_OBJECT_IDS.dagger)!
     const daggerState = getMutableWorldObjectState<MutableWorldObjectState>(daggerObj)
 
-    customExecutor.execute({ name: 'mv', arguments: ['dagger', 'guard'], options: [] }, state)
-    expect(daggerState.thrown).toMatchObject({
-      speed: 450,
-    })
-
-    // Modify dynamic speed source as object with mv_speed
-    const dynamicConfig = { mv_speed: 600 }
-    const customExecutor2 = new MvCommandExecutor(() => dynamicConfig)
-    customExecutor2.execute({ name: 'mv', arguments: ['dagger', 'guard'], options: [] }, state)
-    expect(daggerState.thrown).toMatchObject({
-      speed: 600,
-    })
+    executor.execute({ name: 'mv', arguments: ['dagger', 'guard'], options: [] }, state)
+    expect(daggerState.vx ?? 0).toBe(0)
+    expect(daggerState.vy ?? 0).toBe(0)
   })
 
-  it('uses default decoupled mv_speed across rooms without room1 dependency', () => {
-    const defaultExecutor = new MvCommandExecutor()
+  it('keeps the current velocity and resets hitIds when thrown again mid-flight', () => {
     const state = createInitialWorldState()
     const daggerObj = state.worldObjects.find((o) => o.id === WORLD_OBJECT_IDS.dagger)!
     const daggerState = getMutableWorldObjectState<MutableWorldObjectState>(daggerObj)
 
-    defaultExecutor.execute({ name: 'mv', arguments: ['dagger', 'guard'], options: [] }, state)
-    expect(daggerState.thrown).toMatchObject({
-      speed: 300,
-    })
+    executor.execute({ name: 'mv', arguments: ['dagger', 'guard'], options: [] }, state)
+    daggerState.vx = 120
+    daggerState.vy = -30
+    ;(daggerState.thrown as { hitIds: string[] }).hitIds.push('guard')
+
+    executor.execute({ name: 'mv', arguments: ['dagger', 'room2'], options: [] }, state)
+    expect(daggerState.vx).toBe(120)
+    expect(daggerState.vy).toBe(-30)
+    expect((daggerState.thrown as { hitIds: string[] }).hitIds).toEqual([])
   })
 
   describe('boulder mv behavior', () => {
@@ -188,7 +178,7 @@ describe('MvCommandExecutor', () => {
         targetX: guardState.x,
         targetY: guardState.y,
         targetObjectId: guardObj.id,
-        speed: 300,
+        hitIds: [],
       })
       expect(boulderState.discovered).toBe(true)
 
@@ -205,13 +195,14 @@ describe('MvCommandExecutor', () => {
       const distAfter = Math.hypot((guardState.x as number) - nextX, (guardState.y as number) - nextY)
       expect(distAfter).toBeLessThan(distBefore)
 
-      // Advance long enough to reach target
-      engine.advance(state, 5000)
-      expect(boulderState.x).toBe(guardState.x)
-      expect(boulderState.y).toBe(guardState.y)
+      // Guard-2 stands on the way: the boulder collides with it, which ends the Throw before it arrives
+      for (let i = 0; i < 600 && boulderState.thrown; i++) {
+        engine.advance(state, SIMULATION_TICK_MS)
+      }
       expect(boulderState.thrown).toBeNull()
-      expect(boulderState.vx).toBe(0)
-      expect(boulderState.vy).toBe(0)
+      expect(boulderState.x as number).toBeLessThan(guardState.x as number)
+      expect(boulderState.discovered).toBe(true)
+      expect(guardObj.state).toMatchObject({ health: 100 })
     })
 
     it('throws boulder to room exit', () => {
@@ -228,7 +219,6 @@ describe('MvCommandExecutor', () => {
       expect(boulderState.thrown).toMatchObject({
         targetX: ROOM_LAYOUT.exit.x,
         targetY: ROOM_LAYOUT.exit.y,
-        speed: 300,
       })
     })
 
@@ -247,6 +237,102 @@ describe('MvCommandExecutor', () => {
       expect(throwResult).toEqual({
         status: 'success',
         feedback: [{ kind: 'popup', text: 'Threw rock to guard.' }],
+      })
+    })
+  })
+
+  describe('wildcard sources', () => {
+    const run = (state: ReturnType<typeof createInitialWorldState>, source: string, target: string) =>
+      executor.execute({ name: 'mv', arguments: [source, target], options: [] }, state)
+    const find = (state: ReturnType<typeof createInitialWorldState>, id: string) =>
+      state.worldObjects.find((o) => o.id === id)!
+    const stateOf = (state: ReturnType<typeof createInitialWorldState>, id: string) =>
+      getMutableWorldObjectState<MutableWorldObjectState>(find(state, id))
+
+    it('throws every match, case-insensitively, in one popup and excludes the target', () => {
+      const state = createInitialWorldState()
+      expect(run(state, '*', 'GUARD')).toEqual({
+        status: 'success',
+        feedback: [{ kind: 'popup', text: 'Threw hacker, boulder, dagger, guard-2, guard-3 to guard.' }],
+      })
+      expect(stateOf(state, WORLD_OBJECT_IDS.guard).thrown).toBeFalsy()
+      for (const id of [WORLD_OBJECT_IDS.player, WORLD_OBJECT_IDS.boulder, WORLD_OBJECT_IDS.dagger, 'guard-2', 'guard-3']) {
+        expect(stateOf(state, id).thrown).toMatchObject({ targetObjectId: WORLD_OBJECT_IDS.guard })
+        expect(stateOf(state, id).discovered).toBe(true)
+      }
+    })
+
+    it('matches a pattern in the middle of a name', () => {
+      const state = createInitialWorldState()
+      expect(run(state, 'd*x', 'guard')).toEqual({
+        status: 'rejected',
+        feedback: { kind: 'popup', text: 'Cannot find "d*x".' },
+      })
+      expect(run(state, 'd*r', 'guard').status).toBe('success')
+    })
+
+    it('rejects when nothing matches', () => {
+      const state = createInitialWorldState()
+      expect(run(state, 'z*', 'foo')).toEqual({
+        status: 'rejected',
+        feedback: { kind: 'popup', text: 'Cannot find "z*".' },
+      })
+      expect(find(state, WORLD_OBJECT_IDS.dagger).metadata.name).toBe('dagger')
+    })
+
+    it('rejects when the only match is the target itself', () => {
+      const state = createInitialWorldState()
+      expect(run(state, 'gu*d', 'guard')).toEqual({
+        status: 'rejected',
+        feedback: { kind: 'popup', text: 'Cannot find "gu*d".' },
+      })
+    })
+
+    it('renames a single match to the plain target name', () => {
+      const state = createInitialWorldState()
+      expect(run(state, 'd*', 'knife')).toEqual({
+        status: 'success',
+        feedback: [{ kind: 'popup', text: 'Renamed dagger to knife.' }],
+      })
+      expect(find(state, WORLD_OBJECT_IDS.dagger).metadata.name).toBe('knife')
+    })
+
+    it('renames multiple matches with numeric suffixes', () => {
+      const state = createInitialWorldState()
+      expect(run(state, '*', 'x').status).toBe('success')
+      expect(find(state, WORLD_OBJECT_IDS.player).metadata.name).toBe('x_0')
+      expect(find(state, WORLD_OBJECT_IDS.boulder).metadata.name).toBe('x_1')
+      expect(find(state, WORLD_OBJECT_IDS.dagger).metadata.name).toBe('x_2')
+      expect(find(state, 'guard-3').metadata.name).toBe('x_5')
+    })
+
+    it('skips suffixes already taken by other objects or exits', () => {
+      const state = createInitialWorldState()
+      find(state, WORLD_OBJECT_IDS.guard).rename('X_1')
+      expect(run(state, '*a*', 'x').status).toBe('success')
+      // the renamed guard no longer matches "*a*" and keeps x_1 taken
+      expect(find(state, WORLD_OBJECT_IDS.player).metadata.name).toBe('x_0')
+      expect(find(state, WORLD_OBJECT_IDS.dagger).metadata.name).toBe('x_2')
+      expect(find(state, 'guard-2').metadata.name).toBe('x_3')
+    })
+
+    it('does not count the sources themselves as collisions', () => {
+      const state = createInitialWorldState()
+      find(state, WORLD_OBJECT_IDS.dagger).rename('x_0')
+      run(state, '*', 'x')
+      expect(find(state, WORLD_OBJECT_IDS.player).metadata.name).toBe('x_0')
+    })
+
+    it('treats * in the target as a literal name', () => {
+      const state = createInitialWorldState()
+      expect(run(state, 'dagger', 'k*')).toEqual({
+        status: 'success',
+        feedback: [{ kind: 'popup', text: 'Renamed dagger to k*.' }],
+      })
+      expect(find(state, WORLD_OBJECT_IDS.dagger).metadata.name).toBe('k*')
+      expect(run(state, 'guard', 'k*').status).toBe('success')
+      expect(stateOf(state, WORLD_OBJECT_IDS.guard).thrown).toMatchObject({
+        targetObjectId: WORLD_OBJECT_IDS.dagger,
       })
     })
   })

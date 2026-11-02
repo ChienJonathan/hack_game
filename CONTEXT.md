@@ -52,6 +52,42 @@ _Avoid_: View visibility (when referring to the player's knowledge)
 A command-facing address that resolves to a room or world object inside the game.
 _Avoid_: File path, filesystem path (when referring to the host computer)
 
+**Throw**:
+The flight of a World Object from where it is towards a target after the player moves it with `mv`. It ends when the object arrives at the target or at its first Collision; an object that would Collide on the way never reaches the target.
+_Avoid_: Shot, launch
+
+**Collider Tag**:
+A typed label on a World Object that says what kind of thing it is when it touches another object, such as Weapon, Character or Obstacle. What happens on contact, and whether two objects Collide at all, depends only on the tags of the two objects.
+_Avoid_: Hitbox, collision type
+
+**Obstacle**:
+A World Object, such as the boulder, that is neither a Character nor a Weapon and that Characters, Weapons and other Obstacles Collide with.
+_Avoid_: Wall, solid
+
+**Force**:
+A push applied to a World Object for one tick. All movement of a World Object (walking, pursuing, an `mv` Throw) is made of Forces, which add up.
+_Avoid_: Speed (when referring to the cause of movement)
+
+**Friction**:
+The slowing of a World Object by the ground, as a share of its speed per second. It does not act while the object is in a Throw. Characters' own braking (`frictionAcceleration`) is not Friction.
+_Avoid_: Drag (when referring to the ground; drag acts in the air too)
+
+**Collision**:
+A touch in which two World Objects push each other apart and exchange motion according to their mass and Restitution. A touch that only triggers an effect, such as Impact Damage, is not a Collision.
+_Avoid_: Contact (when the objects exchange motion)
+
+**Restitution**:
+How much of the speed with which two objects approach each other is returned after they Collide. The value for a Collision is the product of both objects' values.
+_Avoid_: Bounciness, elasticity
+
+**Impact Damage**:
+The Health a Weapon in flight takes from a Character it touches, in proportion to the Weapon's speed. It is distinct from the damage of an attack.
+_Avoid_: Collision damage, throw damage
+
+**Wildcard**:
+A `*` in a Command argument that stands for any run of characters (including none). It is matched against World Object names, not expanded into the typed command.
+_Avoid_: Glob (when referring to the in-game `*`)
+
 **Process Definition**:
 A reusable description of a behavior that a world object's rules may select.
 _Avoid_: Process (when referring to a reusable description)

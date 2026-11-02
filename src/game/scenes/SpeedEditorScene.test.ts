@@ -2,13 +2,16 @@ import { describe, expect, it } from 'vitest'
 import {
   createSpeedEditorSession,
   DEFAULT_SPEED_CONFIG,
-  DEFAULT_MV_SPEED,
   getPlayerSpeedFromObjects,
-  getMvSpeedConfig,
+  getTuningConfig,
+  GAME_MV_CONFIG,
+  GAME_PHYSICS_CONFIG,
+  applyTuningConfig,
 } from './speedEditorSession.ts'
 import { WORLD_OBJECT_IDS } from '../content/room1Constants.ts'
 import { generateRoom1Source } from '../content/room1Serializer.ts'
 import { generateMvConstantsSource } from '../commands/mvSerializer.ts'
+import { generatePhysicsConstantsSource } from '../simulation/physicsSerializer.ts'
 import type { RoomObjectConfig } from '../content/room1.ts'
 
 describe('SpeedEditorScene', () => {
@@ -57,15 +60,18 @@ describe('SpeedEditorScene', () => {
     })
   })
 
-  describe('getMvSpeedConfig', () => {
-    it('returns default mv speed config when no override is given', () => {
-      const config = getMvSpeedConfig()
-      expect(config).toEqual({ mv_speed: DEFAULT_MV_SPEED })
+  describe('getTuningConfig', () => {
+    it('returns the global mv and physics config when no override is given', () => {
+      expect(getTuningConfig()).toEqual({ ...GAME_MV_CONFIG, ...GAME_PHYSICS_CONFIG })
     })
 
-    it('handles numeric and object overrides', () => {
-      expect(getMvSpeedConfig(450)).toEqual({ mv_speed: 450 })
-      expect(getMvSpeedConfig({ mv_speed: 500 })).toEqual({ mv_speed: 500 })
+    it('overrides only the given fields', () => {
+      expect(getTuningConfig({ mv_acceleration: 1500, drag: 2 })).toEqual({
+        ...GAME_MV_CONFIG,
+        ...GAME_PHYSICS_CONFIG,
+        mv_acceleration: 1500,
+        drag: 2,
+      })
     })
   })
 
@@ -213,34 +219,31 @@ describe('SpeedEditorScene', () => {
       expect(worldState.outcome).toBe('playing')
     })
 
-    it('simulates mv throw physics with configured mv_speed for dagger', () => {
-      let currentMvSpeed = 200
+    it('flies a thrown dagger with the live mv config and does not hurt the static guards', () => {
+      let force = 1000
       const { session, worldState } = createSpeedEditorSession({
-        mvSpeed: () => currentMvSpeed,
+        mvConfig: () => ({ ...GAME_MV_CONFIG, mv_acceleration: force }),
       })
 
       const dagger = worldState.worldObjects.find((o) => o.id === WORLD_OBJECT_IDS.dagger)!
       const state = dagger.state as Record<string, unknown>
       const startX = state.x as number
 
-      // Execute mv command to throw dagger to guard
-      const result = session.submitCommand('mv dagger guard')
-      expect(result.status).toBe('success')
+      expect(session.submitCommand('mv dagger guard').status).toBe('success')
+      expect(state.thrown).toMatchObject({ targetObjectId: WORLD_OBJECT_IDS.guard, hitIds: [] })
 
-      const thrown = state.thrown as { speed: number }
-      expect(thrown).toBeDefined()
-      expect(thrown.speed).toBe(200)
-      expect(Math.hypot(state.vx as number, state.vy as number)).toBeCloseTo(200, 1)
+      session.update(16.67 * 3)
+      expect(state.x as number).toBeGreaterThan(startX)
+      const slowSpeed = Math.hypot(state.vx as number, state.vy as number)
 
-      // Advance one tick
-      session.update(16.67)
-      expect((state.x as number)).toBeGreaterThan(startX)
+      force = 5000
+      session.update(16.67 * 3)
+      expect(Math.hypot(state.vx as number, state.vy as number)).toBeGreaterThan(slowSpeed)
 
-      // Modify dynamic mvSpeed
-      currentMvSpeed = 500
-      session.submitCommand('mv dagger hacker')
-      const thrown2 = state.thrown as { speed: number }
-      expect(thrown2.speed).toBe(500)
+      for (let i = 0; i < 600; i++) session.update(16.67)
+      for (const o of worldState.worldObjects.filter((o) => o.metadata.role === 'enemy')) {
+        expect((o.state as Record<string, unknown>).health).toBe(100)
+      }
     })
   })
 
@@ -281,14 +284,46 @@ describe('SpeedEditorScene', () => {
       expect(source).not.toContain('MvSpeedConfig')
     })
 
-    it('serializes mv speed to mv constants without DEFAULT_THROW_SPEED', () => {
-      const source = generateMvConstantsSource(420)
+    it('serializes the mv config to mv constants', () => {
+      const source = generateMvConstantsSource({ mv_acceleration: 1200 })
 
-      expect(source).toContain('export const DEFAULT_MV_SPEED = 420')
-      expect(source).toContain('export interface MvSpeedConfig')
-      expect(source).toContain('export const GAME_MV_SPEED: MvSpeedConfig = {')
-      expect(source).toContain('mv_speed: DEFAULT_MV_SPEED,')
-      expect(source).not.toContain('DEFAULT_THROW_SPEED')
+      expect(source).toContain('export const DEFAULT_MV_ACCELERATION = 1200')
+      expect(source).toContain('export const GAME_MV_CONFIG: MvConfig = {')
+      expect(source).not.toContain('DEFAULT_MV_DRAG')
+      expect(source).not.toContain('mv_speed')
+    })
+
+    it('serializes the physics config to physics constants', () => {
+      const source = generatePhysicsConstantsSource({
+        drag: 0.4,
+        mass: 2,
+        max_velocity: 450,
+        restitution: 0.3,
+        friction: 7,
+        min_velocity: 4,
+        min_collide_move_velocity: 60,
+      })
+
+      expect(source).toContain('export const DEFAULT_DRAG = 0.4')
+      expect(source).toContain('export const DEFAULT_MASS = 2')
+      expect(source).toContain('export const DEFAULT_MAX_VELOCITY = 450')
+      expect(source).toContain('export const DEFAULT_RESTITUTION = 0.3')
+      expect(source).toContain('export const DEFAULT_FRICTION = 7')
+      expect(source).toContain('export const DEFAULT_MIN_VELOCITY = 4')
+      expect(source).toContain('export const DEFAULT_MIN_COLLIDE_MOVE_VELOCITY = 60')
+      expect(source).toContain('export const GAME_PHYSICS_CONFIG: PhysicsConfig = {')
+    })
+
+    it('copies a tuning config into the live mv and physics configs', () => {
+      const before = { mv: { ...GAME_MV_CONFIG }, physics: { ...GAME_PHYSICS_CONFIG } }
+      try {
+        applyTuningConfig({ ...getTuningConfig(), mv_acceleration: 123, restitution: 0.9 })
+        expect(GAME_MV_CONFIG.mv_acceleration).toBe(123)
+        expect(GAME_PHYSICS_CONFIG.restitution).toBe(0.9)
+      } finally {
+        Object.assign(GAME_MV_CONFIG, before.mv)
+        Object.assign(GAME_PHYSICS_CONFIG, before.physics)
+      }
     })
   })
 })

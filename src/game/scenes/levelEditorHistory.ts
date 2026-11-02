@@ -1,6 +1,7 @@
-import type { PlayerSpeedConfig, WorldObjectRole } from '../content/room1.ts'
+import type { PhysicsAttrConfig, PlayerSpeedConfig, WorldObjectRole } from '../content/room1.ts'
 import { GAME_WEAPON_CONFIG } from '../content/weaponConstants.ts'
 import { computeCollisionSize } from '../content/room1WorldState.ts'
+import { rolesCollide } from '../domain/ColliderTag.ts'
 
 export function computeEditorCollisionBox(
   role: WorldObjectRole,
@@ -36,11 +37,10 @@ export function wouldOverlapAnyEditorObject(
   colliderWidth?: number,
   colliderHeight?: number,
 ): boolean {
-  if (targetRole === 'weapon') return false
   const targetSize = computeCollisionSize(targetRole, scaleX, scaleY, colliderWidth, colliderHeight)
 
   for (const other of allObjects) {
-    if (other.id === objectId || other.role === 'weapon') continue
+    if (other.id === objectId || !rolesCollide(targetRole, other.role)) continue
     const otherSize = computeCollisionSize(
       other.role,
       other.scaleX,
@@ -80,6 +80,11 @@ export interface ScalableMovableObject {
   attackDurationMs?: number
   holdOffsetX?: number
   holdOffsetY?: number
+  drag?: number
+  mass?: number
+  max_velocity?: number
+  restitution?: number
+  friction?: number
 }
 
 export interface MoveChange {
@@ -139,6 +144,30 @@ export interface ColliderChange {
   readonly nextHeight: number
 }
 
+export type PhysicsAttrKey = keyof PhysicsAttrConfig
+
+/** Sets or clears (undefined) one per-object physics value; a cleared value falls back to the global default. */
+export function setPhysicsAttrValue(
+  target: ScalableMovableObject,
+  key: PhysicsAttrKey,
+  value: number | undefined,
+): void {
+  if (value === undefined) {
+    delete target[key]
+  } else {
+    target[key] = value
+  }
+}
+
+export interface PhysicsAttrChange {
+  readonly type: 'physics_attr'
+  readonly objectId: string
+  readonly key: PhysicsAttrKey
+  /** undefined means "no override, use the global default". */
+  readonly prevValue: number | undefined
+  readonly nextValue: number | undefined
+}
+
 export interface SpawnChange {
   readonly type: 'spawn'
   readonly objectId: string
@@ -158,6 +187,7 @@ export type EditorChange =
   | ScaleChange
   | PropertyChange
   | ColliderChange
+  | PhysicsAttrChange
   | SpawnChange
   | DespawnChange
 
@@ -213,6 +243,14 @@ export function invertChange(change: EditorChange): EditorChange {
         prevHeight: change.nextHeight,
         nextWidth: change.prevWidth,
         nextHeight: change.prevHeight,
+      }
+    case 'physics_attr':
+      return {
+        type: 'physics_attr',
+        objectId: change.objectId,
+        key: change.key,
+        prevValue: change.nextValue,
+        nextValue: change.prevValue,
       }
     case 'spawn':
       return {
@@ -289,6 +327,10 @@ export function applyChange(target: ScalableMovableObject, change: EditorChange)
       if (change.property === 'holdOffsetY') GAME_WEAPON_CONFIG.holdOffsetY = change.nextValue
       if (change.property === 'colliderWidth') target.colliderWidth = change.nextValue
       if (change.property === 'colliderHeight') target.colliderHeight = change.nextValue
+      break
+    }
+    case 'physics_attr': {
+      setPhysicsAttrValue(target, change.key, change.nextValue)
       break
     }
     case 'collider': {

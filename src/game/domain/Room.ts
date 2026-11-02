@@ -1,3 +1,4 @@
+import type { Bounds } from './CollisionWorld.ts'
 import type { WorldObjectId, RoomId } from './ids.ts'
 import type { JsonValue } from './JsonValue.ts'
 
@@ -13,4 +14,6 @@ export interface Room {
   readonly objectIds: readonly WorldObjectId[]
   readonly exits: readonly RoomExit[]
   readonly state: JsonValue
+  /** The area bodies stay inside; without it the room has no edge. */
+  readonly bounds?: Bounds
 }
