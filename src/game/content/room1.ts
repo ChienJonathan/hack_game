@@ -55,8 +55,8 @@ export const ROOM1_OBJECTS: RoomObjectConfig[] = [
       maxSpeed: 300,
     },
     maxHealth: 100,
-    colliderWidth: 58,
-    colliderHeight: 117,
+    colliderWidth: 62,
+    colliderHeight: 94,
   },
   {
     id: "boulder",
