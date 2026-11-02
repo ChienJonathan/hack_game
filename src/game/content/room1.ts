@@ -67,6 +67,7 @@ export const ROOM1_OBJECTS: RoomObjectConfig[] = [
     scaleY: 1.28,
     colliderWidth: 132,
     colliderHeight: 138,
+    mass: 100,
   },
   {
     id: "dagger",
