@@ -36,6 +36,18 @@ export function generateRoom1Source(objects: RoomObjectConfig[]): string {
     if (obj.maxHealth !== undefined) {
       lines.push(`    maxHealth: ${obj.maxHealth},`)
     }
+    if (obj.attackDistance !== undefined) {
+      lines.push(`    attackDistance: ${obj.attackDistance},`)
+    }
+    if (obj.attackDurationMs !== undefined) {
+      lines.push(`    attackDurationMs: ${obj.attackDurationMs},`)
+    }
+    if (obj.holdOffsetX !== undefined) {
+      lines.push(`    holdOffsetX: ${obj.holdOffsetX},`)
+    }
+    if (obj.holdOffsetY !== undefined) {
+      lines.push(`    holdOffsetY: ${obj.holdOffsetY},`)
+    }
     return `  {\n${lines.join('\n')}\n  },`
   })
 
@@ -58,6 +70,10 @@ export interface RoomObjectConfig {
   scaleY?: number
   speed?: number | PlayerSpeedConfig
   maxHealth?: number
+  attackDistance?: number
+  attackDurationMs?: number
+  holdOffsetX?: number
+  holdOffsetY?: number
 }
 
 export const ROOM1_OBJECTS: RoomObjectConfig[] = [

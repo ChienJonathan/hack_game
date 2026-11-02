@@ -11,7 +11,18 @@ export const PLAYER_TEXTURE_KEY = 'player-idle'
 export const GUARD_TEXTURE_KEY = 'guard-idle'
 export const DAGGER_TEXTURE_KEY = 'dagger'
 export const ITEM_LABEL_WIDTH_RATIO = 0.75
-export const WEAPON_HOLD_OFFSET = { x: 44, y: 38 } as const
+
+export {
+  WEAPON_HOLD_OFFSET,
+  DAGGER_ATTACK_DISTANCE,
+  DAGGER_ATTACK_DURATION_MS,
+  computeDaggerAttackTranslation,
+  GAME_WEAPON_CONFIG,
+} from '../content/weaponConstants.ts'
+import {
+  computeDaggerAttackTranslation,
+  GAME_WEAPON_CONFIG,
+} from '../content/weaponConstants.ts'
 
 export const WORLD_OBJECT_TEXTURE_URLS = {
   [PLAYER_TEXTURE_KEY]: playerImageUrl,
@@ -33,6 +44,12 @@ interface DisplayState {
   maxHealth?: unknown
   facing?: unknown
   flipX?: unknown
+  attackOffsetX?: unknown
+  attackElapsedMs?: unknown
+  attackDurationMs?: unknown
+  holdOffsetX?: unknown
+  holdOffsetY?: unknown
+  weaponAttackDistance?: unknown
 }
 
 const TEXT_COLOR = '#d6d6d6'
@@ -185,8 +202,31 @@ export class PhaserRoomView {
           const holderY = holderRendered?.y ?? (typeof holderState.y === 'number' ? holderState.y : y)
           const isHolderFacingLeft = holderState.facing === 'left'
 
-          renderX = holderX + (isHolderFacingLeft ? -WEAPON_HOLD_OFFSET.x : WEAPON_HOLD_OFFSET.x)
-          renderY = holderY + WEAPON_HOLD_OFFSET.y
+          let attackOffsetX = 0
+          if (typeof objectState.attackOffsetX === 'number') {
+            attackOffsetX = objectState.attackOffsetX
+          } else if (
+            typeof objectState.attackElapsedMs === 'number' &&
+            typeof objectState.attackDurationMs === 'number' &&
+            objectState.attackDurationMs > 0
+          ) {
+            const maxDist =
+              typeof objectState.weaponAttackDistance === 'number'
+                ? objectState.weaponAttackDistance
+                : GAME_WEAPON_CONFIG.attackDistance
+            const translation = computeDaggerAttackTranslation(
+              objectState.attackElapsedMs,
+              objectState.attackDurationMs,
+              maxDist,
+            )
+            attackOffsetX = isHolderFacingLeft ? -translation : translation
+          }
+
+          const holdX = typeof objectState.holdOffsetX === 'number' ? objectState.holdOffsetX : GAME_WEAPON_CONFIG.holdOffsetX
+          const holdY = typeof objectState.holdOffsetY === 'number' ? objectState.holdOffsetY : GAME_WEAPON_CONFIG.holdOffsetY
+
+          renderX = holderX + (isHolderFacingLeft ? -holdX : holdX) + attackOffsetX
+          renderY = holderY + holdY
           shouldFlip = isHolderFacingLeft
         }
       }

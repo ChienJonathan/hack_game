@@ -37,7 +37,22 @@ export const ROOM_LAYOUT = {
 
 export const CHARACTER_SIZE = { width: 110, height: 160 } as const
 export const CHARACTER_BASE_SIZE = { width: 176, height: 176 } as const
-export const DAGGER_SIZE = { width: 72, height: 72 } as const
 export const MAX_HEALTH = 100
+
+export {
+  DEFAULT_DAGGER_SIZE,
+  DAGGER_SIZE,
+  DEFAULT_WEAPON_HOLD_OFFSET,
+  WEAPON_HOLD_OFFSET,
+  DEFAULT_DAGGER_ATTACK_DISTANCE,
+  DEFAULT_DAGGER_ATTACK_DURATION_MS,
+  DAGGER_ATTACK_DISTANCE,
+  DAGGER_ATTACK_DURATION_MS,
+  type WeaponConfig,
+  GAME_WEAPON_CONFIG,
+  resetGameWeaponConfig,
+  computeDaggerAttackTranslation,
+  startDaggerAttackAnimation,
+} from './weaponConstants.ts'
 
 

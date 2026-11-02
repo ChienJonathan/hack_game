@@ -17,18 +17,22 @@ export interface RoomObjectConfig {
   scaleY?: number
   speed?: number | PlayerSpeedConfig
   maxHealth?: number
+  attackDistance?: number
+  attackDurationMs?: number
+  holdOffsetX?: number
+  holdOffsetY?: number
 }
 
 export const ROOM1_OBJECTS: RoomObjectConfig[] = [
   {
     id: "player",
     role: "player",
-    x: 378,
-    y: 345,
-    displayWidth: 127,
-    displayHeight: 127,
-    scaleX: 0.72,
-    scaleY: 0.72,
+    x: 424,
+    y: 439,
+    displayWidth: 125,
+    displayHeight: 125,
+    scaleX: 0.71,
+    scaleY: 0.71,
     speed: {
       acceleration: 2500,
       frictionAcceleration: 3000,
@@ -40,12 +44,16 @@ export const ROOM1_OBJECTS: RoomObjectConfig[] = [
   {
     id: "dagger",
     role: "weapon",
-    x: 325,
-    y: 610,
+    x: 614,
+    y: 611,
     displayWidth: 72,
     displayHeight: 72,
     scaleX: 1,
     scaleY: 1,
+    attackDistance: 30,
+    attackDurationMs: 200,
+    holdOffsetX: 14,
+    holdOffsetY: 8,
   },
   {
     id: "guard",

@@ -597,4 +597,43 @@ describe('player facing and turning', () => {
     expect(dagger.x).toBe(player.x)
     expect(dagger.y).toBe(player.y)
   })
+
+  it('translates dagger position during attack animation in domain simulation', () => {
+    const session = newSession()
+    const player = stateOf(session, 'player')
+    const dagger = stateOf(session, 'dagger')
+    player.x = dagger.x
+    player.y = dagger.y
+
+    // Pick up dagger
+    session.update(SIMULATION_TICK_MS)
+    expect(player.weaponId).toBe('dagger')
+    expect(dagger.x).toBe(player.x)
+
+    // Face right and attack
+    session.keyDown('arrowright')
+    session.update(SIMULATION_TICK_MS)
+    session.attack()
+
+    // At peak (approx 100ms into the 200ms animation): dagger position translated forward (+X)
+    runFor(session, 100)
+    expect(dagger.x).toBe(player.x + 30)
+
+    // After animation duration finishes (200ms total): returns to holder position
+    runFor(session, 100)
+    expect(dagger.x).toBe(player.x)
+
+    // Face left and attack
+    session.keyDown('arrowleft')
+    session.update(SIMULATION_TICK_MS)
+    session.attack()
+
+    // At peak: dagger position translated forward in left direction (-X)
+    runFor(session, 100)
+    expect(dagger.x).toBe(player.x - 30)
+
+    // After animation duration finishes: returns to holder position
+    runFor(session, 100)
+    expect(dagger.x).toBe(player.x)
+  })
 })

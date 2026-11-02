@@ -1,4 +1,21 @@
-import { ROOM_IDS, ROOM_LAYOUT, WORLD_OBJECT_IDS, PROCESS_IDS } from '../../content/room1Constants.ts'
+export {
+  DAGGER_ATTACK_DISTANCE,
+  DAGGER_ATTACK_DURATION_MS,
+  computeDaggerAttackTranslation,
+  startDaggerAttackAnimation,
+  GAME_WEAPON_CONFIG,
+} from '../../content/weaponConstants.ts'
+import {
+  ROOM_IDS,
+  ROOM_LAYOUT,
+  WORLD_OBJECT_IDS,
+  PROCESS_IDS,
+} from '../../content/room1Constants.ts'
+import {
+  computeDaggerAttackTranslation,
+  startDaggerAttackAnimation,
+  GAME_WEAPON_CONFIG,
+} from '../../content/weaponConstants.ts'
 import type { PlayerSpeedConfig } from '../../content/room1.ts'
 import type { CharacterState } from '../../domain/CharacterState.ts'
 import { AabbCollisionWorld } from '../../domain/CollisionWorld.ts'
@@ -16,13 +33,18 @@ interface PlayerState extends CharacterState {
   vy: number
 }
 
-interface DaggerState extends Record<string, string | number | boolean | null> {
+export interface DaggerState extends MutableWorldObjectState {
   x: number
   y: number
   width: number
   height: number
   equippedBy: string | null
+  attackDurationMs: number
+  attackElapsedMs: number
+  attackOffsetX: number
 }
+
+
 
 interface GuardState extends CharacterState {
   speed: number
@@ -301,13 +323,44 @@ export class DaggerPickupProcess implements WorldObjectProcess {
     }
 
     if (!dagger.equippedBy) {
+      const daggerRecord = dagger as unknown as Record<string, unknown>
+      daggerRecord.attackDurationMs = 0
+      daggerRecord.attackElapsedMs = 0
+      daggerRecord.attackOffsetX = 0
       return
     }
 
     (dagger as unknown as Record<string, unknown>).thrown = null
     const holder = objectState<CharacterState>(context, dagger.equippedBy)
     if (holder) {
-      dagger.x = holder.x
+      const daggerRecord = dagger as unknown as Record<string, unknown>
+      const duration = typeof daggerRecord.attackDurationMs === 'number' ? daggerRecord.attackDurationMs : 0
+      let attackOffsetX = 0
+
+      if (duration > 0) {
+        const elapsed = ((daggerRecord.attackElapsedMs as number) ?? 0) + context.tickDurationMs
+        if (elapsed >= duration) {
+          daggerRecord.attackDurationMs = 0
+          daggerRecord.attackElapsedMs = 0
+          daggerRecord.attackOffsetX = 0
+        } else {
+          daggerRecord.attackElapsedMs = elapsed
+          const maxDist =
+            typeof daggerRecord.weaponAttackDistance === 'number'
+              ? daggerRecord.weaponAttackDistance
+              : typeof daggerRecord.attackDistance === 'number'
+                ? daggerRecord.attackDistance
+                : GAME_WEAPON_CONFIG.attackDistance
+          const translation = computeDaggerAttackTranslation(elapsed, duration, maxDist)
+          const isHolderFacingLeft = holder.facing === 'left'
+          attackOffsetX = isHolderFacingLeft ? -translation : translation
+          daggerRecord.attackOffsetX = attackOffsetX
+        }
+      } else {
+        daggerRecord.attackOffsetX = 0
+      }
+
+      dagger.x = holder.x + attackOffsetX
       dagger.y = holder.y
     }
   }
@@ -349,6 +402,16 @@ export class GuardResponseProcess implements WorldObjectProcess {
 
     const attack = combat.attack(context.state, context.worldObject.id)
     guard.attacking = attack.status === 'hit'
+    if (guard.attacking && guard.weaponId === 'dagger') {
+      const daggerObj = context.state.worldObjects.find(
+        (o) =>
+          (o.id === WORLD_OBJECT_IDS.dagger || o.metadata.role === 'weapon') &&
+          (o.state as Record<string, unknown>).equippedBy === context.worldObject.id,
+      )
+      if (daggerObj) {
+        startDaggerAttackAnimation(getMutableWorldObjectState<DaggerState>(daggerObj))
+      }
+    }
 
     if (!player.alive) {
       player.moveX = 0

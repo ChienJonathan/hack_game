@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type Phaser from 'phaser'
-import { PhaserRoomView, ITEM_LABEL_WIDTH_RATIO } from './PhaserRoomView.ts'
+import {
+  PhaserRoomView,
+  ITEM_LABEL_WIDTH_RATIO,
+  DAGGER_ATTACK_DISTANCE,
+  DAGGER_ATTACK_DURATION_MS,
+  computeDaggerAttackTranslation,
+} from './PhaserRoomView.ts'
 import { createInitialWorldState } from '../content/room1WorldState.ts'
 
 interface MockText {
@@ -296,5 +302,69 @@ describe('PhaserRoomView', () => {
     expect(daggerImage.x).toBe(356)
     expect(daggerImage.y).toBe(338)
     expect(daggerImage.flipX).toBe(true)
+  })
+
+  it('translates dagger position during attack animation based on facing direction', () => {
+    const view = new PhaserRoomView()
+    const { mockScene, images } = createMockScene()
+    const worldState = createInitialWorldState()
+
+    view.mount(mockScene, worldState)
+
+    const player = worldState.worldObjects.find((o) => o.id === 'player')!
+    const dagger = worldState.worldObjects.find((o) => o.id === 'dagger')!
+    const daggerIndex = worldState.worldObjects.indexOf(dagger)
+    const daggerImage = images[daggerIndex]
+
+    const playerState = player.state as Record<string, unknown>
+    const daggerState = dagger.state as Record<string, unknown>
+    playerState.x = 400
+    playerState.y = 300
+    playerState.facing = 'right'
+
+    daggerState.equippedBy = 'player'
+    daggerState.x = 400
+    daggerState.y = 300
+
+    // Explicit attack translation when facing right: +30px thrust
+    daggerState.attackOffsetX = 30
+    view.update(worldState)
+    expect(daggerImage.x).toBe(474) // 400 + 44 + 30
+    expect(daggerImage.y).toBe(338)
+
+    // Explicit attack translation when facing left: -30px thrust
+    playerState.facing = 'left'
+    daggerState.attackOffsetX = -30
+    view.update(worldState)
+    expect(daggerImage.x).toBe(326) // 400 - 44 - 30
+    expect(daggerImage.y).toBe(338)
+
+    // Dynamic computation from attackElapsedMs at peak (100ms / 200ms)
+    delete daggerState.attackOffsetX
+    daggerState.attackDurationMs = DAGGER_ATTACK_DURATION_MS
+    daggerState.attackElapsedMs = DAGGER_ATTACK_DURATION_MS / 2 // peak: +30px translation
+
+    playerState.facing = 'right'
+    view.update(worldState)
+    expect(daggerImage.x).toBe(474)
+
+    playerState.facing = 'left'
+    view.update(worldState)
+    expect(daggerImage.x).toBe(326)
+
+    // After animation completes, returns to resting position
+    daggerState.attackElapsedMs = DAGGER_ATTACK_DURATION_MS
+    view.update(worldState)
+    expect(daggerImage.x).toBe(356) // 400 - 44 + 0
+  })
+
+  it('computes dagger attack translation using sine-wave easing', () => {
+    expect(computeDaggerAttackTranslation(0, DAGGER_ATTACK_DURATION_MS, DAGGER_ATTACK_DISTANCE)).toBe(0)
+    expect(computeDaggerAttackTranslation(100, DAGGER_ATTACK_DURATION_MS, DAGGER_ATTACK_DISTANCE)).toBe(DAGGER_ATTACK_DISTANCE)
+    expect(computeDaggerAttackTranslation(200, DAGGER_ATTACK_DURATION_MS, DAGGER_ATTACK_DISTANCE)).toBe(0)
+    expect(computeDaggerAttackTranslation(-10, DAGGER_ATTACK_DURATION_MS, DAGGER_ATTACK_DISTANCE)).toBe(0)
+    expect(computeDaggerAttackTranslation(250, DAGGER_ATTACK_DURATION_MS, DAGGER_ATTACK_DISTANCE)).toBe(0)
+    expect(computeDaggerAttackTranslation(50, DAGGER_ATTACK_DURATION_MS, DAGGER_ATTACK_DISTANCE)).toBe(21)
+    expect(computeDaggerAttackTranslation(150, DAGGER_ATTACK_DURATION_MS, DAGGER_ATTACK_DISTANCE)).toBe(21)
   })
 })

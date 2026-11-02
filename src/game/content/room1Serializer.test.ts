@@ -100,5 +100,28 @@ describe('room1Serializer', () => {
     expect(source).not.toContain('ROOM1_MV_SPEED')
     expect(source).not.toContain('MvSpeedConfig')
   })
+
+  it('serializes weapon attack and hold properties', () => {
+    const objects: RoomObjectConfig[] = [
+      {
+        id: 'dagger',
+        role: 'weapon',
+        x: 325,
+        y: 610,
+        displayWidth: 72,
+        displayHeight: 72,
+        attackDistance: 45,
+        attackDurationMs: 250,
+        holdOffsetX: 16,
+        holdOffsetY: 8,
+      },
+    ]
+
+    const source = generateRoom1Source(objects)
+    expect(source).toContain('attackDistance: 45')
+    expect(source).toContain('attackDurationMs: 250')
+    expect(source).toContain('holdOffsetX: 16')
+    expect(source).toContain('holdOffsetY: 8')
+  })
 })
 

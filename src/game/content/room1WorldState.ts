@@ -12,6 +12,7 @@ import {
   CHARACTER_BASE_SIZE,
   DAGGER_SIZE,
   MAX_HEALTH,
+  GAME_WEAPON_CONFIG,
 } from './room1Constants.ts'
 import { ROOM1_OBJECTS, type RoomObjectConfig } from './room1.ts'
 
@@ -133,6 +134,13 @@ export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJE
           scaleY,
           discovered: false,
           equippedBy: null,
+          attackDurationMs: 0,
+          attackElapsedMs: 0,
+          attackOffsetX: 0,
+          weaponAttackDistance: obj.attackDistance ?? GAME_WEAPON_CONFIG.attackDistance,
+          weaponAttackDurationMs: obj.attackDurationMs ?? GAME_WEAPON_CONFIG.attackDurationMs,
+          holdOffsetX: obj.holdOffsetX ?? GAME_WEAPON_CONFIG.holdOffsetX,
+          holdOffsetY: obj.holdOffsetY ?? GAME_WEAPON_CONFIG.holdOffsetY,
         },
       )
     }

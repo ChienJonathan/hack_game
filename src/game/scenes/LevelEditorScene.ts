@@ -7,6 +7,7 @@ import {
   ROOM_IDS,
   CHARACTER_BASE_SIZE,
   DAGGER_SIZE,
+  GAME_WEAPON_CONFIG,
 } from '../content/room1Constants.ts'
 import { createInitialWorldState } from '../content/room1WorldState.ts'
 import { ROOM1_OBJECTS, type PlayerSpeedConfig, type RoomObjectConfig } from '../content/room1.ts'
@@ -50,6 +51,10 @@ export interface SpawnObjectConfig {
   scaleY?: number
   speed?: number | PlayerSpeedConfig
   maxHealth?: number
+  attackDistance?: number
+  attackDurationMs?: number
+  holdOffsetX?: number
+  holdOffsetY?: number
 }
 
 export interface EditorObject extends ScalableMovableObject {
@@ -75,6 +80,8 @@ export class LevelEditorScene extends Phaser.Scene {
   private statsElements: Phaser.GameObjects.Text[] = []
   private guardStatsElements: Phaser.GameObjects.Text[] = []
   private playerStatsElements: Phaser.GameObjects.Text[] = []
+  private weaponStatsElements: Phaser.GameObjects.Text[] = []
+  private section3Title: Phaser.GameObjects.Text | undefined
   private naStatsText: Phaser.GameObjects.Text | undefined
   private headerText: Phaser.GameObjects.Text | undefined
   private isDraggingObject = false
@@ -113,6 +120,10 @@ export class LevelEditorScene extends Phaser.Scene {
     this.selectedId = null
     this.panelFields.clear()
     this.statsElements = []
+    this.guardStatsElements = []
+    this.playerStatsElements = []
+    this.weaponStatsElements = []
+    this.section3Title = undefined
     this.naStatsText = undefined
     this.objectListButtons = []
     this.objectListTitle = undefined
@@ -235,6 +246,10 @@ export class LevelEditorScene extends Phaser.Scene {
       this.editorObjects = []
       this.panelFields.clear()
       this.statsElements = []
+      this.guardStatsElements = []
+      this.playerStatsElements = []
+      this.weaponStatsElements = []
+      this.section3Title = undefined
       this.naStatsText = undefined
       this.objectListButtons = []
       this.objectListTitle = undefined
@@ -275,6 +290,31 @@ export class LevelEditorScene extends Phaser.Scene {
     const acceleration = speedConfig?.acceleration
     const frictionAcceleration = speedConfig?.frictionAcceleration
     const turnaroundAcceleration = speedConfig?.turnaroundAcceleration
+    const roomObj = ROOM1_OBJECTS.find((o) => o.id === worldObject.id)
+    const attackDistance = isWeapon
+      ? typeof state.weaponAttackDistance === 'number'
+        ? state.weaponAttackDistance
+        : typeof state.attackDistance === 'number'
+          ? state.attackDistance
+          : (roomObj?.attackDistance ?? GAME_WEAPON_CONFIG.attackDistance)
+      : undefined
+    const attackDurationMs = isWeapon
+      ? typeof state.weaponAttackDurationMs === 'number'
+        ? state.weaponAttackDurationMs
+        : typeof state.attackDurationMs === 'number'
+          ? state.attackDurationMs
+          : (roomObj?.attackDurationMs ?? GAME_WEAPON_CONFIG.attackDurationMs)
+      : undefined
+    const holdOffsetX = isWeapon
+      ? typeof state.holdOffsetX === 'number'
+        ? state.holdOffsetX
+        : (roomObj?.holdOffsetX ?? GAME_WEAPON_CONFIG.holdOffsetX)
+      : undefined
+    const holdOffsetY = isWeapon
+      ? typeof state.holdOffsetY === 'number'
+        ? state.holdOffsetY
+        : (roomObj?.holdOffsetY ?? GAME_WEAPON_CONFIG.holdOffsetY)
+      : undefined
     const defaultBaseWidth = isWeapon ? DAGGER_SIZE.width : CHARACTER_BASE_SIZE.width
     const defaultBaseHeight = isWeapon ? DAGGER_SIZE.height : CHARACTER_BASE_SIZE.height
 
@@ -351,6 +391,10 @@ export class LevelEditorScene extends Phaser.Scene {
       acceleration,
       frictionAcceleration,
       turnaroundAcceleration,
+      attackDistance,
+      attackDurationMs,
+      holdOffsetX,
+      holdOffsetY,
     }
 
     this.editorObjects.push(editorObject)
@@ -496,18 +540,18 @@ export class LevelEditorScene extends Phaser.Scene {
       this.panelFields.set(`val_${field}`, val)
     }
 
-    // ─── Section 3: Character Stats (Editable for player & guard) ───
-    const section3Title = this.add
+    // ─── Section 3: Stats (Editable for player, guard & weapon) ───
+    this.section3Title = this.add
       .text(890, 24, 'CHARACTER STATS', {
         fontFamily: FONT_FAMILY,
         fontSize: 14,
         color: ACCENT_COLOR,
       })
       .setOrigin(0.5, 0)
-    items.push(section3Title)
+    items.push(this.section3Title)
 
     this.naStatsText = this.add
-      .text(890, 115, '(Weapon — no stats)', {
+      .text(890, 115, '(No editable stats)', {
         fontFamily: FONT_FAMILY,
         fontSize: 13,
         color: DIM_COLOR,
@@ -519,6 +563,7 @@ export class LevelEditorScene extends Phaser.Scene {
     this.statsElements = []
     this.guardStatsElements = []
     this.playerStatsElements = []
+    this.weaponStatsElements = []
 
     const createStatRow = (
       labelName: string,
@@ -654,6 +699,30 @@ export class LevelEditorScene extends Phaser.Scene {
       .setOrigin(0.5, 0)
     this.statsElements.push(statHint1, statHint2)
     items.push(statHint1, statHint2)
+
+    // Weapon stats rows
+    createStatRow('attack_dist', 'attackDistance', 'attackDistance', 50, this.weaponStatsElements)
+    createStatRow('attack_dur', 'attackDurationMs', 'attackDurationMs', 86, this.weaponStatsElements)
+    createStatRow('hold_offset_x', 'holdOffsetX', 'holdOffsetX', 122, this.weaponStatsElements)
+    createStatRow('hold_offset_y', 'holdOffsetY', 'holdOffsetY', 158, this.weaponStatsElements)
+
+    const weaponHint1 = this.add
+      .text(890, 204, 'Click +/- (10) · Shift (50)', {
+        fontFamily: FONT_FAMILY,
+        fontSize: 11,
+        color: DIM_COLOR,
+      })
+      .setOrigin(0.5, 0)
+    const weaponHint2 = this.add
+      .text(890, 226, 'Click number to set exact', {
+        fontFamily: FONT_FAMILY,
+        fontSize: 11,
+        color: DIM_COLOR,
+      })
+      .setOrigin(0.5, 0)
+    this.weaponStatsElements.push(weaponHint1, weaponHint2)
+    items.push(weaponHint1, weaponHint2)
+    this.weaponStatsElements.forEach((el) => el.setVisible(false))
 
     // ─── Section 4: Scale & Nudge ───
     const section4Title = this.add
@@ -793,12 +862,18 @@ export class LevelEditorScene extends Phaser.Scene {
         'maxHealth',
         'speed',
         'player_speed_summary',
+        'attackDistance',
+        'attackDurationMs',
+        'holdOffsetX',
+        'holdOffsetY',
       ]) {
         setField(field, '--')
       }
+      this.section3Title?.setText('CHARACTER STATS')
       this.statsElements.forEach((el) => el.setVisible(false))
       this.guardStatsElements.forEach((el) => el.setVisible(false))
       this.playerStatsElements.forEach((el) => el.setVisible(false))
+      this.weaponStatsElements.forEach((el) => el.setVisible(false))
       this.naStatsText?.setVisible(false)
       return
     }
@@ -815,8 +890,14 @@ export class LevelEditorScene extends Phaser.Scene {
       (selected.speed !== undefined || selected.maxSpeed !== undefined)
 
     if (isCharacter) {
+      this.section3Title?.setText('CHARACTER STATS')
       setField('maxHealth', selected.maxHealth!.toString())
+      setField('attackDistance', '--')
+      setField('attackDurationMs', '--')
+      setField('holdOffsetX', '--')
+      setField('holdOffsetY', '--')
       this.statsElements.forEach((el) => el.setVisible(true))
+      this.weaponStatsElements.forEach((el) => el.setVisible(false))
       this.naStatsText?.setVisible(false)
 
       if (selected.role === 'player') {
@@ -841,13 +922,39 @@ export class LevelEditorScene extends Phaser.Scene {
         const spd = typeof selected.speed === 'number' ? selected.speed : (selected.maxSpeed ?? 210)
         setField('speed', spd.toString())
       }
-    } else {
+    } else if (selected.role === 'weapon') {
+      this.section3Title?.setText('WEAPON STATS')
       setField('maxHealth', '--')
       setField('speed', '--')
       setField('player_speed_summary', '--')
       this.statsElements.forEach((el) => el.setVisible(false))
       this.guardStatsElements.forEach((el) => el.setVisible(false))
       this.playerStatsElements.forEach((el) => el.setVisible(false))
+      this.naStatsText?.setVisible(false)
+      this.weaponStatsElements.forEach((el) => el.setVisible(true))
+
+      const attackDist = selected.attackDistance ?? GAME_WEAPON_CONFIG.attackDistance
+      const attackDur = selected.attackDurationMs ?? GAME_WEAPON_CONFIG.attackDurationMs
+      const holdX = selected.holdOffsetX ?? GAME_WEAPON_CONFIG.holdOffsetX
+      const holdY = selected.holdOffsetY ?? GAME_WEAPON_CONFIG.holdOffsetY
+
+      setField('attackDistance', attackDist.toString())
+      setField('attackDurationMs', attackDur.toString())
+      setField('holdOffsetX', holdX.toString())
+      setField('holdOffsetY', holdY.toString())
+    } else {
+      this.section3Title?.setText('STATS')
+      setField('maxHealth', '--')
+      setField('speed', '--')
+      setField('player_speed_summary', '--')
+      setField('attackDistance', '--')
+      setField('attackDurationMs', '--')
+      setField('holdOffsetX', '--')
+      setField('holdOffsetY', '--')
+      this.statsElements.forEach((el) => el.setVisible(false))
+      this.guardStatsElements.forEach((el) => el.setVisible(false))
+      this.playerStatsElements.forEach((el) => el.setVisible(false))
+      this.weaponStatsElements.forEach((el) => el.setVisible(false))
       this.naStatsText?.setVisible(true)
     }
   }
@@ -882,11 +989,28 @@ export class LevelEditorScene extends Phaser.Scene {
           typeof selected.speed === 'object' && selected.speed !== null
             ? selected.speed.turnaroundAcceleration
             : 1600
+      } else if (property === 'attackDistance') {
+        prevValue = GAME_WEAPON_CONFIG.attackDistance
+      } else if (property === 'attackDurationMs') {
+        prevValue = GAME_WEAPON_CONFIG.attackDurationMs
+      } else if (property === 'holdOffsetX') {
+        prevValue = GAME_WEAPON_CONFIG.holdOffsetX
+      } else if (property === 'holdOffsetY') {
+        prevValue = GAME_WEAPON_CONFIG.holdOffsetY
       }
     }
     if (prevValue === undefined) return
 
-    const min = property === 'maxHealth' ? 1 : 10
+    let min = 10
+    if (property === 'maxHealth') {
+      min = 1
+    } else if (property === 'attackDistance') {
+      min = 0
+    } else if (property === 'attackDurationMs') {
+      min = 10
+    } else if (property === 'holdOffsetX' || property === 'holdOffsetY') {
+      min = -200
+    }
     const nextValue = Math.max(min, prevValue + delta)
     if (nextValue === prevValue) return
 
@@ -897,6 +1021,10 @@ export class LevelEditorScene extends Phaser.Scene {
       if (property === 'frictionAcceleration') selected.speed.frictionAcceleration = nextValue
       if (property === 'turnaroundAcceleration') selected.speed.turnaroundAcceleration = nextValue
     }
+    if (property === 'attackDistance') GAME_WEAPON_CONFIG.attackDistance = nextValue
+    if (property === 'attackDurationMs') GAME_WEAPON_CONFIG.attackDurationMs = nextValue
+    if (property === 'holdOffsetX') GAME_WEAPON_CONFIG.holdOffsetX = nextValue
+    if (property === 'holdOffsetY') GAME_WEAPON_CONFIG.holdOffsetY = nextValue
 
     this.history.push({
       type: 'property',
@@ -940,6 +1068,14 @@ export class LevelEditorScene extends Phaser.Scene {
           typeof selected.speed === 'object' && selected.speed !== null
             ? selected.speed.turnaroundAcceleration
             : 1600
+      } else if (property === 'attackDistance') {
+        prevValue = GAME_WEAPON_CONFIG.attackDistance
+      } else if (property === 'attackDurationMs') {
+        prevValue = GAME_WEAPON_CONFIG.attackDurationMs
+      } else if (property === 'holdOffsetX') {
+        prevValue = GAME_WEAPON_CONFIG.holdOffsetX
+      } else if (property === 'holdOffsetY') {
+        prevValue = GAME_WEAPON_CONFIG.holdOffsetY
       }
     }
     if (prevValue === undefined) return
@@ -953,12 +1089,29 @@ export class LevelEditorScene extends Phaser.Scene {
             ? 'friction_accel'
             : property === 'turnaroundAcceleration'
               ? 'turnaround_accel'
-              : property
+              : property === 'attackDistance'
+                ? 'attack_dist'
+                : property === 'attackDurationMs'
+                  ? 'attack_dur'
+                  : property === 'holdOffsetX'
+                    ? 'hold_offset_x'
+                    : property === 'holdOffsetY'
+                      ? 'hold_offset_y'
+                      : property
     const input = window.prompt(`Enter new ${label} for ${selected.id}:`, prevValue.toString())
     if (input === null) return
 
     const parsed = parseInt(input.trim(), 10)
-    const min = property === 'maxHealth' ? 1 : 10
+    let min = 10
+    if (property === 'maxHealth') {
+      min = 1
+    } else if (property === 'attackDistance') {
+      min = 0
+    } else if (property === 'attackDurationMs') {
+      min = 10
+    } else if (property === 'holdOffsetX' || property === 'holdOffsetY') {
+      min = -200
+    }
     if (isNaN(parsed) || parsed < min) return
 
     const nextValue = parsed
@@ -971,6 +1124,10 @@ export class LevelEditorScene extends Phaser.Scene {
       if (property === 'frictionAcceleration') selected.speed.frictionAcceleration = nextValue
       if (property === 'turnaroundAcceleration') selected.speed.turnaroundAcceleration = nextValue
     }
+    if (property === 'attackDistance') GAME_WEAPON_CONFIG.attackDistance = nextValue
+    if (property === 'attackDurationMs') GAME_WEAPON_CONFIG.attackDurationMs = nextValue
+    if (property === 'holdOffsetX') GAME_WEAPON_CONFIG.holdOffsetX = nextValue
+    if (property === 'holdOffsetY') GAME_WEAPON_CONFIG.holdOffsetY = nextValue
 
     this.history.push({
       type: 'property',
@@ -1290,6 +1447,10 @@ export class LevelEditorScene extends Phaser.Scene {
           scaleY: reversed.snapshot.scaleY,
           speed: reversed.snapshot.speed,
           maxHealth: reversed.snapshot.maxHealth,
+          attackDistance: reversed.snapshot.attackDistance,
+          attackDurationMs: reversed.snapshot.attackDurationMs,
+          holdOffsetX: reversed.snapshot.holdOffsetX,
+          holdOffsetY: reversed.snapshot.holdOffsetY,
         },
         false,
       )
@@ -1362,6 +1523,10 @@ export class LevelEditorScene extends Phaser.Scene {
         scaleY: Number(obj.scaleY.toFixed(2)),
         ...(speed !== undefined ? { speed } : {}),
         ...(obj.maxHealth !== undefined ? { maxHealth: obj.maxHealth } : {}),
+        ...(obj.attackDistance !== undefined ? { attackDistance: obj.attackDistance } : {}),
+        ...(obj.attackDurationMs !== undefined ? { attackDurationMs: obj.attackDurationMs } : {}),
+        ...(obj.holdOffsetX !== undefined ? { holdOffsetX: obj.holdOffsetX } : {}),
+        ...(obj.holdOffsetY !== undefined ? { holdOffsetY: obj.holdOffsetY } : {}),
       }
     })
 
@@ -1476,6 +1641,10 @@ export class LevelEditorScene extends Phaser.Scene {
       }
       if (config.maxHealth !== undefined) existing.maxHealth = config.maxHealth
       if (config.speed !== undefined) existing.speed = config.speed
+      if (config.attackDistance !== undefined) existing.attackDistance = config.attackDistance
+      if (config.attackDurationMs !== undefined) existing.attackDurationMs = config.attackDurationMs
+      if (config.holdOffsetX !== undefined) existing.holdOffsetX = config.holdOffsetX
+      if (config.holdOffsetY !== undefined) existing.holdOffsetY = config.holdOffsetY
       this.updateObjectVisuals(existing)
       this.selectObject(id)
       return existing
@@ -1514,6 +1683,10 @@ export class LevelEditorScene extends Phaser.Scene {
     const acceleration = speedConfig?.acceleration
     const frictionAcceleration = speedConfig?.frictionAcceleration
     const turnaroundAcceleration = speedConfig?.turnaroundAcceleration
+    const spawnAttackDistance = config.attackDistance ?? (isWeapon ? GAME_WEAPON_CONFIG.attackDistance : undefined)
+    const spawnAttackDurationMs = config.attackDurationMs ?? (isWeapon ? GAME_WEAPON_CONFIG.attackDurationMs : undefined)
+    const spawnHoldOffsetX = config.holdOffsetX ?? (isWeapon ? GAME_WEAPON_CONFIG.holdOffsetX : undefined)
+    const spawnHoldOffsetY = config.holdOffsetY ?? (isWeapon ? GAME_WEAPON_CONFIG.holdOffsetY : undefined)
 
     const defaultX = 960 + (this.editorObjects.length % 5) * 40 - 80
     const defaultY = 380 + (this.editorObjects.length % 5) * 30 - 60
@@ -1576,6 +1749,10 @@ export class LevelEditorScene extends Phaser.Scene {
       acceleration,
       frictionAcceleration,
       turnaroundAcceleration,
+      attackDistance: spawnAttackDistance,
+      attackDurationMs: spawnAttackDurationMs,
+      holdOffsetX: spawnHoldOffsetX,
+      holdOffsetY: spawnHoldOffsetY,
     }
 
     this.editorObjects.push(editorObject)
@@ -1700,6 +1877,10 @@ export class LevelEditorScene extends Phaser.Scene {
       scaleY: obj.scaleY,
       speed: obj.speed,
       maxHealth: obj.maxHealth,
+      attackDistance: obj.attackDistance,
+      attackDurationMs: obj.attackDurationMs,
+      holdOffsetX: obj.holdOffsetX,
+      holdOffsetY: obj.holdOffsetY,
     }
   }
 

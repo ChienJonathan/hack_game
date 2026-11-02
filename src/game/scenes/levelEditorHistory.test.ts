@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, beforeEach } from 'vitest'
 import {
   type EditorChange,
   type MoveChange,
@@ -9,6 +9,7 @@ import {
   applyChange,
   invertChange,
 } from './levelEditorHistory.ts'
+import { GAME_WEAPON_CONFIG, resetGameWeaponConfig } from '../content/weaponConstants.ts'
 
 function createTestObject(overrides: Partial<ScalableMovableObject> = {}): ScalableMovableObject {
   return {
@@ -26,6 +27,10 @@ function createTestObject(overrides: Partial<ScalableMovableObject> = {}): Scala
 }
 
 describe('levelEditorHistory', () => {
+  beforeEach(() => {
+    resetGameWeaponConfig()
+  })
+
   describe('invertChange', () => {
     it('defines the reverse of a move change by negating dx and dy and swapping prev/next', () => {
       const move: MoveChange = {
@@ -198,6 +203,60 @@ describe('levelEditorHistory', () => {
         nextValue: 210,
       })
       expect(obj.speed).toBe(210)
+    })
+
+    it('applies weapon property changes to target object and syncs GAME_WEAPON_CONFIG', () => {
+      const weaponObj = createTestObject({
+        id: 'dagger',
+        attackDistance: 30,
+        attackDurationMs: 200,
+        holdOffsetX: 12,
+        holdOffsetY: 6,
+      })
+
+      applyChange(weaponObj, {
+        type: 'property',
+        objectId: 'dagger',
+        property: 'attackDistance',
+        delta: 20,
+        prevValue: 30,
+        nextValue: 50,
+      })
+      expect(weaponObj.attackDistance).toBe(50)
+      expect(GAME_WEAPON_CONFIG.attackDistance).toBe(50)
+
+      applyChange(weaponObj, {
+        type: 'property',
+        objectId: 'dagger',
+        property: 'attackDurationMs',
+        delta: 50,
+        prevValue: 200,
+        nextValue: 250,
+      })
+      expect(weaponObj.attackDurationMs).toBe(250)
+      expect(GAME_WEAPON_CONFIG.attackDurationMs).toBe(250)
+
+      applyChange(weaponObj, {
+        type: 'property',
+        objectId: 'dagger',
+        property: 'holdOffsetX',
+        delta: 8,
+        prevValue: 12,
+        nextValue: 20,
+      })
+      expect(weaponObj.holdOffsetX).toBe(20)
+      expect(GAME_WEAPON_CONFIG.holdOffsetX).toBe(20)
+
+      applyChange(weaponObj, {
+        type: 'property',
+        objectId: 'dagger',
+        property: 'holdOffsetY',
+        delta: -4,
+        prevValue: 6,
+        nextValue: 2,
+      })
+      expect(weaponObj.holdOffsetY).toBe(2)
+      expect(GAME_WEAPON_CONFIG.holdOffsetY).toBe(2)
     })
     it('applies move change by delta when exact positions are omitted', () => {
       const obj = createTestObject({ x: 50, y: 50 })
@@ -518,6 +577,35 @@ describe('levelEditorHistory', () => {
         role: 'guard',
         snapshot,
       })
+    })
+
+    it('undoes weapon property changes and restores GAME_WEAPON_CONFIG', () => {
+      const history = new EditorHistory()
+      const weapon = createTestObject({
+        id: 'dagger',
+        attackDistance: 30,
+        attackDurationMs: 200,
+      })
+
+      const change: PropertyChange = {
+        type: 'property',
+        objectId: 'dagger',
+        property: 'attackDistance',
+        delta: 20,
+        prevValue: 30,
+        nextValue: 50,
+      }
+
+      applyChange(weapon, change)
+      expect(weapon.attackDistance).toBe(50)
+      expect(GAME_WEAPON_CONFIG.attackDistance).toBe(50)
+
+      history.push(change)
+      const reversed = history.undo((id) => (id === weapon.id ? weapon : undefined))
+
+      expect(reversed?.type).toBe('property')
+      expect(weapon.attackDistance).toBe(30)
+      expect(GAME_WEAPON_CONFIG.attackDistance).toBe(30)
     })
   })
 })

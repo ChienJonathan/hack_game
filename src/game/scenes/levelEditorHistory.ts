@@ -1,4 +1,5 @@
 import type { PlayerSpeedConfig } from '../content/room1.ts'
+import { GAME_WEAPON_CONFIG } from '../content/weaponConstants.ts'
 
 export interface ScalableMovableObject {
   id: string
@@ -16,6 +17,10 @@ export interface ScalableMovableObject {
   acceleration?: number
   frictionAcceleration?: number
   turnaroundAcceleration?: number
+  attackDistance?: number
+  attackDurationMs?: number
+  holdOffsetX?: number
+  holdOffsetY?: number
 }
 
 export interface MoveChange {
@@ -50,6 +55,10 @@ export type CharacterProperty =
   | 'acceleration'
   | 'frictionAcceleration'
   | 'turnaroundAcceleration'
+  | 'attackDistance'
+  | 'attackDurationMs'
+  | 'holdOffsetX'
+  | 'holdOffsetY'
 
 export interface PropertyChange {
   readonly type: 'property'
@@ -194,6 +203,10 @@ export function applyChange(target: ScalableMovableObject, change: EditorChange)
         if (change.property === 'frictionAcceleration') target.speed.frictionAcceleration = change.nextValue
         if (change.property === 'turnaroundAcceleration') target.speed.turnaroundAcceleration = change.nextValue
       }
+      if (change.property === 'attackDistance') GAME_WEAPON_CONFIG.attackDistance = change.nextValue
+      if (change.property === 'attackDurationMs') GAME_WEAPON_CONFIG.attackDurationMs = change.nextValue
+      if (change.property === 'holdOffsetX') GAME_WEAPON_CONFIG.holdOffsetX = change.nextValue
+      if (change.property === 'holdOffsetY') GAME_WEAPON_CONFIG.holdOffsetY = change.nextValue
       break
     }
   }

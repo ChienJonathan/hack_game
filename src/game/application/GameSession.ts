@@ -7,8 +7,9 @@ import type { SimulationClock } from '../simulation/SimulationClock.ts'
 import type { RenderPosition, SimulationEngine } from '../simulation/SimulationEngine.ts'
 import type { CombatService } from '../domain/CombatService.ts'
 import type { PickUpService } from '../domain/PickUpService.ts'
-import { getMutableWorldObjectState } from '../domain/WorldObjectState.ts'
+import { getMutableWorldObjectState, type MutableWorldObjectState } from '../domain/WorldObjectState.ts'
 import type { WorldState } from '../domain/WorldState.ts'
+import { startDaggerAttackAnimation } from '../content/weaponConstants.ts'
 import type { InputMode, InputModeController } from './InputModeController.ts'
 
 const SAVE_SCHEMA_VERSION = 1
@@ -87,8 +88,27 @@ export class GameSession {
 
   attack(): void {
     if (this.canAct()) {
-      this.dependencies.combat.attack(this.dependencies.worldState, this.dependencies.playerId)
+      const result = this.dependencies.combat.attack(this.dependencies.worldState, this.dependencies.playerId)
+      if (result.status !== 'cooling-down') {
+        this.triggerEquippedDaggerAttack(this.dependencies.playerId)
+      }
     }
+  }
+
+  private triggerEquippedDaggerAttack(attackerId: string): void {
+    const daggerObj = this.dependencies.worldState.worldObjects.find((worldObject) => {
+      const state = worldObject.state as Record<string, unknown>
+      return (
+        (worldObject.id === 'dagger' || worldObject.metadata.role === 'weapon') &&
+        state.equippedBy === attackerId
+      )
+    })
+    if (!daggerObj) {
+      return
+    }
+
+    const state = getMutableWorldObjectState<MutableWorldObjectState>(daggerObj)
+    startDaggerAttackAnimation(state)
   }
 
   update(realDeltaMs: number): void {
