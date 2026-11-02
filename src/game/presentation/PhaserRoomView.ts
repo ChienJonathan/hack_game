@@ -1,7 +1,15 @@
+import guardAttack from '../../assets/game/characters/guard/attack.png'
+import guardRecover from '../../assets/game/characters/guard/recover.png'
+import { CombatFeedback } from './CombatFeedback.ts'
+import playerStepA from '../../assets/game/characters/player/step-a.png'
+import playerStepB from '../../assets/game/characters/player/step-b.png'
+import guardStepA from '../../assets/game/characters/guard/step-a.png'
+import guardStepB from '../../assets/game/characters/guard/step-b.png'
+import { drawRoomBackdrop } from './drawRoomBackdrop.ts'
 import type Phaser from 'phaser'
-import guardImageUrl from '../../assets/game/characters/guard/idle.png'
-import playerImageUrl from '../../assets/game/characters/player/idle.png'
-import daggerImageUrl from '../../assets/game/items/weapons/dagger.png'
+import guardImageUrl from '../../assets/game/characters/guard/idle-retro.png'
+import playerImageUrl from '../../assets/game/characters/player/idle-retro.png'
+import daggerImageUrl from '../../assets/game/items/weapons/dagger-horizontal.png'
 import boulderImageUrl from '../../assets/game/objects/boulder.png'
 import type { WorldObject } from '../domain/WorldObject.ts'
 import type { WorldState } from '../domain/WorldState.ts'
@@ -27,6 +35,12 @@ import {
 } from '../content/weaponConstants.ts'
 
 export const WORLD_OBJECT_TEXTURE_URLS = {
+  'guard-attack': guardAttack,
+  'guard-recover': guardRecover,
+  'player-step-a': playerStepA,
+  'player-step-b': playerStepB,
+  'guard-step-a': guardStepA,
+  'guard-step-b': guardStepB,
   [PLAYER_TEXTURE_KEY]: playerImageUrl,
   [GUARD_TEXTURE_KEY]: guardImageUrl,
   [DAGGER_TEXTURE_KEY]: daggerImageUrl,
@@ -73,11 +87,13 @@ export class PhaserRoomView {
   private readonly objectViews = new WorldObjectViewRegistry()
   private readonly spriteById = new Map<string, Phaser.GameObjects.Image>()
   private readonly labelById = new Map<string, Phaser.GameObjects.Text>()
+  private readonly lastPositionById = new Map<string, { x: number; y: number }>()
   private roomTitle: Phaser.GameObjects.Text | undefined
   private roomFrame: Phaser.GameObjects.Graphics | undefined
-  private roomDivider: Phaser.GameObjects.Graphics | undefined
   private doorFrame: Phaser.GameObjects.Graphics | undefined
   private doorLabel: Phaser.GameObjects.Text | undefined
+  private readonly combatFeedback = new CombatFeedback()
+  private combatParticles: Phaser.GameObjects.Graphics | undefined
   private healthBars: Phaser.GameObjects.Graphics | undefined
 
   mount(scene: Phaser.Scene, state: WorldState, showRoomTitle = (scene.scene?.key === 'game')): void {
@@ -85,36 +101,22 @@ export class PhaserRoomView {
 
     this.roomFrame = scene.add.graphics().setDepth(0)
     this.healthBars = scene.add.graphics().setDepth(4)
-    this.roomFrame.lineStyle(4, 0x595959, 1).strokeRect(
-      ROOM_LAYOUT.left,
-      ROOM_LAYOUT.top,
-      ROOM_LAYOUT.right - ROOM_LAYOUT.left,
-      ROOM_LAYOUT.bottom - ROOM_LAYOUT.top,
-    )
-    this.roomFrame.lineStyle(2, 0x282828, 1)
-    for (let y = ROOM_LAYOUT.top + 36; y < ROOM_LAYOUT.bottom; y += 48) {
-      this.roomFrame.lineBetween(ROOM_LAYOUT.left + 4, y, ROOM_LAYOUT.right - 4, y)
-    }
-
-    this.roomDivider = scene.add.graphics().setDepth(0)
-    this.roomDivider.lineStyle(2, 0x3c3c3c, 0.8)
-    for (let y = ROOM_LAYOUT.top + 8; y < ROOM_LAYOUT.bottom; y += 24) {
-      this.roomDivider.lineBetween(
-        ROOM_LAYOUT.rightHalfStartX,
-        y,
-        ROOM_LAYOUT.rightHalfStartX,
-        Math.min(y + 10, ROOM_LAYOUT.bottom),
-      )
-    }
+    this.combatParticles = scene.add.graphics().setDepth(5)
+    drawRoomBackdrop(this.roomFrame)
 
     this.doorFrame = scene.add.graphics().setDepth(1)
-    this.doorFrame.fillStyle(0x101010, 1).fillRect(ROOM_LAYOUT.exit.x - 42, ROOM_LAYOUT.exit.y - 84, 84, 168)
-    this.doorFrame.lineStyle(4, 0x9a9a9a, 1).strokeRect(
+    this.doorFrame.fillStyle(0x0b1620, 1).fillRect(ROOM_LAYOUT.exit.x - 42, ROOM_LAYOUT.exit.y - 84, 84, 168)
+    this.doorFrame.lineStyle(6, 0x799594, 1).strokeRect(
       ROOM_LAYOUT.exit.x - 42,
       ROOM_LAYOUT.exit.y - 84,
       84,
       168,
     )
+    this.doorFrame.fillStyle(0x7fc5b3, 0.12).fillRect(ROOM_LAYOUT.exit.x - 34, ROOM_LAYOUT.exit.y - 76, 68, 152)
+    this.doorFrame.fillStyle(0xa7dcc5, 1).fillRect(ROOM_LAYOUT.exit.x - 20, ROOM_LAYOUT.exit.y - 3, 40, 6)
+    this.doorFrame.lineStyle(3, 0xa7dcc5, 1)
+      .lineBetween(ROOM_LAYOUT.exit.x + 20, ROOM_LAYOUT.exit.y, ROOM_LAYOUT.exit.x + 8, ROOM_LAYOUT.exit.y - 12)
+      .lineBetween(ROOM_LAYOUT.exit.x + 20, ROOM_LAYOUT.exit.y, ROOM_LAYOUT.exit.x + 8, ROOM_LAYOUT.exit.y + 12)
     this.doorLabel = scene.add
       .text(ROOM_LAYOUT.exit.x, ROOM_LAYOUT.exit.y + 100, ROOM_NAMES[ROOM_IDS.second], {
         fontFamily: '"Press Start 2P", monospace',
@@ -167,10 +169,23 @@ export class PhaserRoomView {
     this.update(state)
   }
 
-  update(state: WorldState, positionOf: (objectId: string) => { x: number; y: number } | undefined = () => undefined): void {
+  update(state: WorldState, positionOf: (objectId: string) => { x: number; y: number } | undefined = () => undefined, endedDeltaMs = 0): void {
+    this.combatFeedback.update(state, endedDeltaMs)
+    this.combatParticles?.clear()
+    for (const burst of this.combatFeedback.bursts) {
+      if (burst.roomId !== state.currentRoomId) continue
+      const t = burst.ageMs / 360
+      for (let i = 0; i < 9; i++) {
+        const vx = burst.direction * (20 + (i * 17) % 65)
+        const vy = -45 + (i * 19) % 60
+        const x = Math.round((burst.x + vx * t) / 3) * 3
+        const y = Math.round((burst.y + vy * t + 55 * t * t) / 3) * 3
+        this.combatParticles?.fillStyle(i % 2 ? 0xa82f40 : 0xe3595b, 1 - t)
+          .fillRect(x, y, i % 3 === 0 ? 6 : 3, i % 3 === 0 ? 6 : 3)
+      }
+    }
     const currentRoom = state.rooms.find((room) => room.id === state.currentRoomId)
     this.roomTitle?.setText(currentRoom ? ROOM_NAMES[currentRoom.id] ?? currentRoom.id : 'NO ROOM')
-    this.roomDivider?.setVisible(state.currentRoomId === ROOM_IDS.first)
     this.doorFrame?.setVisible(state.currentRoomId === ROOM_IDS.first)
     this.doorLabel?.setVisible(state.currentRoomId === ROOM_IDS.first)
 
@@ -234,6 +249,28 @@ export class PhaserRoomView {
         }
       }
 
+      const role = worldObject.metadata.role
+      if (role === 'player' || role === 'guard') {
+        const previous = this.lastPositionById.get(worldObject.id)
+        const moving = previous !== undefined && Math.hypot(x - previous.x, y - previous.y) > 0.01
+        const step = moving ? [0, 1, 0, 2][Math.floor(state.simulationTick / 7) % 4] : 0
+        const attackAge = this.combatFeedback.attacks.get(worldObject.id)
+        const texture = role === 'guard' && attackAge !== undefined
+          ? (attackAge < 110 ? 'guard-attack' : 'guard-recover')
+          : step === 0 ? (role === 'player' ? PLAYER_TEXTURE_KEY : GUARD_TEXTURE_KEY)
+          : `${role}-step-${step === 1 ? 'a' : 'b'}`
+        if (typeof sprite.setTexture === 'function' && sprite.texture.key !== texture) {
+          const w = sprite.displayWidth
+          const h = sprite.displayHeight
+          sprite.setTexture(texture).setDisplaySize(w, h)
+        }
+        this.lastPositionById.set(worldObject.id, { x, y })
+      }
+      // Anchor the horizontal texture at its grip, mirroring the grip with facing.
+      if (typeof sprite.setAngle === 'function' && worldObject.metadata.role === 'weapon') {
+        sprite.setAngle(0)
+        sprite.setOrigin(equipped ? (shouldFlip ? 0.75 : 0.25) : 0.5, 0.5)
+      }
       sprite.setPosition(renderX, renderY)
       const visible = inCurrentRoom && alive
       sprite.setVisible(visible)
@@ -303,19 +340,21 @@ export class PhaserRoomView {
       label.destroy()
     }
 
+    this.combatFeedback.clear()
+    this.combatParticles?.destroy()
+    this.combatParticles = undefined
+    this.lastPositionById.clear()
     this.spriteById.clear()
     this.labelById.clear()
     this.objectViews.clear()
     this.roomTitle?.destroy()
     this.roomFrame?.destroy()
-    this.roomDivider?.destroy()
     this.doorFrame?.destroy()
     this.doorLabel?.destroy()
     this.roomTitle = undefined
     this.healthBars?.destroy()
     this.healthBars = undefined
     this.roomFrame = undefined
-    this.roomDivider = undefined
     this.doorFrame = undefined
     this.doorLabel = undefined
   }

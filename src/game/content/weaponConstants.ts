@@ -10,7 +10,7 @@ export const DAGGER_SIZE = DEFAULT_DAGGER_SIZE
  * Default weapon hold offset in local coordinates relative to the holder.
  * Mirrored horizontally when the holder is facing left.
  */
-export const DEFAULT_WEAPON_HOLD_OFFSET = { x: 44, y: 38 } as const
+export const DEFAULT_WEAPON_HOLD_OFFSET = { x: 20, y: 26 } as const
 export const WEAPON_HOLD_OFFSET = DEFAULT_WEAPON_HOLD_OFFSET
 
 /**

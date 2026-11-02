@@ -24,7 +24,7 @@ describe('weaponConstants', () => {
   describe('constants and config', () => {
     it('defines base dagger size and hold offset', () => {
       expect(DAGGER_SIZE).toEqual({ width: 72, height: 72 })
-      expect(WEAPON_HOLD_OFFSET).toEqual({ x: 44, y: 38 })
+      expect(WEAPON_HOLD_OFFSET).toEqual({ x: 20, y: 26 })
     })
 
     it('defines default attack parameters', () => {
@@ -35,8 +35,8 @@ describe('weaponConstants', () => {
     it('provides mutable GAME_WEAPON_CONFIG that can be reset', () => {
       expect(GAME_WEAPON_CONFIG.attackDistance).toBe(30)
       expect(GAME_WEAPON_CONFIG.attackDurationMs).toBe(200)
-      expect(GAME_WEAPON_CONFIG.holdOffsetX).toBe(44)
-      expect(GAME_WEAPON_CONFIG.holdOffsetY).toBe(38)
+      expect(GAME_WEAPON_CONFIG.holdOffsetX).toBe(20)
+      expect(GAME_WEAPON_CONFIG.holdOffsetY).toBe(26)
 
       GAME_WEAPON_CONFIG.attackDistance = 50
       GAME_WEAPON_CONFIG.attackDurationMs = 300
@@ -47,8 +47,8 @@ describe('weaponConstants', () => {
       resetGameWeaponConfig()
       expect(GAME_WEAPON_CONFIG.attackDistance).toBe(30)
       expect(GAME_WEAPON_CONFIG.attackDurationMs).toBe(200)
-      expect(GAME_WEAPON_CONFIG.holdOffsetX).toBe(44)
-      expect(GAME_WEAPON_CONFIG.holdOffsetY).toBe(38)
+      expect(GAME_WEAPON_CONFIG.holdOffsetX).toBe(20)
+      expect(GAME_WEAPON_CONFIG.holdOffsetY).toBe(26)
     })
 
     it('re-exports weapon constants and functions through room1Constants for backwards compatibility', () => {
