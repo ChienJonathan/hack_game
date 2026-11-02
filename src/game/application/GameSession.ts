@@ -53,11 +53,26 @@ export class GameSession {
   }
 
   keyDown(key: string): { typeable: boolean } {
+    if (this.dependencies.inputMode.mode === 'movement') {
+      if (this.dependencies.inputMode.isBoundTo(key, 'left') || key.toLowerCase() === 'arrowleft') {
+        this.setPlayerFacing('left')
+      } else if (this.dependencies.inputMode.isBoundTo(key, 'right') || key.toLowerCase() === 'arrowright') {
+        this.setPlayerFacing('right')
+      }
+    }
     return this.dependencies.inputMode.keyDown(key)
   }
 
   keyUp(key: string): void {
     this.dependencies.inputMode.keyUp(key)
+    if (this.dependencies.inputMode.mode === 'movement') {
+      const { x } = this.dependencies.inputMode.moveVector()
+      if (x < 0) {
+        this.setPlayerFacing('left')
+      } else if (x > 0) {
+        this.setPlayerFacing('right')
+      }
+    }
   }
 
   releaseAllKeys(): void {
@@ -159,9 +174,26 @@ export class GameSession {
     }
 
     const { x, y } = this.dependencies.inputMode.moveVector()
-    const state = getMutableWorldObjectState<{ moveX: number; moveY: number }>(player)
+    const state = getMutableWorldObjectState<{ moveX: number; moveY: number; facing?: 'left' | 'right' }>(player)
     state.moveX = x
     state.moveY = y
+    if (x < 0) {
+      state.facing = 'left'
+    } else if (x > 0) {
+      state.facing = 'right'
+    }
+  }
+
+  private setPlayerFacing(facing: 'left' | 'right'): void {
+    const player = this.dependencies.worldState.worldObjects.find(
+      (worldObject) => worldObject.id === this.dependencies.playerId,
+    )
+    if (!player) {
+      return
+    }
+
+    const state = getMutableWorldObjectState<{ facing?: 'left' | 'right' }>(player)
+    state.facing = facing
   }
 
   private syncTimeScale(): void {

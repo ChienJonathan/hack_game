@@ -735,6 +735,7 @@ export class SpeedEditorScene extends Phaser.Scene {
       state.y = room1Player?.y ?? ROOM_LAYOUT.playerStart.y
       state.vx = 0
       state.vy = 0
+      state.facing = 'right'
       state.thrown = null
     }
 
@@ -748,6 +749,7 @@ export class SpeedEditorScene extends Phaser.Scene {
       state.vy = 0
       state.thrown = null
       state.equippedBy = null
+      state.flipX = false
     }
 
     this.session.releaseAllKeys()

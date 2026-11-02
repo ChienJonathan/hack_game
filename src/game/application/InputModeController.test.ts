@@ -179,3 +179,17 @@ describe('releaseAll', () => {
     expect(input.moveVector()).toEqual({ x: 0, y: 0 })
   })
 })
+
+describe('isBoundTo', () => {
+  it('checks if a key is bound to a specific direction case-insensitively', () => {
+    const input = controller()
+
+    expect(input.isBoundTo('arrowleft', 'left')).toBe(true)
+    expect(input.isBoundTo('ArrowLeft', 'left')).toBe(true)
+    expect(input.isBoundTo('a', 'left')).toBe(true)
+    expect(input.isBoundTo('d', 'left')).toBe(false)
+    expect(input.isBoundTo('arrowright', 'right')).toBe(true)
+    expect(input.isBoundTo('arrowup', 'up')).toBe(true)
+    expect(input.isBoundTo('arrowdown', 'down')).toBe(true)
+  })
+})

@@ -150,6 +150,7 @@ export function createAiEditorSession(options?: {
       pState.vy = 0
       pState.moveX = 0
       pState.moveY = 0
+      pState.facing = 'right'
       pState.health = initialPlayerCfg?.maxHealth ?? 100
       pState.alive = true
     }

@@ -25,6 +25,7 @@ function character(
     discovered: true,
     weaponId: null,
     attackCooldownMs: 0,
+    facing: 'right',
     ...overrides,
   }
   return new BasicWorldObject(id, 'room1', { role }, [], state as never)

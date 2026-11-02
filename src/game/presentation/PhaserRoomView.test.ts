@@ -37,11 +37,13 @@ interface MockImage {
   displayWidth: number
   displayHeight: number
   visible: boolean
+  flipX: boolean
   depth: number
   setDepth(d: number): MockImage
   setDisplaySize(w: number, h: number): MockImage
   setPosition(x: number, y: number): MockImage
   setVisible(v: boolean): MockImage
+  setFlipX(flip: boolean): MockImage
   destroy(): void
 }
 
@@ -121,11 +123,13 @@ function createMockScene() {
           displayWidth: 0,
           displayHeight: 0,
           visible: true,
+          flipX: false,
           depth: 0,
           setDepth(d: number) { img.depth = d; return img },
           setDisplaySize(w: number, h: number) { img.displayWidth = w; img.displayHeight = h; return img },
           setPosition(px: number, py: number) { img.x = px; img.y = py; return img },
           setVisible(v: boolean) { img.visible = v; return img },
+          setFlipX(flip: boolean) { img.flipX = flip; return img },
           destroy() {},
         }
         images.push(img)
@@ -231,5 +235,66 @@ describe('PhaserRoomView', () => {
 
     expect(texts.some((t) => t.text === 'sword')).toBe(true)
     expect(texts.some((t) => t.text === 'dagger')).toBe(false)
+  })
+
+  it('sets sprite flipX according to facing direction', () => {
+    const view = new PhaserRoomView()
+    const { mockScene, images } = createMockScene()
+    const worldState = createInitialWorldState()
+
+    view.mount(mockScene, worldState)
+
+    const player = worldState.worldObjects.find((o) => o.id === 'player')!
+    const playerIndex = worldState.worldObjects.indexOf(player)
+    const playerImage = images[playerIndex]
+
+    // Default player facing is 'right' -> flipX is false
+    expect(playerImage.flipX).toBe(false)
+
+    // When facing is 'left' -> flipX is true
+    ;(player.state as Record<string, unknown>).facing = 'left'
+    view.update(worldState)
+    expect(playerImage.flipX).toBe(true)
+
+    // When facing is 'right' -> flipX is false
+    ;(player.state as Record<string, unknown>).facing = 'right'
+    view.update(worldState)
+    expect(playerImage.flipX).toBe(false)
+  })
+
+  it('renders equipped weapon in local coordinates of holder and flips with holder', () => {
+    const view = new PhaserRoomView()
+    const { mockScene, images } = createMockScene()
+    const worldState = createInitialWorldState()
+
+    view.mount(mockScene, worldState)
+
+    const player = worldState.worldObjects.find((o) => o.id === 'player')!
+    const dagger = worldState.worldObjects.find((o) => o.id === 'dagger')!
+    const daggerIndex = worldState.worldObjects.indexOf(dagger)
+    const daggerImage = images[daggerIndex]
+
+    const playerState = player.state as Record<string, unknown>
+    const daggerState = dagger.state as Record<string, unknown>
+    playerState.x = 400
+    playerState.y = 300
+    playerState.facing = 'right'
+
+    daggerState.equippedBy = 'player'
+    daggerState.x = 400
+    daggerState.y = 300
+
+    // When holder faces right: local offset (+44, +38), flipX is false
+    view.update(worldState)
+    expect(daggerImage.x).toBe(444)
+    expect(daggerImage.y).toBe(338)
+    expect(daggerImage.flipX).toBe(false)
+
+    // When holder faces left: mirrored local offset (-44, +38), flipX is true
+    playerState.facing = 'left'
+    view.update(worldState)
+    expect(daggerImage.x).toBe(356)
+    expect(daggerImage.y).toBe(338)
+    expect(daggerImage.flipX).toBe(true)
   })
 })

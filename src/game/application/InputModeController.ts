@@ -78,6 +78,11 @@ export class InputModeController {
     this.suppressedKeys.clear()
   }
 
+  isBoundTo(key: string, direction: Direction): boolean {
+    const lowerKey = key.toLowerCase()
+    return this.bindings[direction].some((k) => k.toLowerCase() === lowerKey)
+  }
+
   moveVector(): MoveVector {
     return this.currentMode === 'command' ? this.latchedVector : this.heldVector()
   }

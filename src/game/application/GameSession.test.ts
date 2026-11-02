@@ -504,3 +504,97 @@ describe('saved state', () => {
     expect(session.hasSavedState()).toBe(false)
   })
 })
+
+describe('player facing and turning', () => {
+  it('defaults to facing right', () => {
+    const session = newSession()
+    const player = stateOf(session, 'player')
+    expect(player.facing).toBe('right')
+  })
+
+  it('turns player left when pressing left arrow', () => {
+    const session = newSession()
+    session.keyDown('arrowleft')
+    expect(stateOf(session, 'player').facing).toBe('left')
+  })
+
+  it('turns player right when pressing right arrow', () => {
+    const session = newSession()
+    session.keyDown('arrowleft')
+    expect(stateOf(session, 'player').facing).toBe('left')
+
+    session.keyDown('arrowright')
+    expect(stateOf(session, 'player').facing).toBe('right')
+  })
+
+  it('preserves facing direction when pressing up or down arrow', () => {
+    const session = newSession()
+    session.keyDown('arrowleft')
+    expect(stateOf(session, 'player').facing).toBe('left')
+
+    session.keyDown('arrowup')
+    expect(stateOf(session, 'player').facing).toBe('left')
+
+    session.keyDown('arrowdown')
+    expect(stateOf(session, 'player').facing).toBe('left')
+  })
+
+  it('keeps facing direction after releasing arrow key', () => {
+    const session = newSession()
+    session.keyDown('arrowleft')
+    expect(stateOf(session, 'player').facing).toBe('left')
+
+    session.keyUp('arrowleft')
+    expect(stateOf(session, 'player').facing).toBe('left')
+
+    session.update(SIMULATION_TICK_MS)
+    expect(stateOf(session, 'player').facing).toBe('left')
+  })
+
+  it('switches facing when pressing and releasing opposing keys', () => {
+    const session = newSession()
+    session.keyDown('arrowleft')
+    expect(stateOf(session, 'player').facing).toBe('left')
+
+    // While holding left, press right
+    session.keyDown('arrowright')
+    expect(stateOf(session, 'player').facing).toBe('right')
+
+    // Release right while left is still held -> turns back to left
+    session.keyUp('arrowright')
+    expect(stateOf(session, 'player').facing).toBe('left')
+  })
+
+  it('does not turn player when typing arrow keys in command mode', () => {
+    const session = newSession()
+    expect(stateOf(session, 'player').facing).toBe('right')
+
+    session.enterCommandMode()
+    session.keyDown('arrowleft')
+    // Cursor navigation in command mode should not turn character
+    expect(stateOf(session, 'player').facing).toBe('right')
+  })
+
+  it('tracks holder position for equipped dagger in domain simulation', () => {
+    const session = newSession()
+    const player = stateOf(session, 'player')
+    const dagger = stateOf(session, 'dagger')
+    player.x = dagger.x
+    player.y = dagger.y
+
+    // Pick up dagger
+    session.update(SIMULATION_TICK_MS)
+    expect(player.weaponId).toBe('dagger')
+    expect(dagger.equippedBy).toBe('player')
+
+    // In domain state, equipped dagger tracks holder coordinates
+    expect(dagger.x).toBe(player.x)
+    expect(dagger.y).toBe(player.y)
+
+    // Turning left or right preserves domain tracking
+    session.keyDown('arrowleft')
+    session.update(SIMULATION_TICK_MS)
+    expect(dagger.x).toBe(player.x)
+    expect(dagger.y).toBe(player.y)
+  })
+})

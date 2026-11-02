@@ -11,6 +11,7 @@ export interface CharacterState extends MutableWorldObjectState {
   discovered: boolean
   weaponId: string | null
   attackCooldownMs: number
+  facing: 'left' | 'right'
 }
 
 export const CHARACTER_ROLES: readonly string[] = ['player', 'guard']

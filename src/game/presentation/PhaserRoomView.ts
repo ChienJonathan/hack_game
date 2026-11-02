@@ -11,6 +11,7 @@ export const PLAYER_TEXTURE_KEY = 'player-idle'
 export const GUARD_TEXTURE_KEY = 'guard-idle'
 export const DAGGER_TEXTURE_KEY = 'dagger'
 export const ITEM_LABEL_WIDTH_RATIO = 0.75
+export const WEAPON_HOLD_OFFSET = { x: 44, y: 38 } as const
 
 export const WORLD_OBJECT_TEXTURE_URLS = {
   [PLAYER_TEXTURE_KEY]: playerImageUrl,
@@ -30,6 +31,8 @@ interface DisplayState {
   displayHeight?: unknown
   health?: unknown
   maxHealth?: unknown
+  facing?: unknown
+  flipX?: unknown
 }
 
 const TEXT_COLOR = '#d6d6d6'
@@ -169,9 +172,32 @@ export class PhaserRoomView {
       const x = rendered?.x ?? (typeof objectState.x === 'number' ? objectState.x : 0)
       const y = rendered?.y ?? (typeof objectState.y === 'number' ? objectState.y : 0)
 
-      sprite.setPosition(x, y)
+      let renderX = x
+      let renderY = y
+      let shouldFlip = objectState.flipX === true || objectState.facing === 'left'
+
+      if (equipped && typeof objectState.equippedBy === 'string') {
+        const holderObj = state.worldObjects.find((o) => o.id === objectState.equippedBy)
+        if (holderObj) {
+          const holderState = displayState(holderObj)
+          const holderRendered = positionOf(holderObj.id)
+          const holderX = holderRendered?.x ?? (typeof holderState.x === 'number' ? holderState.x : x)
+          const holderY = holderRendered?.y ?? (typeof holderState.y === 'number' ? holderState.y : y)
+          const isHolderFacingLeft = holderState.facing === 'left'
+
+          renderX = holderX + (isHolderFacingLeft ? -WEAPON_HOLD_OFFSET.x : WEAPON_HOLD_OFFSET.x)
+          renderY = holderY + WEAPON_HOLD_OFFSET.y
+          shouldFlip = isHolderFacingLeft
+        }
+      }
+
+      sprite.setPosition(renderX, renderY)
       const visible = inCurrentRoom && alive
       sprite.setVisible(visible)
+
+      if (typeof sprite.setFlipX === 'function') {
+        sprite.setFlipX(shouldFlip)
+      }
 
       const isWeapon = worldObject.metadata.role === 'weapon' || worldObject.id === WORLD_OBJECT_IDS.dagger
       const dw = typeof objectState.displayWidth === 'number' ? objectState.displayWidth : (isWeapon ? 72 : 176)
@@ -190,7 +216,7 @@ export class PhaserRoomView {
       if (hasHealthBar) {
         const barWidth = typeof objectState.width === 'number' ? objectState.width : HEALTH_BAR_WIDTH
         const offsetY = typeof objectState.height === 'number' ? objectState.height / 2 + 20 : HEALTH_BAR_OFFSET_Y
-        this.drawHealthBar(x, y, (objectState.health as number) / (objectState.maxHealth as number), barWidth, offsetY)
+        this.drawHealthBar(renderX, renderY, (objectState.health as number) / (objectState.maxHealth as number), barWidth, offsetY)
         labelOffsetY = offsetY + 4
       } else {
         labelOffsetY = effectiveDh / 2 + 4
@@ -220,7 +246,7 @@ export class PhaserRoomView {
           label.setScale(1)
           label.setAlpha(1)
         }
-        label.setPosition(x, y - labelOffsetY)
+        label.setPosition(renderX, renderY - labelOffsetY)
         label.setVisible(visible)
       }
     }

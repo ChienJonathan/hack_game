@@ -195,6 +195,7 @@ export class PlayerMovementProcess implements WorldObjectProcess {
       // X axis
       const inputX = player.moveX
       if (inputX !== 0) {
+        player.facing = inputX < 0 ? 'left' : 'right'
         const targetVx = inputX * maxSpeed
         const isOpposing = (inputX > 0 && vx < 0) || (inputX < 0 && vx > 0)
         const currentAccel = isOpposing ? turnaround : accel
@@ -249,6 +250,9 @@ export class PlayerMovementProcess implements WorldObjectProcess {
       player.vx = vx
       player.vy = vy
     } else {
+      if (player.moveX !== 0) {
+        player.facing = player.moveX < 0 ? 'left' : 'right'
+      }
       const speed = typeof player.speed === 'number' ? player.speed : 240
       const distance = (speed * context.tickDurationMs) / 1000
       player.x += player.moveX * distance
@@ -303,8 +307,8 @@ export class DaggerPickupProcess implements WorldObjectProcess {
     (dagger as unknown as Record<string, unknown>).thrown = null
     const holder = objectState<CharacterState>(context, dagger.equippedBy)
     if (holder) {
-      dagger.x = holder.x + 44
-      dagger.y = holder.y + 38
+      dagger.x = holder.x
+      dagger.y = holder.y
     }
   }
 }

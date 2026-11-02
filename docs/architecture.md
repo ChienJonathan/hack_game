@@ -23,13 +23,13 @@ Architecture specification for the command-driven RTS game and initial room (Vit
 
 `GameScene` (1920×1080 reference space) mounts Room 1 domain state, session, room/object views, input, feedback, and outcome panels, forwarding Phaser's frame delta to `GameSession`. `createGame` boots with `GameScene`.
 
-`PhaserCommandInputView` sits bottom-center. In Command Mode, it accepts printable ASCII, cursor editing, auto-wrapping, and history navigation; Enter submits. In Movement Mode, it is dimmed with a typing prompt hint. `PhaserRoomView` projects world objects to Phaser sprites and overhead labels (`?` for undiscovered objects, object name once revealed, and `hacker` for the player character; equipped items remain visible with label scale shrunk to `ITEM_LABEL_WIDTH_RATIO` [0.75] of item sprite width to avoid overlapping the character); `PhaserGameOutcomePanel` displays Game Over / Congratulations states.
+`PhaserCommandInputView` sits bottom-center. In Command Mode, it accepts printable ASCII, cursor editing, auto-wrapping, and history navigation; Enter submits. In Movement Mode, it is dimmed with a typing prompt hint. `PhaserRoomView` projects world objects to Phaser sprites (orienting characters horizontally based on `facing` via `flipX`, and rendering equipped items in local holder coordinates `WEAPON_HOLD_OFFSET = { x: 44, y: 38 }` mirrored with the holder's facing direction) and overhead labels (`?` for undiscovered objects, object name once revealed, and `hacker` for the player character; equipped items remain visible with label scale shrunk to `ITEM_LABEL_WIDTH_RATIO` [0.75] of item sprite width to avoid overlapping the character); `PhaserGameOutcomePanel` displays Game Over / Congratulations states.
 
 ### Input Modes
 
 | Mode | Time Scale | Player Control | Combat & Actions |
 |---|:---:|---|---|
-| **Movement** | 1.00 | Arrows (responsive physics) | Space / Left-click: attack (auto-pickup on contact) |
+| **Movement** | 1.00 | Arrows (responsive physics, turning left/right) | Space / Left-click: attack (auto-pickup on contact) |
 | **Command** | 0.25 | Disabled (or latched direction) | Ignored |
 
 - **Shell Entry & Exit**: Typing any alphabet key (`[a-zA-Z]`) while in Movement Mode directly enters Command Mode and begins typing the command. Pressing Escape in Command Mode immediately exits Command Mode and clears any unsubmitted command draft.
@@ -84,7 +84,7 @@ Room 1 initializes with Player Character (upper-left, named `hacker`), Dagger (l
 - Undiscovered world objects display a `?` overhead label at the top of their sprite; the player character displays `hacker` and is never `?`.
 - `ls` discovers objects in the room and reveals their `?` labels to their respective names; direct player interaction (picking up an item or attacking a guard) also marks the target object discovered, while guard movement/pursuit and guard attacks do not discover the guard.
 - `mv <label1> <label2>` throws `<label1>` towards `<label2>` (an object or room exit) with speed `mv_speed` (`DEFAULT_MV_SPEED` 300 px/s in `src/game/commands/mvConstants.ts`, constant across all rooms), unequipping it if equipped. If `<label2>` does not exist in the room, it renames `<label1>` to `<label2>` and marks it discovered.
-- The player walks with Arrows, automatically picks up the Dagger (and any items) on contact/reach, and attacks with Space or left click. Typing any alphabet key directly switches to Command Mode and begins entering a command.
+- The player walks with Arrows (turning left or right horizontally when pressing Left or Right Arrow, flipping the sprite and equipped weapon offset in presentation), automatically picks up the Dagger (and any items) on contact/reach, and attacks with Space or left click. Equipped weapons track the holder position in domain state (`dagger.x = holder.x, dagger.y = holder.y`) while `PhaserRoomView` handles local coordinate attachment and mirroring. Typing any alphabet key directly switches to Command Mode and begins entering a command.
 - Guard pursues player when player enters room's right half; attacks within Reach.
 - Player reaching 0 Health triggers `game-over`. Defeating guard stops pursuit. Reaching exit triggers `congratulations`.
 

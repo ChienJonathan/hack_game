@@ -110,6 +110,7 @@ export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJE
           attackCooldownMs: 0,
           moveX: 0,
           moveY: 0,
+          facing: 'right',
         },
       )
     }
@@ -162,6 +163,7 @@ export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJE
         alerted: false,
         chasing: false,
         attacking: false,
+        facing: 'right',
       },
     )
   })
