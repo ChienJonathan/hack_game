@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: accepted, tick order and blocking rules superseded by 0010
 ---
 
 # Throws are flown by one engine phase with force, drag and a speed cap
