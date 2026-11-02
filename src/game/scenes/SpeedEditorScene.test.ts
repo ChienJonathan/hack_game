@@ -66,10 +66,10 @@ describe('SpeedEditorScene', () => {
     })
 
     it('overrides only the given fields', () => {
-      expect(getTuningConfig({ mv_force: 1500, drag: 2 })).toEqual({
+      expect(getTuningConfig({ mv_acceleration: 1500, drag: 2 })).toEqual({
         ...GAME_MV_CONFIG,
         ...GAME_PHYSICS_CONFIG,
-        mv_force: 1500,
+        mv_acceleration: 1500,
         drag: 2,
       })
     })
@@ -222,7 +222,7 @@ describe('SpeedEditorScene', () => {
     it('flies a thrown dagger with the live mv config and does not hurt the static guards', () => {
       let force = 1000
       const { session, worldState } = createSpeedEditorSession({
-        mvConfig: () => ({ ...GAME_MV_CONFIG, mv_force: force }),
+        mvConfig: () => ({ ...GAME_MV_CONFIG, mv_acceleration: force }),
       })
 
       const dagger = worldState.worldObjects.find((o) => o.id === WORLD_OBJECT_IDS.dagger)!
@@ -285,9 +285,9 @@ describe('SpeedEditorScene', () => {
     })
 
     it('serializes the mv config to mv constants', () => {
-      const source = generateMvConstantsSource({ mv_force: 1200 })
+      const source = generateMvConstantsSource({ mv_acceleration: 1200 })
 
-      expect(source).toContain('export const DEFAULT_MV_FORCE = 1200')
+      expect(source).toContain('export const DEFAULT_MV_ACCELERATION = 1200')
       expect(source).toContain('export const GAME_MV_CONFIG: MvConfig = {')
       expect(source).not.toContain('DEFAULT_MV_DRAG')
       expect(source).not.toContain('mv_speed')
@@ -315,8 +315,8 @@ describe('SpeedEditorScene', () => {
     it('copies a tuning config into the live mv and physics configs', () => {
       const before = { mv: { ...GAME_MV_CONFIG }, physics: { ...GAME_PHYSICS_CONFIG } }
       try {
-        applyTuningConfig({ ...getTuningConfig(), mv_force: 123, restitution: 0.9 })
-        expect(GAME_MV_CONFIG.mv_force).toBe(123)
+        applyTuningConfig({ ...getTuningConfig(), mv_acceleration: 123, restitution: 0.9 })
+        expect(GAME_MV_CONFIG.mv_acceleration).toBe(123)
         expect(GAME_PHYSICS_CONFIG.restitution).toBe(0.9)
       } finally {
         Object.assign(GAME_MV_CONFIG, before.mv)

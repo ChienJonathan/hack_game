@@ -3,14 +3,14 @@
  * Constant across all rooms in the game world.
  */
 
-export const DEFAULT_MV_FORCE = 5000
+export const DEFAULT_MV_ACCELERATION = 5000
 
 export interface MvConfig {
-  mv_force: number
+  mv_acceleration: number
   [key: string]: number
 }
 
 /** Shared runtime mv configuration, constant across all rooms. */
 export const GAME_MV_CONFIG: MvConfig = {
-  mv_force: DEFAULT_MV_FORCE,
+  mv_acceleration: DEFAULT_MV_ACCELERATION,
 }

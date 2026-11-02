@@ -25,7 +25,7 @@ import {
   getTuningConfig,
   createSpeedEditorSession,
 } from './speedEditorSession.ts'
-import { DEFAULT_MV_FORCE } from '../commands/mvConstants.ts'
+import { DEFAULT_MV_ACCELERATION } from '../commands/mvConstants.ts'
 import {
   DEFAULT_DRAG,
   DEFAULT_MASS,
@@ -250,7 +250,7 @@ export class SpeedEditorScene extends Phaser.Scene {
       .setOrigin(0.5, 0)
     items.push(mvTitle)
 
-    this.buildMvControlRow('mv_force', 'FORCE (px/s²)', 'mv pull toward target', 34, [-250, -50, 50, 250], items)
+    this.buildMvControlRow('mv_acceleration', 'ACCELERATION (px/s²)', 'mv pull toward target (any mass)', 34, [-250, -50, 50, 250], items)
     this.buildMvControlRow('drag', 'DRAG (1/s)', 'Default velocity loss per second', 72, [-0.5, -0.1, 0.1, 0.5], items)
     this.buildMvControlRow('mass', 'MASS', 'Default mass (force ÷ mass)', 110, [-1, -0.1, 0.1, 1], items)
     this.buildMvControlRow('max_velocity', 'MAX VELOCITY (px/s)', 'Default speed cap', 148, [-100, -50, 50, 100], items)
@@ -632,7 +632,7 @@ export class SpeedEditorScene extends Phaser.Scene {
         `MV: ${thrownObj.id}\n${curSpeed.toFixed(1)} px/s`,
       )
     } else {
-      this.telemetryThrownText?.setText(`MV force: ${this.mvConfig.mv_force} px/s²\n(click TEST MV)`)
+      this.telemetryThrownText?.setText(`MV acceleration: ${this.mvConfig.mv_acceleration} px/s²\n(click TEST MV)`)
     }
   }
 
@@ -730,7 +730,7 @@ export class SpeedEditorScene extends Phaser.Scene {
   public resetDefaults(): void {
     this.setPlayerSpeed(DEFAULT_SPEED_CONFIG)
     this.setMvConfig({
-      mv_force: DEFAULT_MV_FORCE,
+      mv_acceleration: DEFAULT_MV_ACCELERATION,
       drag: DEFAULT_DRAG,
       mass: DEFAULT_MASS,
       max_velocity: DEFAULT_MAX_VELOCITY,

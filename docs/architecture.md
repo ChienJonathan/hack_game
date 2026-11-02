@@ -98,7 +98,7 @@ After the rules run, `applyPlayerDefeat` (`domain/PlayerDefeat.ts`) sets `game-o
 
 Every body of the current room (an object with `x/y/width/height`, alive, not a held Weapon) is moved only by Forces. Processes call `applyForce(obj, fx, fy)`, which adds to `forceX/forceY` in the object state; `PhysicsWorld.step` consumes and clears them each tick:
 
-1. **integrate**: `v = (v + F ÷ mass × dt) × max(0, 1 − drag × dt)`, then `|v|` is capped at `max_velocity`. A body with no Force this tick and `|v| < min_velocity` is set to rest. A body with `frozen` set (an arriving Throw) is skipped for the tick.
+1. **integrate**: `v = (v + F ÷ mass × dt) × max(0, 1 − drag × dt)`, then `|v|` is capped at `max(max_velocity, the speed before the Force)`: `max_velocity` only limits what a Force can add, so speed given by a Collision is kept. A body with no Force this tick and `|v| < min_velocity` is set to rest. A body with `frozen` set (an arriving Throw) is skipped for the tick.
 2. **separate**: bodies that collide physically and already overlap are pushed apart along the shallowest axis; only one of each pair moves (the one with a Force or velocity, else the lighter one).
 3. **move**: each body moves by `v × dt` through `resolveMovement` against the bodies it collides with and the room bounds (`Room.bounds`). Bounds clamp the position and zero the speed into the edge, with no bounce.
 4. **collide**: each touching pair that is approaching exchanges motion with `resolveCollision` (`domain/CollisionResponse.ts`) and the `onCollision` listeners are called with `{ a, b, normal, closingSpeed }`.
@@ -113,13 +113,13 @@ The processes' `afterPhysics` hooks (run by `TickSimulationEngine` after the ste
 
 `mv` stores `thrown: { targetX, targetY, targetObjectId, hitIds }` and leaves velocity alone (starts at rest; a re-`mv` keeps the current velocity and resets `hitIds`). `simulation/MvDrive.ts` then, per tick and per Thrown object (alive, in the current room):
 
-- **drive** (before the physics step): tracks a moving target object's position; if the distance to the target centre is ≤ `max(speed × dt, ARRIVAL_RADIUS = 10 px)` the object is placed on the target and `frozen` for the tick (`thrown.arrived`), otherwise it applies a Force of `mv_force` towards the target.
+- **drive** (before the physics step): tracks a moving target object's position; if the distance to the target centre is ≤ `max(speed × dt, ARRIVAL_RADIUS = 10 px)` the object is placed on the target and `frozen` for the tick (`thrown.arrived`), otherwise it applies a Force of `mass × mv_acceleration` towards the target, so objects of any mass speed up alike.
 - **collision** (physics listener): the first Collision of a Thrown object ends its Throw: `thrown` is cleared, the speed is kept and no more Force is applied, so the physics step carries it on. Colliding with the target object itself marks it discovered; colliding with any other object does not. A Throw that would Collide first therefore never reaches its target.
 - **settle** (after contacts): an arrived object gets `vx = vy = 0`, `thrown = null` and its target marked discovered. Contacts therefore see the speed the object arrived with.
 - Weapons collide only with Obstacles, so a thrown Weapon flies through Characters (and can hurt them) but stops its Throw against the boulder.
 - A held dagger has `thrown` cleared and its velocity zeroed by `DaggerPickupProcess`; it is re-picked up the tick after it is thrown if the player is unarmed and in reach, and a dagger in flight that comes within reach of an unarmed player is picked up in that tick's `afterPhysics` (expected behaviour).
 
-Parameters: `mv_force` 5000 px/s² (`commands/mvConstants.ts`, `GAME_MV_CONFIG`). Physics defaults (`simulation/physicsConstants.ts`, `GAME_PHYSICS_CONFIG`): `drag` 0.5 /s, `mass` 1, `max_velocity` 1000 px/s, `restitution` 0.5, `min_velocity` 5 px/s, `min_collide_move_velocity` 50 px/s. An object may set its own `drag`, `mass`, `max_velocity` and `restitution` at the top level of its state (also `RoomObjectConfig`); unset fields fall back to the defaults at use time (`domain/PhysicsAttr.ts`, `resolvePhysicsAttr`). Only `mass ≥ 0.001` is enforced; other values are unrestricted (a `max_velocity` or `mv_force` of 0 leaves the object unable to arrive, and there is no flight timeout).
+Parameters: `mv_acceleration` 5000 px/s² (`commands/mvConstants.ts`, `GAME_MV_CONFIG`). Physics defaults (`simulation/physicsConstants.ts`, `GAME_PHYSICS_CONFIG`): `drag` 0.5 /s, `mass` 1, `max_velocity` 1000 px/s, `restitution` 0.5, `min_velocity` 5 px/s, `min_collide_move_velocity` 50 px/s. An object may set its own `drag`, `mass`, `max_velocity` and `restitution` at the top level of its state (also `RoomObjectConfig`); unset fields fall back to the defaults at use time (`domain/PhysicsAttr.ts`, `resolvePhysicsAttr`). Only `mass ≥ 0.001` is enforced; other values are unrestricted (a `max_velocity` or `mv_acceleration` of 0 leaves the object unable to arrive, and there is no flight timeout).
 
 ### Collisionbox & Collision Resolution
 
@@ -134,7 +134,7 @@ Every world object, weapons included, has a domain-owned `collisionBox` (`width`
 Room 1 initializes with Player Character (upper-left, named `hacker`), Dagger (lower-left), Boulder (environmental world object with role `object`), and Guards (hostile characters with role `enemy`, right). All World Object sprites are shown by default. Exiting right leads to Room 2:
 - Undiscovered world objects display a `?` overhead label at the top of their sprite; the player character displays `hacker` and is never `?`. The player character's label (`hacker`) is tab-completable in command line autocompletion.
 - `ls` discovers objects in the room and reveals their `?` labels to their respective names; direct player interaction (picking up an item or attacking a guard) also marks the target object discovered, while guard movement/pursuit and guard attacks do not discover the guard.
-- `mv <label1> <label2>` throws `<label1>` towards `<label2>` (an object or room exit) as a Throw (see Throw: it accelerates from rest under `mv_force`, drag and `max_velocity`, ends at its first Collision, and a thrown Weapon hurts Characters it touches), unequipping it if equipped. If `<label2>` does not exist in the room, it renames `<label1>` to `<label2>` and marks it discovered.
+- `mv <label1> <label2>` throws `<label1>` towards `<label2>` (an object or room exit) as a Throw (see Throw: it accelerates from rest under `mv_acceleration`, drag and `max_velocity`, ends at its first Collision, and a thrown Weapon hurts Characters it touches), unequipping it if equipped. If `<label2>` does not exist in the room, it renames `<label1>` to `<label2>` and marks it discovered.
 - `mv` Wildcard source: a `*` in `<label1>` (any run of characters, case-insensitive, any position, repeatable) is matched against the display names of every object in the current room (ignoring Discovery, player included). The typed command is not expanded; `<label2>` is always literal, so names may contain `*`. The target object is excluded from the matches (no same-object error); zero matches rejects with `Cannot find "<pattern>".`. With an existing target all matches are thrown and reported in one popup (`Threw a, b to target.`). With a non-existent target a single match is renamed to the plain target name, while two or more are renamed `<target>_0`, `<target>_1`, … (the counter skips names taken by non-source objects, exit labels or exit target room ids, and continues across sources).
 - The player walks with Arrows (turning left or right horizontally when pressing Left or Right Arrow, flipping the sprite and equipped weapon offset in presentation), automatically picks up the Dagger (and any items) on contact/reach, and attacks with Space or left click. Equipped weapons track the holder position in domain state (`dagger.x = holder.x, dagger.y = holder.y`, translating `dagger.x` forward during attack animation) while `PhaserRoomView` handles local coordinate attachment, mirroring, and attack translation animation. Typing any alphabet key directly switches to Command Mode and begins entering a command.
 - Guard pursues player when player enters room's right half; attacks within Reach.
@@ -305,7 +305,7 @@ All weapon constants, animation translation curves, and runtime configurations a
 
 | Parameter | Default | Unit | Description |
 |---|:---:|:---:|---|
-| `mv_force` | 5000 | px/s² | Pull toward the target (global; acceleration = force ÷ mass) |
+| `mv_acceleration` | 5000 | px/s² | Pull toward the target (global; the Force is mass × this, so mass does not change it) |
 | `drag` | 0.5 | 1/s | Default velocity loss per second for objects without their own value |
 | `mass` | 1 | - | Default mass (minimum 0.001) |
 | `max_velocity` | 1000 | px/s | Default speed cap |
@@ -313,17 +313,17 @@ All weapon constants, animation translation curves, and runtime configurations a
 | `min_velocity` | 5 | px/s | Below this, a body with no Force applied is set to rest |
 | `min_collide_move_velocity` | 50 | px/s | A resting body that would gain less than this in a Collision counts as infinitely heavy |
 
-`mv_force` is in `mvConstants.ts`; the rest are the global defaults in `physicsConstants.ts`. Per-object values are set in the Level Editor.
+`mv_acceleration` is in `mvConstants.ts`; the rest are the global defaults in `physicsConstants.ts`. Per-object values are set in the Level Editor.
 
 ### Features & Runtime Behavior
 
 - **Live Tuning While Moving**: Keyboard movement (Arrows) runs continuously during mouse interaction, giving immediate tactile feedback on physics changes.
-- **MV Command Tuning & Testing**: Dedicated controls for `mv_force` and the six physics defaults, paired with an interactive `TEST MV (THROW DAGGER)` button to test the throw in real time. The session runs without the contact resolver, so the thrown dagger does not hurt the static guards; the physics step stays on.
+- **MV Command Tuning & Testing**: Dedicated controls for `mv_acceleration` and the six physics defaults, paired with an interactive `TEST MV (THROW DAGGER)` button to test the throw in real time. The session runs without the contact resolver, so the thrown dagger does not hurt the static guards; the physics step stays on.
 - **Step & Direct Input**: Parameter buttons (`+` / `−` with step sizes, Shift: 5x multiplier) or click value for exact number prompt. Clamped to minimum safe values.
 - **Live Telemetry**: Displays real-time player speed (`px/s`), velocity vectors (`vx`, `vy`), input direction (`moveX`, `moveY`), dynamic visual speedometer gauge, and active `mv` thrown entity telemetry.
 - **Reset Position**: **R** (or `RESET POSITIONS (R)` button) snaps player and dagger back to start coordinates with zero velocity for clean trials.
 - **Reset Defaults**: Restores default physics values for both player and the mv and physics defaults.
-- **Save Changes**: `SAVE CHANGES` button writes updated player speed directly to `src/game/content/room1.ts` via `/api/save-room1` (`ROOM1_OBJECTS`) saves `mv_force` to `src/game/commands/mvConstants.ts` via `/api/save-mv` and the physics defaults to `src/game/simulation/physicsConstants.ts` via `/api/save-physics`, syncing the global runtime `GAME_MV_CONFIG` and `GAME_PHYSICS_CONFIG`.
+- **Save Changes**: `SAVE CHANGES` button writes updated player speed directly to `src/game/content/room1.ts` via `/api/save-room1` (`ROOM1_OBJECTS`) saves `mv_acceleration` to `src/game/commands/mvConstants.ts` via `/api/save-mv` and the physics defaults to `src/game/simulation/physicsConstants.ts` via `/api/save-physics`, syncing the global runtime `GAME_MV_CONFIG` and `GAME_PHYSICS_CONFIG`.
 - **Navigation**: Accessible from anywhere via **F3**; **Escape** or **F3** exits to the current active playable scene (`'game'`), **F2** opens Level Editor, **F4** opens AI Editor.
 
 ## Behavior Tree & AI System

@@ -37,7 +37,7 @@ export type TuningConfig = MvConfig & PhysicsConfig
 
 export function getTuningConfig(config?: Partial<TuningConfig>): TuningConfig {
   return {
-    mv_force: config?.mv_force ?? GAME_MV_CONFIG.mv_force,
+    mv_acceleration: config?.mv_acceleration ?? GAME_MV_CONFIG.mv_acceleration,
     drag: config?.drag ?? GAME_PHYSICS_CONFIG.drag,
     mass: config?.mass ?? GAME_PHYSICS_CONFIG.mass,
     max_velocity: config?.max_velocity ?? GAME_PHYSICS_CONFIG.max_velocity,
@@ -49,7 +49,7 @@ export function getTuningConfig(config?: Partial<TuningConfig>): TuningConfig {
 
 /** Copies a tuning config into the live global configs, so the running game uses it. */
 export function applyTuningConfig(config: TuningConfig): void {
-  GAME_MV_CONFIG.mv_force = config.mv_force
+  GAME_MV_CONFIG.mv_acceleration = config.mv_acceleration
   for (const key of Object.keys(GAME_PHYSICS_CONFIG)) {
     GAME_PHYSICS_CONFIG[key] = config[key]
   }

@@ -1,7 +1,9 @@
 import { GAME_MV_CONFIG, type MvConfig } from '../commands/mvConstants.ts'
+import { resolvePhysicsAttr } from '../domain/PhysicsAttr.ts'
 import type { WorldObject } from '../domain/WorldObject.ts'
 import { getMutableWorldObjectState } from '../domain/WorldObjectState.ts'
 import type { WorldState } from '../domain/WorldState.ts'
+import { GAME_PHYSICS_CONFIG, type PhysicsConfig } from './physicsConstants.ts'
 import { applyForce, type PhysicsWorld } from './PhysicsWorld.ts'
 
 /** Distance from the target centre at which a Throw counts as arrived, at least one tick's step. */
@@ -38,16 +40,22 @@ function driveStateOf(worldObject: WorldObject): DriveState | undefined {
 }
 
 /**
- * The pull of an `mv` Throw. Every tick it applies `mv_force` towards the target as a Force; the
+ * The pull of an `mv` Throw. Every tick it applies a Force of `mass × mv_acceleration` towards the target, so
+ * the object speeds up the same whatever its mass; the
  * physics step does the moving. A Throw ends when the object comes within reach of the target
  * (it is placed on it and stopped) or at its first Collision (it keeps its speed and is only
  * handed over to the physics step).
  */
 export class MvDrive {
   private readonly config: () => MvConfig
+  private readonly physicsConfig: () => PhysicsConfig
 
-  constructor(config: () => MvConfig = () => GAME_MV_CONFIG) {
+  constructor(
+    config: () => MvConfig = () => GAME_MV_CONFIG,
+    physicsConfig: () => PhysicsConfig = () => GAME_PHYSICS_CONFIG,
+  ) {
     this.config = config
+    this.physicsConfig = physicsConfig
   }
 
   /** Ends the Throw of any object that collides, and discovers the target if that is what it hit. */
@@ -61,7 +69,8 @@ export class MvDrive {
   /** Before the physics step: tracks the target, then applies the pull or places an arriving object. */
   drive(state: WorldState, tickDurationMs: number): void {
     const dt = tickDurationMs / 1000
-    const mvForce = this.config().mv_force
+    const mvAcceleration = this.config().mv_acceleration
+    const physicsConfig = this.physicsConfig()
 
     for (const { worldObject, body, thrown } of this.thrownObjects(state)) {
       this.trackTarget(state, thrown)
@@ -79,7 +88,8 @@ export class MvDrive {
         continue
       }
 
-      applyForce(worldObject, (mvForce * deltaX) / remaining, (mvForce * deltaY) / remaining)
+      const force = resolvePhysicsAttr(worldObject, physicsConfig).mass * mvAcceleration
+      applyForce(worldObject, (force * deltaX) / remaining, (force * deltaY) / remaining)
     }
   }
 

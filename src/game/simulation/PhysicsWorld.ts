@@ -143,17 +143,22 @@ export class PhysicsWorld {
     }
     const forceX = state.forceX ?? 0
     const forceY = state.forceY ?? 0
-    const damping = Math.max(0, 1 - attr.drag * dt)
-    let vx = ((state.vx ?? 0) + (forceX / attr.mass) * dt) * damping
-    let vy = ((state.vy ?? 0) + (forceY / attr.mass) * dt) * damping
+    const speedBefore = Math.hypot(state.vx ?? 0, state.vy ?? 0)
+    let vx = (state.vx ?? 0) + (forceX / attr.mass) * dt
+    let vy = (state.vy ?? 0) + (forceY / attr.mass) * dt
 
+    // `max_velocity` only limits what a Force can add: speed that came from a Collision is not cut.
+    const speedLimit = Math.max(Math.max(0, attr.max_velocity), speedBefore)
     const speed = Math.hypot(vx, vy)
-    const maxVelocity = Math.max(0, attr.max_velocity)
-    if (speed > maxVelocity) {
-      const scale = maxVelocity / speed
+    if (speed > speedLimit) {
+      const scale = speedLimit / speed
       vx *= scale
       vy *= scale
     }
+
+    const damping = Math.max(0, 1 - attr.drag * dt)
+    vx *= damping
+    vy *= damping
     if ((forceX === 0 && forceY === 0) && Math.hypot(vx, vy) < config.min_velocity) {
       vx = 0
       vy = 0

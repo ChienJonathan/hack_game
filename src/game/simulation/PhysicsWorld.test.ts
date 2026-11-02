@@ -104,6 +104,35 @@ describe('PhysicsWorld motion', () => {
     expect(Math.hypot(capped.body.vx, capped.body.vy)).toBeCloseTo(80, 6)
   })
 
+  it('does not cap a speed that did not come from a Force, such as one a Collision gave', () => {
+    const { add, step } = createWorld({ drag: 0, max_velocity: 1000 })
+    const { body } = add('guard', 'enemy', { vx: 1500 })
+
+    step(3)
+
+    expect(body.vx).toBe(1500)
+  })
+
+  it('does not let a Force add speed to a body that is already beyond max_velocity', () => {
+    const { add, step } = createWorld({ drag: 0, max_velocity: 1000 })
+    const { object, body } = add('guard', 'enemy', { vx: 1500 })
+
+    applyForce(object, 100000, 0)
+    step()
+
+    expect(body.vx).toBe(1500)
+  })
+
+  it('still lets a Force slow a body that is beyond max_velocity', () => {
+    const { add, step } = createWorld({ drag: 0, max_velocity: 1000 })
+    const { object, body } = add('guard', 'enemy', { vx: 1500 })
+
+    applyForce(object, -6000, 0)
+    step()
+
+    expect(body.vx).toBeCloseTo(1500 - 6000 * DT, 6)
+  })
+
   it('brings a slow body without force to rest, but not one that is being pushed', () => {
     const { add, step } = createWorld({ drag: 0, min_velocity: 5 })
     const coasting = add('a', 'enemy', { y: 100, vx: 4 })

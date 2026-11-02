@@ -89,7 +89,7 @@ export class TickSimulationEngine implements SimulationEngine {
     this.tickDurationMs = tickDurationMs
     this.conditionEvaluator = conditionEvaluator
     this.physics = new PhysicsWorld(options.physicsConfig)
-    this.mvDrive = new MvDrive(options.mvConfig)
+    this.mvDrive = new MvDrive(options.mvConfig, options.physicsConfig)
     this.mvDrive.attach(this.physics)
     this.contactResolver =
       options.contactResolver === undefined ? new ContactResolver() : options.contactResolver

@@ -17,7 +17,7 @@ function setup(mv: Partial<MvConfig> = {}, physics: Partial<PhysicsConfig> = {})
   const state = createInitialWorldState()
   const physicsConfig = { ...GAME_PHYSICS_CONFIG, drag: 0, ...physics } as PhysicsConfig
   const world = new PhysicsWorld(() => physicsConfig)
-  const drive = new MvDrive(() => ({ ...GAME_MV_CONFIG, ...mv }) as MvConfig)
+  const drive = new MvDrive(() => ({ ...GAME_MV_CONFIG, ...mv }) as MvConfig, () => physicsConfig)
   drive.attach(world)
   const body = (id: string) =>
     getMutableWorldObjectState(state.worldObjects.find((o) => o.id === id)!) as unknown as Body
@@ -35,7 +35,7 @@ function throwTo(body: Body, targetX: number, targetY: number, targetObjectId: s
 
 /** Boulder at (500, 500) with only `guard-2` left alive as an obstacle at (700, 500). */
 function boulderSetup(targetId: string) {
-  const ctx = setup({ mv_force: 1000 })
+  const ctx = setup({ mv_acceleration: 1000 })
   for (const id of ['player', 'guard', 'guard-2', 'guard-3']) {
     ctx.body(id).alive = false
   }
@@ -56,7 +56,7 @@ function boulderSetup(targetId: string) {
 
 describe('MvDrive', () => {
   it('starts at rest and accelerates toward the target by force / mass', () => {
-    const { tick, body } = setup({ mv_force: 1000 })
+    const { tick, body } = setup({ mv_acceleration: 1000 })
     const dagger = body(WORLD_OBJECT_IDS.dagger)
     dagger.x = 500
     dagger.y = 500
@@ -71,8 +71,8 @@ describe('MvDrive', () => {
     expect(dagger.vx).toBeCloseTo(2000 * DT, 6)
   })
 
-  it('divides the force by the object mass', () => {
-    const { tick, body } = setup({ mv_force: 1000 })
+  it('accelerates by mv_acceleration whatever the mass, so mass only matters in Collisions', () => {
+    const { tick, body } = setup({ mv_acceleration: 1000 })
     const dagger = body(WORLD_OBJECT_IDS.dagger)
     dagger.x = 500
     dagger.y = 500
@@ -80,11 +80,11 @@ describe('MvDrive', () => {
     throwTo(dagger, 1000, 500)
 
     tick()
-    expect(dagger.vx).toBeCloseTo((1000 / 4) * DT, 6)
+    expect(dagger.vx).toBeCloseTo(1000 * DT, 6)
   })
 
   it('keeps inertia when re-aimed: velocity is a vector, not snapped to the target', () => {
-    const { tick, body } = setup({ mv_force: 1000 })
+    const { tick, body } = setup({ mv_acceleration: 1000 })
     const dagger = body(WORLD_OBJECT_IDS.dagger)
     dagger.x = 800
     dagger.y = 500
@@ -98,7 +98,7 @@ describe('MvDrive', () => {
   })
 
   it('snaps to the target, stops at once and clears the throw on arrival', () => {
-    const { tick, body } = setup({ mv_force: 0 })
+    const { tick, body } = setup({ mv_acceleration: 0 })
     const dagger = body(WORLD_OBJECT_IDS.dagger)
     dagger.x = 500
     dagger.y = 500
@@ -114,7 +114,7 @@ describe('MvDrive', () => {
   })
 
   it('keeps the arriving speed until contacts have been resolved', () => {
-    const { drive, world, state, body } = setup({ mv_force: 0 })
+    const { drive, world, state, body } = setup({ mv_acceleration: 0 })
     const dagger = body(WORLD_OBJECT_IDS.dagger)
     dagger.x = 500
     dagger.y = 500
@@ -133,7 +133,7 @@ describe('MvDrive', () => {
   })
 
   it('tracks a moving target object and marks it discovered on arrival', () => {
-    const { tick, body } = setup({ mv_force: 0 })
+    const { tick, body } = setup({ mv_acceleration: 0 })
     const dagger = body(WORLD_OBJECT_IDS.dagger)
     const guard = body(WORLD_OBJECT_IDS.guard)
     dagger.x = 500
@@ -149,7 +149,7 @@ describe('MvDrive', () => {
   })
 
   it('ignores objects that are not thrown and dead ones', () => {
-    const { tick, body } = setup({ mv_force: 1000 })
+    const { tick, body } = setup({ mv_acceleration: 1000 })
     const guard = body(WORLD_OBJECT_IDS.guard)
     const x = guard.x
     tick()
@@ -162,7 +162,7 @@ describe('MvDrive', () => {
   })
 
   it('does not pull an object any more once its Throw has ended', () => {
-    const { tick, body } = setup({ mv_force: 1000 })
+    const { tick, body } = setup({ mv_acceleration: 1000 })
     const dagger = body(WORLD_OBJECT_IDS.dagger)
     dagger.x = 500
     dagger.y = 500
@@ -176,7 +176,7 @@ describe('MvDrive', () => {
   })
 
   it('lets a thrown Weapon fly through a Character', () => {
-    const { tick, body } = setup({ mv_force: 0 })
+    const { tick, body } = setup({ mv_acceleration: 0 })
     for (const id of ['player', 'guard-2', 'guard-3', 'boulder']) {
       body(id).alive = false
     }
