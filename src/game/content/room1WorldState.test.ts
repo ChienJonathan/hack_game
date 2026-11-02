@@ -232,4 +232,33 @@ describe('room1WorldState scaled collision AABB', () => {
       }
     }
   })
+
+  it('supports explicit collider dimensions in computeCollisionSize and createInitialWorldState', () => {
+    const customSize = computeCollisionSize('enemy', 1, 1, 90, 130)
+    expect(customSize.width).toBe(90)
+    expect(customSize.height).toBe(130)
+
+    const objects: RoomObjectConfig[] = [
+      {
+        id: 'player',
+        role: 'player',
+        x: 200,
+        y: 200,
+        displayWidth: 176,
+        displayHeight: 176,
+        colliderWidth: 80,
+        colliderHeight: 120,
+      },
+    ]
+
+    const state = createInitialWorldState(objects)
+    const player = state.worldObjects.find((o) => o.id === 'player')!
+    const playerState = player.state as Record<string, unknown>
+
+    expect(playerState.width).toBe(80)
+    expect(playerState.height).toBe(120)
+    expect(playerState.collisionBox).toEqual({ width: 80, height: 120 })
+    expect(playerState.colliderWidth).toBe(80)
+    expect(playerState.colliderHeight).toBe(120)
+  })
 })

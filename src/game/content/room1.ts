@@ -23,6 +23,8 @@ export interface RoomObjectConfig {
   attackDurationMs?: number
   holdOffsetX?: number
   holdOffsetY?: number
+  colliderWidth?: number
+  colliderHeight?: number
 }
 
 export const ROOM1_OBJECTS: RoomObjectConfig[] = [
@@ -42,16 +44,20 @@ export const ROOM1_OBJECTS: RoomObjectConfig[] = [
       maxSpeed: 300,
     },
     maxHealth: 100,
+    colliderWidth: 58,
+    colliderHeight: 117,
   },
   {
     id: "boulder",
     role: "object",
     x: 800,
     y: 280,
-    displayWidth: 120,
-    displayHeight: 120,
-    scaleX: 1,
-    scaleY: 1,
+    displayWidth: 154,
+    displayHeight: 154,
+    scaleX: 1.28,
+    scaleY: 1.28,
+    colliderWidth: 132,
+    colliderHeight: 138,
   },
   {
     id: "dagger",
@@ -78,11 +84,13 @@ export const ROOM1_OBJECTS: RoomObjectConfig[] = [
     scaleY: 1,
     speed: 210,
     maxHealth: 100,
+    colliderWidth: 110,
+    colliderHeight: 160,
   },
   {
     id: "guard-2",
     role: "enemy",
-    x: 1000,
+    x: 1012,
     y: 410,
     displayWidth: 176,
     displayHeight: 176,
@@ -90,6 +98,8 @@ export const ROOM1_OBJECTS: RoomObjectConfig[] = [
     scaleY: 1,
     speed: 120,
     maxHealth: 100,
+    colliderWidth: 82,
+    colliderHeight: 163,
   },
   {
     id: "guard-3",
@@ -102,5 +112,7 @@ export const ROOM1_OBJECTS: RoomObjectConfig[] = [
     scaleY: 0.49,
     speed: 120,
     maxHealth: 100,
+    colliderWidth: 54,
+    colliderHeight: 78,
   },
 ]

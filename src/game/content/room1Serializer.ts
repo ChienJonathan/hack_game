@@ -48,6 +48,12 @@ export function generateRoom1Source(objects: RoomObjectConfig[]): string {
     if (obj.holdOffsetY !== undefined) {
       lines.push(`    holdOffsetY: ${obj.holdOffsetY},`)
     }
+    if (obj.colliderWidth !== undefined) {
+      lines.push(`    colliderWidth: ${Math.round(obj.colliderWidth)},`)
+    }
+    if (obj.colliderHeight !== undefined) {
+      lines.push(`    colliderHeight: ${Math.round(obj.colliderHeight)},`)
+    }
     return `  {\n${lines.join('\n')}\n  },`
   })
 
@@ -76,6 +82,8 @@ export interface RoomObjectConfig {
   attackDurationMs?: number
   holdOffsetX?: number
   holdOffsetY?: number
+  colliderWidth?: number
+  colliderHeight?: number
 }
 
 export const ROOM1_OBJECTS: RoomObjectConfig[] = [

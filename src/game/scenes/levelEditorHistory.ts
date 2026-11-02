@@ -8,9 +8,11 @@ export function computeEditorCollisionBox(
   y: number,
   scaleX: number,
   scaleY: number,
+  colliderWidth?: number,
+  colliderHeight?: number,
 ): { x: number; y: number; width: number; height: number } | null {
   if (role === 'weapon') return null
-  const size = computeCollisionSize(role, scaleX, scaleY)
+  const size = computeCollisionSize(role, scaleX, scaleY, colliderWidth, colliderHeight)
   return { x, y, width: size.width, height: size.height }
 }
 
@@ -21,14 +23,31 @@ export function wouldOverlapAnyEditorObject(
   y: number,
   scaleX: number,
   scaleY: number,
-  allObjects: readonly { id: string; role: WorldObjectRole; x: number; y: number; scaleX: number; scaleY: number }[],
+  allObjects: readonly {
+    id: string
+    role: WorldObjectRole
+    x: number
+    y: number
+    scaleX: number
+    scaleY: number
+    colliderWidth?: number
+    colliderHeight?: number
+  }[],
+  colliderWidth?: number,
+  colliderHeight?: number,
 ): boolean {
   if (targetRole === 'weapon') return false
-  const targetSize = computeCollisionSize(targetRole, scaleX, scaleY)
+  const targetSize = computeCollisionSize(targetRole, scaleX, scaleY, colliderWidth, colliderHeight)
 
   for (const other of allObjects) {
     if (other.id === objectId || other.role === 'weapon') continue
-    const otherSize = computeCollisionSize(other.role, other.scaleX, other.scaleY)
+    const otherSize = computeCollisionSize(
+      other.role,
+      other.scaleX,
+      other.scaleY,
+      other.colliderWidth,
+      other.colliderHeight,
+    )
     if (
       Math.abs(x - other.x) < (targetSize.width + otherSize.width) / 2 &&
       Math.abs(y - other.y) < (targetSize.height + otherSize.height) / 2
@@ -49,6 +68,8 @@ export interface ScalableMovableObject {
   baseHeight: number
   scaleX: number
   scaleY: number
+  colliderWidth?: number
+  colliderHeight?: number
   maxHealth?: number
   speed?: number | PlayerSpeedConfig
   maxSpeed?: number
@@ -97,6 +118,8 @@ export type CharacterProperty =
   | 'attackDurationMs'
   | 'holdOffsetX'
   | 'holdOffsetY'
+  | 'colliderWidth'
+  | 'colliderHeight'
 
 export interface PropertyChange {
   readonly type: 'property'
@@ -105,6 +128,15 @@ export interface PropertyChange {
   readonly delta: number
   readonly prevValue: number
   readonly nextValue: number
+}
+
+export interface ColliderChange {
+  readonly type: 'collider'
+  readonly objectId: string
+  readonly prevWidth: number
+  readonly prevHeight: number
+  readonly nextWidth: number
+  readonly nextHeight: number
 }
 
 export interface SpawnChange {
@@ -125,6 +157,7 @@ export type EditorChange =
   | MoveChange
   | ScaleChange
   | PropertyChange
+  | ColliderChange
   | SpawnChange
   | DespawnChange
 
@@ -171,6 +204,15 @@ export function invertChange(change: EditorChange): EditorChange {
         delta: -change.delta,
         prevValue: change.nextValue,
         nextValue: change.prevValue,
+      }
+    case 'collider':
+      return {
+        type: 'collider',
+        objectId: change.objectId,
+        prevWidth: change.nextWidth,
+        prevHeight: change.nextHeight,
+        nextWidth: change.prevWidth,
+        nextHeight: change.prevHeight,
       }
     case 'spawn':
       return {
@@ -245,6 +287,13 @@ export function applyChange(target: ScalableMovableObject, change: EditorChange)
       if (change.property === 'attackDurationMs') GAME_WEAPON_CONFIG.attackDurationMs = change.nextValue
       if (change.property === 'holdOffsetX') GAME_WEAPON_CONFIG.holdOffsetX = change.nextValue
       if (change.property === 'holdOffsetY') GAME_WEAPON_CONFIG.holdOffsetY = change.nextValue
+      if (change.property === 'colliderWidth') target.colliderWidth = change.nextValue
+      if (change.property === 'colliderHeight') target.colliderHeight = change.nextValue
+      break
+    }
+    case 'collider': {
+      target.colliderWidth = change.nextWidth
+      target.colliderHeight = change.nextHeight
       break
     }
   }

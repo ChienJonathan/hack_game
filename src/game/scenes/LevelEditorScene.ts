@@ -60,6 +60,8 @@ export interface SpawnObjectConfig {
   attackDurationMs?: number
   holdOffsetX?: number
   holdOffsetY?: number
+  colliderWidth?: number
+  colliderHeight?: number
 }
 
 export interface EditorObject extends ScalableMovableObject {
@@ -67,8 +69,11 @@ export interface EditorObject extends ScalableMovableObject {
   sprite: Phaser.GameObjects.Image
   outline: Phaser.GameObjects.Rectangle
   collisionBox?: Phaser.GameObjects.Rectangle
+  colliderHandle?: Phaser.GameObjects.Rectangle
   scaleHandle: Phaser.GameObjects.Rectangle
   label: Phaser.GameObjects.Text
+  colliderWidth?: number
+  colliderHeight?: number
 }
 
 export class LevelEditorScene extends Phaser.Scene {
@@ -102,6 +107,7 @@ export class LevelEditorScene extends Phaser.Scene {
   private headerText: Phaser.GameObjects.Text | undefined
   private isDraggingObject = false
   private isDraggingScaleHandle = false
+  private isDraggingColliderHandle = false
   private history = new EditorHistory()
   private dragStartX = 0
   private dragStartY = 0
@@ -113,6 +119,10 @@ export class LevelEditorScene extends Phaser.Scene {
   private scaleStartScaleY = 0
   private scaleStartPointerX = 0
   private scaleStartPointerY = 0
+  private colliderStartWidth = 0
+  private colliderStartHeight = 0
+  private colliderStartPointerX = 0
+  private colliderStartPointerY = 0
   private exportButton!: Phaser.GameObjects.Container
   private instructionText: Phaser.GameObjects.Text | undefined
 
@@ -261,6 +271,8 @@ export class LevelEditorScene extends Phaser.Scene {
       for (const obj of this.editorObjects) {
         obj.sprite.destroy()
         obj.outline.destroy()
+        obj.collisionBox?.destroy()
+        obj.colliderHandle?.destroy()
         obj.scaleHandle.destroy()
         obj.label.destroy()
       }
@@ -412,15 +424,46 @@ export class LevelEditorScene extends Phaser.Scene {
       .setDepth(2)
       .setVisible(false)
 
+    const stateCollBox = state.collisionBox as { width?: number; height?: number } | null | undefined
+    const colliderWidth =
+      typeof roomObj?.colliderWidth === 'number'
+        ? roomObj.colliderWidth
+        : typeof stateCollBox?.width === 'number'
+          ? stateCollBox.width
+          : typeof state.colliderWidth === 'number'
+            ? (state.colliderWidth as number)
+            : undefined
+    const colliderHeight =
+      typeof roomObj?.colliderHeight === 'number'
+        ? roomObj.colliderHeight
+        : typeof stateCollBox?.height === 'number'
+          ? stateCollBox.height
+          : typeof state.colliderHeight === 'number'
+            ? (state.colliderHeight as number)
+            : undefined
+
     // Collision box (added for all world objects besides weapon)
     let collisionBox: Phaser.GameObjects.Rectangle | undefined
+    let colliderHandle: Phaser.GameObjects.Rectangle | undefined
     if (role !== 'weapon') {
-      const collSize = computeCollisionSize(role, scaleX, scaleY)
+      const collSize = computeCollisionSize(role, scaleX, scaleY, colliderWidth, colliderHeight)
       collisionBox = this.add
         .rectangle(x, y, collSize.width, collSize.height)
         .setStrokeStyle(2, 0x00e676, 0.9)
         .setFillStyle(0x00e676, 0.12)
         .setDepth(2)
+
+      colliderHandle = this.add
+        .rectangle(
+          x + collSize.width / 2,
+          y + collSize.height / 2,
+          HANDLE_SIZE,
+          HANDLE_SIZE,
+          0x00e676,
+          1,
+        )
+        .setDepth(5)
+        .setVisible(false)
     }
 
     // Scale handle (bottom-right corner)
@@ -452,8 +495,11 @@ export class LevelEditorScene extends Phaser.Scene {
       sprite,
       outline,
       collisionBox,
+      colliderHandle,
       scaleHandle,
       label,
+      colliderWidth: role !== 'weapon' ? (colliderWidth ?? computeCollisionSize(role, scaleX, scaleY).width) : undefined,
+      colliderHeight: role !== 'weapon' ? (colliderHeight ?? computeCollisionSize(role, scaleX, scaleY).height) : undefined,
       x,
       y,
       displayWidth,
@@ -616,6 +662,80 @@ export class LevelEditorScene extends Phaser.Scene {
       items.push(label, val)
       this.panelFields.set(`val_${field}`, val)
     }
+
+    // Collider box row in Section 2
+    const collWLabel = this.add
+      .text(310, 242, 'box_w:', {
+        fontFamily: FONT_FAMILY,
+        fontSize: 13,
+        color: '#00e676',
+      })
+      .setOrigin(0, 0)
+
+    const collWVal = this.add
+      .text(405, 240, '--', {
+        fontFamily: FONT_FAMILY,
+        fontSize: 13,
+        color: '#00e676',
+        backgroundColor: '#2a2a2a',
+        padding: { x: 6, y: 2 },
+      })
+      .setOrigin(1, 0)
+      .setInteractive({ useHandCursor: true })
+    collWVal.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      pointer.event?.stopPropagation?.()
+      this.promptColliderSize('colliderWidth')
+    })
+
+    const collWMinus = this.createPanelButton(430, 238, '−', (pointer) => {
+      this.adjustColliderSize('colliderWidth', pointer.event?.shiftKey ? -50 : -10)
+    })
+    const collWPlus = this.createPanelButton(462, 238, '+', (pointer) => {
+      this.adjustColliderSize('colliderWidth', pointer.event?.shiftKey ? 50 : 10)
+    })
+
+    const collHLabel = this.add
+      .text(490, 242, 'box_h:', {
+        fontFamily: FONT_FAMILY,
+        fontSize: 13,
+        color: '#00e676',
+      })
+      .setOrigin(0, 0)
+
+    const collHVal = this.add
+      .text(585, 240, '--', {
+        fontFamily: FONT_FAMILY,
+        fontSize: 13,
+        color: '#00e676',
+        backgroundColor: '#2a2a2a',
+        padding: { x: 6, y: 2 },
+      })
+      .setOrigin(1, 0)
+      .setInteractive({ useHandCursor: true })
+    collHVal.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      pointer.event?.stopPropagation?.()
+      this.promptColliderSize('colliderHeight')
+    })
+
+    const collHMinus = this.createPanelButton(610, 238, '−', (pointer) => {
+      this.adjustColliderSize('colliderHeight', pointer.event?.shiftKey ? -50 : -10)
+    })
+    const collHPlus = this.createPanelButton(642, 238, '+', (pointer) => {
+      this.adjustColliderSize('colliderHeight', pointer.event?.shiftKey ? 50 : 10)
+    })
+
+    this.panelFields.set('val_colliderWidth', collWVal)
+    this.panelFields.set('val_colliderHeight', collHVal)
+    items.push(
+      collWLabel,
+      collWVal,
+      collWMinus,
+      collWPlus,
+      collHLabel,
+      collHVal,
+      collHMinus,
+      collHPlus,
+    )
 
     // ─── Section 3: Stats (Editable for player, guard & weapon) ───
     this.section3Title = this.add
@@ -845,23 +965,30 @@ export class LevelEditorScene extends Phaser.Scene {
       .setOrigin(0.5, 0)
     items.push(section4Title)
 
-    const scalePlusBtn = this.createPanelButton(1200, 72, 'SCALE +', () =>
+    const scalePlusBtn = this.createPanelButton(1200, 64, 'SCALE +', () =>
       this.scaleSelected(1.1),
     )
-    const scaleMinusBtn = this.createPanelButton(1320, 72, 'SCALE -', () =>
+    const scaleMinusBtn = this.createPanelButton(1320, 64, 'SCALE -', () =>
       this.scaleSelected(1 / 1.1),
     )
-    items.push(scalePlusBtn, scaleMinusBtn)
+    const collScalePlusBtn = this.createPanelButton(1200, 106, 'BOX +', () =>
+      this.scaleSelectedCollider(1.1),
+    )
+    const collScaleMinusBtn = this.createPanelButton(1320, 106, 'BOX -', () =>
+      this.scaleSelectedCollider(1 / 1.1),
+    )
+    items.push(scalePlusBtn, scaleMinusBtn, collScalePlusBtn, collScaleMinusBtn)
 
     const hints = [
-      'Nudge: Arrow keys',
-      'Shift: 10px step',
+      'Nudge: Arrows (Shift: 10px)',
+      'Scale: +/- (Box: [/])',
+      'Drag: Yellow (Scale) / Green (Box)',
     ]
     for (let i = 0; i < hints.length; i++) {
       const hint = this.add
-        .text(1260, 138 + i * 34, hints[i], {
+        .text(1260, 155 + i * 28, hints[i], {
           fontFamily: FONT_FAMILY,
-          fontSize: 13,
+          fontSize: 11,
           color: DIM_COLOR,
         })
         .setOrigin(0.5, 0)
@@ -943,6 +1070,9 @@ export class LevelEditorScene extends Phaser.Scene {
       const isSelected = obj.id === id
       obj.outline.setVisible(isSelected)
       obj.scaleHandle.setVisible(isSelected)
+      if (obj.colliderHandle) {
+        obj.colliderHandle.setVisible(isSelected && obj.role !== 'weapon')
+      }
       obj.sprite.setAlpha(isSelected ? 1 : 0.7)
 
       // Highlight the panel button
@@ -970,6 +1100,8 @@ export class LevelEditorScene extends Phaser.Scene {
         'height',
         'scaleX',
         'scaleY',
+        'colliderWidth',
+        'colliderHeight',
         'maxHealth',
         'speed',
         'player_speed_summary',
@@ -998,6 +1130,21 @@ export class LevelEditorScene extends Phaser.Scene {
     setField('height', Math.round(selected.displayHeight).toString())
     setField('scaleX', selected.scaleX.toFixed(2))
     setField('scaleY', selected.scaleY.toFixed(2))
+
+    if (selected.role === 'weapon') {
+      setField('colliderWidth', '--')
+      setField('colliderHeight', '--')
+    } else {
+      const collSize = computeCollisionSize(
+        selected.role,
+        selected.scaleX,
+        selected.scaleY,
+        selected.colliderWidth,
+        selected.colliderHeight,
+      )
+      setField('colliderWidth', Math.round(collSize.width).toString())
+      setField('colliderHeight', Math.round(collSize.height).toString())
+    }
 
     const isCharacter =
       selected.maxHealth !== undefined &&
@@ -1274,8 +1421,10 @@ export class LevelEditorScene extends Phaser.Scene {
     y: number,
     scaleX: number,
     scaleY: number,
+    colliderWidth?: number,
+    colliderHeight?: number,
   ): { x: number; y: number; width: number; height: number } | null {
-    return computeEditorCollisionBox(role, x, y, scaleX, scaleY)
+    return computeEditorCollisionBox(role, x, y, scaleX, scaleY, colliderWidth, colliderHeight)
   }
 
   public wouldOverlapAny(
@@ -1284,12 +1433,153 @@ export class LevelEditorScene extends Phaser.Scene {
     y: number,
     scaleX?: number,
     scaleY?: number,
+    colliderWidth?: number,
+    colliderHeight?: number,
   ): boolean {
     const targetObj = this.editorObjects.find((o) => o.id === objectId)
     const role = targetObj?.role ?? 'enemy'
     const sX = scaleX ?? targetObj?.scaleX ?? 1
     const sY = scaleY ?? targetObj?.scaleY ?? 1
-    return wouldOverlapAnyEditorObject(objectId, role, x, y, sX, sY, this.editorObjects)
+    const cW = colliderWidth ?? targetObj?.colliderWidth
+    const cH = colliderHeight ?? targetObj?.colliderHeight
+    return wouldOverlapAnyEditorObject(objectId, role, x, y, sX, sY, this.editorObjects, cW, cH)
+  }
+
+  public adjustColliderSize(property: 'colliderWidth' | 'colliderHeight', delta: number): void {
+    const selected = this.getSelected()
+    if (!selected || selected.role === 'weapon') return
+
+    const defaultSize = computeCollisionSize(selected.role, selected.scaleX, selected.scaleY)
+    const prevWidth = selected.colliderWidth ?? defaultSize.width
+    const prevHeight = selected.colliderHeight ?? defaultSize.height
+
+    const nextWidth = property === 'colliderWidth' ? Math.max(16, prevWidth + delta) : prevWidth
+    const nextHeight = property === 'colliderHeight' ? Math.max(16, prevHeight + delta) : prevHeight
+
+    if (nextWidth === prevWidth && nextHeight === prevHeight) return
+
+    if (
+      this.wouldOverlapAny(
+        selected.id,
+        selected.x,
+        selected.y,
+        selected.scaleX,
+        selected.scaleY,
+        nextWidth,
+        nextHeight,
+      )
+    ) {
+      return
+    }
+
+    selected.colliderWidth = nextWidth
+    selected.colliderHeight = nextHeight
+
+    this.history.push({
+      type: 'collider',
+      objectId: selected.id,
+      prevWidth,
+      prevHeight,
+      nextWidth,
+      nextHeight,
+    })
+
+    this.updateObjectVisuals(selected)
+    this.updatePropertyPanel()
+  }
+
+  public scaleSelectedCollider(factor: number): void {
+    const selected = this.getSelected()
+    if (!selected || selected.role === 'weapon') return
+
+    const defaultSize = computeCollisionSize(selected.role, selected.scaleX, selected.scaleY)
+    const prevWidth = selected.colliderWidth ?? defaultSize.width
+    const prevHeight = selected.colliderHeight ?? defaultSize.height
+
+    const nextWidth = Math.max(16, Math.round(prevWidth * factor))
+    const nextHeight = Math.max(16, Math.round(prevHeight * factor))
+
+    if (nextWidth === prevWidth && nextHeight === prevHeight) return
+
+    if (
+      this.wouldOverlapAny(
+        selected.id,
+        selected.x,
+        selected.y,
+        selected.scaleX,
+        selected.scaleY,
+        nextWidth,
+        nextHeight,
+      )
+    ) {
+      return
+    }
+
+    selected.colliderWidth = nextWidth
+    selected.colliderHeight = nextHeight
+
+    this.history.push({
+      type: 'collider',
+      objectId: selected.id,
+      prevWidth,
+      prevHeight,
+      nextWidth,
+      nextHeight,
+    })
+
+    this.updateObjectVisuals(selected)
+    this.updatePropertyPanel()
+  }
+
+  public promptColliderSize(property: 'colliderWidth' | 'colliderHeight'): void {
+    const selected = this.getSelected()
+    if (!selected || selected.role === 'weapon') return
+
+    const defaultSize = computeCollisionSize(selected.role, selected.scaleX, selected.scaleY)
+    const prevWidth = selected.colliderWidth ?? defaultSize.width
+    const prevHeight = selected.colliderHeight ?? defaultSize.height
+    const currentVal = property === 'colliderWidth' ? prevWidth : prevHeight
+
+    const label = property === 'colliderWidth' ? 'collider width' : 'collider height'
+    const input = window.prompt(`Enter new ${label} for ${selected.id}:`, currentVal.toString())
+    if (input === null) return
+
+    const parsed = parseInt(input.trim(), 10)
+    if (isNaN(parsed) || parsed < 16) return
+
+    const nextWidth = property === 'colliderWidth' ? parsed : prevWidth
+    const nextHeight = property === 'colliderHeight' ? parsed : prevHeight
+
+    if (nextWidth === prevWidth && nextHeight === prevHeight) return
+
+    if (
+      this.wouldOverlapAny(
+        selected.id,
+        selected.x,
+        selected.y,
+        selected.scaleX,
+        selected.scaleY,
+        nextWidth,
+        nextHeight,
+      )
+    ) {
+      return
+    }
+
+    selected.colliderWidth = nextWidth
+    selected.colliderHeight = nextHeight
+
+    this.history.push({
+      type: 'collider',
+      objectId: selected.id,
+      prevWidth,
+      prevHeight,
+      nextWidth,
+      nextHeight,
+    })
+
+    this.updateObjectVisuals(selected)
+    this.updatePropertyPanel()
   }
 
   private updateObjectVisuals(obj: EditorObject): void {
@@ -1298,10 +1588,20 @@ export class LevelEditorScene extends Phaser.Scene {
     obj.outline.setPosition(obj.x, obj.y)
     obj.outline.setSize(obj.displayWidth + 8, obj.displayHeight + 8)
     if (obj.collisionBox) {
-      const collSize = computeCollisionSize(obj.role, obj.scaleX, obj.scaleY)
+      const collSize = computeCollisionSize(
+        obj.role,
+        obj.scaleX,
+        obj.scaleY,
+        obj.colliderWidth,
+        obj.colliderHeight,
+      )
       obj.collisionBox.setPosition(obj.x, obj.y)
       obj.collisionBox.setSize(collSize.width, collSize.height)
       obj.collisionBox.setVisible(obj.sprite.visible)
+      if (obj.colliderHandle) {
+        obj.colliderHandle.setPosition(obj.x + collSize.width / 2, obj.y + collSize.height / 2)
+        obj.colliderHandle.setVisible(obj.id === this.selectedId && obj.role !== 'weapon' && obj.sprite.visible)
+      }
     }
     obj.scaleHandle.setPosition(
       obj.x + obj.displayWidth / 2,
@@ -1541,6 +1841,30 @@ export class LevelEditorScene extends Phaser.Scene {
       }
     }
 
+    // Check if clicking the collider handle of the selected object
+    if (selected && selected.colliderHandle && selected.colliderHandle.visible) {
+      const collSize = computeCollisionSize(
+        selected.role,
+        selected.scaleX,
+        selected.scaleY,
+        selected.colliderWidth,
+        selected.colliderHeight,
+      )
+      const chx = selected.x + collSize.width / 2
+      const chy = selected.y + collSize.height / 2
+      if (
+        Math.abs(worldX - chx) <= HANDLE_SIZE &&
+        Math.abs(worldY - chy) <= HANDLE_SIZE
+      ) {
+        this.isDraggingColliderHandle = true
+        this.colliderStartWidth = collSize.width
+        this.colliderStartHeight = collSize.height
+        this.colliderStartPointerX = worldX
+        this.colliderStartPointerY = worldY
+        return
+      }
+    }
+
     // Check if clicking on an object sprite
     for (let i = this.editorObjects.length - 1; i >= 0; i--) {
       const obj = this.editorObjects[i]
@@ -1628,6 +1952,32 @@ export class LevelEditorScene extends Phaser.Scene {
       this.updateObjectVisuals(selected)
       this.updatePropertyPanel()
     }
+
+    if (this.isDraggingColliderHandle) {
+      const selected = this.getSelected()
+      if (!selected) return
+      const dx = (pointer.worldX - this.colliderStartPointerX) * 2
+      const dy = (pointer.worldY - this.colliderStartPointerY) * 2
+      const candW = Math.max(16, snap(this.colliderStartWidth + dx))
+      const candH = Math.max(16, snap(this.colliderStartHeight + dy))
+
+      if (
+        !this.wouldOverlapAny(
+          selected.id,
+          selected.x,
+          selected.y,
+          selected.scaleX,
+          selected.scaleY,
+          candW,
+          candH,
+        )
+      ) {
+        selected.colliderWidth = candW
+        selected.colliderHeight = candH
+        this.updateObjectVisuals(selected)
+        this.updatePropertyPanel()
+      }
+    }
   }
 
   private onPointerUp(): void {
@@ -1676,6 +2026,25 @@ export class LevelEditorScene extends Phaser.Scene {
         })
       }
       this.isDraggingScaleHandle = false
+    }
+
+    if (this.isDraggingColliderHandle) {
+      const selected = this.getSelected()
+      if (
+        selected &&
+        ((selected.colliderWidth ?? this.colliderStartWidth) !== this.colliderStartWidth ||
+          (selected.colliderHeight ?? this.colliderStartHeight) !== this.colliderStartHeight)
+      ) {
+        this.history.push({
+          type: 'collider',
+          objectId: selected.id,
+          prevWidth: this.colliderStartWidth,
+          prevHeight: this.colliderStartHeight,
+          nextWidth: selected.colliderWidth ?? this.colliderStartWidth,
+          nextHeight: selected.colliderHeight ?? this.colliderStartHeight,
+        })
+      }
+      this.isDraggingColliderHandle = false
     }
   }
 
@@ -1737,6 +2106,12 @@ export class LevelEditorScene extends Phaser.Scene {
       case '_':
         this.scaleSelected(1 / 1.05)
         return
+      case '[':
+        this.scaleSelectedCollider(1 / 1.05)
+        return
+      case ']':
+        this.scaleSelectedCollider(1.05)
+        return
       case 'Tab':
         event.preventDefault()
         this.cycleSelection(event.shiftKey ? -1 : 1)
@@ -1773,6 +2148,8 @@ export class LevelEditorScene extends Phaser.Scene {
           displayHeight: reversed.snapshot.displayHeight,
           scaleX: reversed.snapshot.scaleX,
           scaleY: reversed.snapshot.scaleY,
+          colliderWidth: reversed.snapshot.colliderWidth,
+          colliderHeight: reversed.snapshot.colliderHeight,
           speed: reversed.snapshot.speed,
           maxHealth: reversed.snapshot.maxHealth,
           attackDistance: reversed.snapshot.attackDistance,
@@ -1859,6 +2236,8 @@ export class LevelEditorScene extends Phaser.Scene {
         ...(obj.attackDurationMs !== undefined ? { attackDurationMs: obj.attackDurationMs } : {}),
         ...(obj.holdOffsetX !== undefined ? { holdOffsetX: obj.holdOffsetX } : {}),
         ...(obj.holdOffsetY !== undefined ? { holdOffsetY: obj.holdOffsetY } : {}),
+        ...(obj.colliderWidth !== undefined ? { colliderWidth: Math.round(obj.colliderWidth) } : {}),
+        ...(obj.colliderHeight !== undefined ? { colliderHeight: Math.round(obj.colliderHeight) } : {}),
       }
     })
 
@@ -1971,6 +2350,8 @@ export class LevelEditorScene extends Phaser.Scene {
       } else if (config.displayHeight !== undefined) {
         existing.scaleY = existing.displayHeight / existing.baseHeight
       }
+      if (config.colliderWidth !== undefined) existing.colliderWidth = config.colliderWidth
+      if (config.colliderHeight !== undefined) existing.colliderHeight = config.colliderHeight
       if (config.maxHealth !== undefined) existing.maxHealth = config.maxHealth
       if (config.speed !== undefined) existing.speed = config.speed
       if (config.attackDistance !== undefined) existing.attackDistance = config.attackDistance
@@ -2029,14 +2410,23 @@ export class LevelEditorScene extends Phaser.Scene {
     let x = config.x !== undefined ? config.x : defaultX
     let y = config.y !== undefined ? config.y : defaultY
 
+    const colliderWidth = config.colliderWidth
+    const colliderHeight = config.colliderHeight
+
     if (role !== 'weapon') {
-      const collSize = computeCollisionSize(role, scaleX, scaleY)
+      const collSize = computeCollisionSize(role, scaleX, scaleY, colliderWidth, colliderHeight)
       let offset = 0
       while (offset < 800) {
         let collides = false
         for (const other of this.editorObjects) {
           if (other.role === 'weapon') continue
-          const otherSize = computeCollisionSize(other.role, other.scaleX, other.scaleY)
+          const otherSize = computeCollisionSize(
+            other.role,
+            other.scaleX,
+            other.scaleY,
+            other.colliderWidth,
+            other.colliderHeight,
+          )
           if (
             Math.abs(x - other.x) < (collSize.width + otherSize.width) / 2 &&
             Math.abs(y - other.y) < (collSize.height + otherSize.height) / 2
@@ -2066,13 +2456,26 @@ export class LevelEditorScene extends Phaser.Scene {
 
     // Collision box (added for all world objects besides weapon)
     let collisionBox: Phaser.GameObjects.Rectangle | undefined
+    let colliderHandle: Phaser.GameObjects.Rectangle | undefined
     if (role !== 'weapon') {
-      const collSize = computeCollisionSize(role, scaleX, scaleY)
+      const collSize = computeCollisionSize(role, scaleX, scaleY, colliderWidth, colliderHeight)
       collisionBox = this.add
         .rectangle(x, y, collSize.width, collSize.height)
         .setStrokeStyle(2, 0x00e676, 0.9)
         .setFillStyle(0x00e676, 0.12)
         .setDepth(2)
+
+      colliderHandle = this.add
+        .rectangle(
+          x + collSize.width / 2,
+          y + collSize.height / 2,
+          HANDLE_SIZE,
+          HANDLE_SIZE,
+          0x00e676,
+          1,
+        )
+        .setDepth(5)
+        .setVisible(false)
     }
 
     // Scale handle (bottom-right corner)
@@ -2104,6 +2507,7 @@ export class LevelEditorScene extends Phaser.Scene {
       sprite,
       outline,
       collisionBox,
+      colliderHandle,
       scaleHandle,
       label,
       x,
@@ -2114,6 +2518,8 @@ export class LevelEditorScene extends Phaser.Scene {
       baseHeight,
       scaleX,
       scaleY,
+      colliderWidth,
+      colliderHeight,
       maxHealth,
       speed,
       maxSpeed,
@@ -2167,6 +2573,7 @@ export class LevelEditorScene extends Phaser.Scene {
     obj.sprite.destroy()
     obj.outline.destroy()
     obj.collisionBox?.destroy()
+    obj.colliderHandle?.destroy()
     obj.scaleHandle.destroy()
     obj.label.destroy()
 
@@ -2252,6 +2659,8 @@ export class LevelEditorScene extends Phaser.Scene {
       baseHeight: obj.baseHeight,
       scaleX: obj.scaleX,
       scaleY: obj.scaleY,
+      colliderWidth: obj.colliderWidth,
+      colliderHeight: obj.colliderHeight,
       speed: obj.speed,
       maxHealth: obj.maxHealth,
       attackDistance: obj.attackDistance,

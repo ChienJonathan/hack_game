@@ -146,5 +146,33 @@ describe('room1Serializer', () => {
     expect(source).toContain('displayWidth: 120')
     expect(source).toContain('displayHeight: 120')
   })
+
+  it('serializes colliderWidth and colliderHeight when defined', () => {
+    const objects: RoomObjectConfig[] = [
+      {
+        id: 'player',
+        role: 'player',
+        x: 250,
+        y: 205,
+        displayWidth: 176,
+        displayHeight: 176,
+        colliderWidth: 95,
+        colliderHeight: 145,
+      },
+      {
+        id: 'guard-1',
+        role: 'enemy',
+        x: 600,
+        y: 400,
+        displayWidth: 176,
+        displayHeight: 176,
+      },
+    ]
+
+    const source = generateRoom1Source(objects)
+    expect(source).toContain('colliderWidth: 95')
+    expect(source).toContain('colliderHeight: 145')
+    expect(source).not.toContain('colliderWidth: undefined')
+  })
 })
 

@@ -84,7 +84,7 @@ All world objects besides weapons have a domain-owned `collisionBox` (`width`, `
 
 `AabbCollisionWorld` provides `overlaps(a, b)` and `resolveMovement(currentBox, targetBox, obstacles, bounds)` to guarantee that collisionboxes never overlap each other:
 - In simulation (`PlayerMovementProcess`, `GuardResponseProcess`, `BehaviorTreeEvaluator`), moving entities resolve motion axis-by-axis against obstacles (all other alive room entities with collisionboxes) and room bounds, sliding smoothly along obstacle edges without penetrating or overlapping.
-- In `LevelEditorScene`, each non-weapon world object displays a visual green collisionbox matching its scaled physical dimensions. Dragging, nudging, scaling, and spawning enforce non-overlapping constraints so collisionboxes can never be placed overlapping each other.
+- In `LevelEditorScene`, each non-weapon world object displays a visual green collisionbox matching its physical dimensions. Non-weapon collisionboxes are directly editable via handle dragging (green handle at bottom-right of the collider box), inspector panel dimension controls (`box_w`, `box_h`), scale buttons (`BOX +` / `BOX -`), and hotkeys (`[` / `]`). Dragging, nudging, scaling, collider resizing, and spawning enforce non-overlapping constraints so collisionboxes can never be placed overlapping each other.
 - In `room1.ts`, all starting world object positions are arranged without collisionbox overlap.
 
 ### First Room Behavior
@@ -204,7 +204,8 @@ Editable configurations export directly to `room1.ts` (`ROOM1_OBJECTS`). Objects
 | **Reposition** | Drag sprite, or arrow keys (1 px, Shift: 10 px; blocked from collisionbox overlap) |
 | **Uniform Scale** | Drag yellow corner handle, `+`/`-` keys, or panel `×1.1` / `÷1.1` buttons (blocked from collisionbox overlap) |
 | **Spawn / Despawn** | `+ GUARD`, `+ DAGGER` buttons (spawns in non-overlapping spot); despawn with `REMOVE SELECTED` or `Del`/`Backspace` |
-| **Collisionboxes** | Non-weapon objects render green collisionbox rectangles (`110×scaleX` by `160×scaleY` for characters, `120×scaleX` by `120×scaleY` for boulders); weapons have no collisionbox |
+| **Collisionboxes** | Non-weapon objects render green collisionbox rectangles (`110×scaleX` by `160×scaleY` for characters, `120×scaleX` by `120×scaleY` for boulders, or custom `colliderWidth`×`colliderHeight`); weapons have no collisionbox |
+| **Collider Box Editing** | Drag green corner handle, hotkeys `[` / `]`, panel `BOX +` / `BOX -` buttons, or inspector `box_w` / `box_h` fields (+/- 10, Shift: 50, click for prompt; blocked from collisionbox overlap) |
 | **Selection** | Click sprite, panel list entry, or cycle with `Tab` / `Shift+Tab` |
 | **Character Stats** | Edit guard `max_health` & `speed`, or player `max_health` (`+/-` 10, Shift: 50, click value for prompt) |
 | **Weapon Stats** | Edit weapon `attack_dist`, `attack_dur`, `hold_offset_x`, `hold_offset_y` (`+/-` 10, Shift: 50, click value for prompt) |
@@ -213,7 +214,7 @@ Editable configurations export directly to `room1.ts` (`ROOM1_OBJECTS`). Objects
 | **Speed Editor Access** | `OPEN SPEED EDITOR (F3)` button or **F3** shortcut |
 | **AI Editor Access** | `AI EDITOR (F4)` button or **F4** shortcut |
 | **Return to Game** | **F2** or **Escape** (exits to active playable scene) |
-| **Undo / Redo** | `Ctrl+Z` reverses operations via invertible delta stack (move, scale, character/weapon stats, spawn/despawn) |
+| **Undo / Redo** | `Ctrl+Z` reverses operations via invertible delta stack (move, scale, collider box, character/weapon stats, spawn/despawn) |
 | **Toggle Panel** | **P** toggles bottom property panel visibility |
 | **Save** | `SAVE TO ROOM1.TS` overwrites file via `/api/save-room1` and syncs in-memory `ROOM1_OBJECTS` and `GAME_WEAPON_CONFIG` |
 

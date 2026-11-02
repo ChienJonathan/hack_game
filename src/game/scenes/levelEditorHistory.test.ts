@@ -5,6 +5,7 @@ import {
   type PropertyChange,
   type ScalableMovableObject,
   type ScaleChange,
+  type ColliderChange,
   EditorHistory,
   applyChange,
   invertChange,
@@ -141,6 +142,29 @@ describe('levelEditorHistory', () => {
       expect(invertChange(reverse)).toEqual(propChange)
     })
 
+    it('defines the reverse of a collider change by swapping prev/next dimensions', () => {
+      const colliderChange: ColliderChange = {
+        type: 'collider',
+        objectId: 'player',
+        prevWidth: 110,
+        prevHeight: 160,
+        nextWidth: 140,
+        nextHeight: 180,
+      }
+
+      const reverse = invertChange(colliderChange)
+
+      expect(reverse).toEqual({
+        type: 'collider',
+        objectId: 'player',
+        prevWidth: 140,
+        prevHeight: 180,
+        nextWidth: 110,
+        nextHeight: 160,
+      })
+      expect(invertChange(reverse)).toEqual(colliderChange)
+    })
+
     it('defines the reverse of a spawn change as despawn change and vice versa', () => {
       const snapshot = createTestObject({ id: 'guard-2' })
       const spawnChange = {
@@ -205,6 +229,40 @@ describe('levelEditorHistory', () => {
         nextValue: 210,
       })
       expect(obj.speed).toBe(210)
+
+      applyChange(obj, {
+        type: 'property',
+        objectId: 'test-obj',
+        property: 'colliderWidth',
+        delta: 20,
+        prevValue: 100,
+        nextValue: 120,
+      })
+      expect(obj.colliderWidth).toBe(120)
+
+      applyChange(obj, {
+        type: 'property',
+        objectId: 'test-obj',
+        property: 'colliderHeight',
+        delta: -15,
+        prevValue: 150,
+        nextValue: 135,
+      })
+      expect(obj.colliderHeight).toBe(135)
+    })
+
+    it('applies collider change by updating colliderWidth and colliderHeight', () => {
+      const obj = createTestObject({ colliderWidth: 100, colliderHeight: 120 })
+      applyChange(obj, {
+        type: 'collider',
+        objectId: 'test-obj',
+        prevWidth: 100,
+        prevHeight: 120,
+        nextWidth: 140,
+        nextHeight: 160,
+      })
+      expect(obj.colliderWidth).toBe(140)
+      expect(obj.colliderHeight).toBe(160)
     })
 
     it('applies weapon property changes to target object and syncs GAME_WEAPON_CONFIG', () => {
@@ -721,6 +779,36 @@ describe('levelEditorHistory', () => {
         expect(spawnReversed.snapshot.holdOffsetY).toBe(35)
       }
     })
+
+    it('records and reverses collider box changes', () => {
+      const history = new EditorHistory()
+      const playerObj = createTestObject({
+        id: 'player',
+        colliderWidth: 140,
+        colliderHeight: 180,
+      })
+
+      history.push({
+        type: 'collider',
+        objectId: 'player',
+        prevWidth: 110,
+        prevHeight: 160,
+        nextWidth: 140,
+        nextHeight: 180,
+      })
+
+      const reversed = history.undo((id) => (id === 'player' ? playerObj : undefined))
+      expect(reversed).toEqual({
+        type: 'collider',
+        objectId: 'player',
+        prevWidth: 140,
+        prevHeight: 180,
+        nextWidth: 110,
+        nextHeight: 160,
+      })
+      expect(playerObj.colliderWidth).toBe(110)
+      expect(playerObj.colliderHeight).toBe(160)
+    })
   })
 
   describe('computeEditorCollisionBox', () => {
@@ -737,6 +825,17 @@ describe('levelEditorHistory', () => {
 
       const boulderBox = computeEditorCollisionBox('object', 400, 500, 1, 1)
       expect(boulderBox).toEqual({ x: 400, y: 500, width: 120, height: 120 })
+    })
+
+    it('uses explicit colliderWidth and colliderHeight when provided', () => {
+      const customBox = computeEditorCollisionBox('enemy', 200, 300, 1, 1, 150, 200)
+      expect(customBox).toEqual({ x: 200, y: 300, width: 150, height: 200 })
+
+      const customBoulder = computeEditorCollisionBox('object', 400, 500, 1, 1, 80, 90)
+      expect(customBoulder).toEqual({ x: 400, y: 500, width: 80, height: 90 })
+
+      const clampedBox = computeEditorCollisionBox('enemy', 200, 300, 1, 1, 5, 8)
+      expect(clampedBox).toEqual({ x: 200, y: 300, width: 16, height: 16 })
     })
   })
 
@@ -783,6 +882,28 @@ describe('levelEditorHistory', () => {
       // Testing guard-1 at its own position (200, 200)
       const result = wouldOverlapAnyEditorObject('guard-1', 'enemy', 200, 200, 1, 1, existing)
       expect(result).toBe(false)
+    })
+
+    it('respects custom candidate colliderWidth and colliderHeight', () => {
+      // Guard-1 at (200, 200), width 110 (right edge = 255).
+      // Candidate at (320, 200). With default width 110 (left edge = 265), it does not overlap.
+      const noOverlapDefault = wouldOverlapAnyEditorObject('player', 'player', 320, 200, 1, 1, existing)
+      expect(noOverlapDefault).toBe(false)
+
+      // With expanded candidate width 150 (half-width = 75):
+      // Candidate left edge = 320 - 75 = 245 < 255 (guard right edge) -> overlaps!
+      const overlapExpanded = wouldOverlapAnyEditorObject('player', 'player', 320, 200, 1, 1, existing, 150, 160)
+      expect(overlapExpanded).toBe(true)
+    })
+
+    it('respects custom obstacle colliderWidth and colliderHeight', () => {
+      const obstacleWithCustomCollider = [
+        { id: 'guard-1', role: 'enemy' as const, x: 200, y: 200, scaleX: 1, scaleY: 1, colliderWidth: 200, colliderHeight: 160 },
+      ]
+      // Guard-1 right edge = 200 + 100 = 300.
+      // Candidate player at (320, 200) with default width 110 (left edge = 320 - 55 = 265 < 300) -> overlaps!
+      const result = wouldOverlapAnyEditorObject('player', 'player', 320, 200, 1, 1, obstacleWithCustomCollider)
+      expect(result).toBe(true)
     })
   })
 })
