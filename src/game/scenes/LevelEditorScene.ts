@@ -8,6 +8,7 @@ import {
   CHARACTER_BASE_SIZE,
   DAGGER_SIZE,
   GAME_WEAPON_CONFIG,
+  computeDaggerAttackTranslation,
 } from '../content/room1Constants.ts'
 import { createInitialWorldState } from '../content/room1WorldState.ts'
 import { ROOM1_OBJECTS, type PlayerSpeedConfig, type RoomObjectConfig } from '../content/room1.ts'
@@ -81,6 +82,16 @@ export class LevelEditorScene extends Phaser.Scene {
   private guardStatsElements: Phaser.GameObjects.Text[] = []
   private playerStatsElements: Phaser.GameObjects.Text[] = []
   private weaponStatsElements: Phaser.GameObjects.Text[] = []
+  private testEquipBtn: Phaser.GameObjects.Text | undefined
+  private testAttackBtn: Phaser.GameObjects.Text | undefined
+  private testEquippedWeaponId: string | null = null
+  private savedWeaponPositions: Map<string, { x: number; y: number }> = new Map()
+  private testAttackAnimation: {
+    weaponId: string
+    elapsedMs: number
+    durationMs: number
+    attackDistance: number
+  } | null = null
   private section3Title: Phaser.GameObjects.Text | undefined
   private naStatsText: Phaser.GameObjects.Text | undefined
   private headerText: Phaser.GameObjects.Text | undefined
@@ -123,6 +134,11 @@ export class LevelEditorScene extends Phaser.Scene {
     this.guardStatsElements = []
     this.playerStatsElements = []
     this.weaponStatsElements = []
+    this.testEquipBtn = undefined
+    this.testAttackBtn = undefined
+    this.testEquippedWeaponId = null
+    this.savedWeaponPositions.clear()
+    this.testAttackAnimation = null
     this.section3Title = undefined
     this.naStatsText = undefined
     this.objectListButtons = []
@@ -249,6 +265,14 @@ export class LevelEditorScene extends Phaser.Scene {
       this.guardStatsElements = []
       this.playerStatsElements = []
       this.weaponStatsElements = []
+      if (this.testEquippedWeaponId) {
+        this.testUnequip(this.testEquippedWeaponId)
+      }
+      this.testEquippedWeaponId = null
+      this.savedWeaponPositions.clear()
+      this.testAttackAnimation = null
+      this.testEquipBtn = undefined
+      this.testAttackBtn = undefined
       this.section3Title = undefined
       this.naStatsText = undefined
       this.objectListButtons = []
@@ -257,8 +281,37 @@ export class LevelEditorScene extends Phaser.Scene {
     })
   }
 
-  update(): void {
-    // Selected object transform is displayed in Property Panel (Transform section)
+  update(_time: number, delta: number): void {
+    if (this.testAttackAnimation) {
+      this.testAttackAnimation.elapsedMs += delta
+      const { weaponId, elapsedMs, durationMs, attackDistance } = this.testAttackAnimation
+      const weapon = this.editorObjects.find((o) => o.id === weaponId)
+      if (weapon) {
+        if (elapsedMs >= durationMs) {
+          this.testAttackAnimation = null
+          if (this.testEquippedWeaponId === weapon.id) {
+            this.updateEquippedWeaponPosition(weapon)
+          } else {
+            this.updateObjectVisuals(weapon)
+          }
+        } else {
+          const translation = computeDaggerAttackTranslation(elapsedMs, durationMs, attackDistance)
+          if (this.testEquippedWeaponId === weapon.id) {
+            this.updateEquippedWeaponPosition(weapon, undefined, translation)
+          } else {
+            weapon.sprite.setPosition(weapon.x + translation, weapon.y)
+            weapon.outline.setPosition(weapon.x + translation, weapon.y)
+            weapon.scaleHandle.setPosition(
+              weapon.x + translation + weapon.displayWidth / 2,
+              weapon.y + weapon.displayHeight / 2,
+            )
+            weapon.label.setPosition(weapon.x + translation, weapon.y - weapon.displayHeight / 2 - 20)
+          }
+        }
+      } else {
+        this.testAttackAnimation = null
+      }
+    }
   }
 
   private createEditorObject(worldObject: WorldObject): void {
@@ -706,22 +759,56 @@ export class LevelEditorScene extends Phaser.Scene {
     createStatRow('hold_offset_x', 'holdOffsetX', 'holdOffsetX', 122, this.weaponStatsElements)
     createStatRow('hold_offset_y', 'holdOffsetY', 'holdOffsetY', 158, this.weaponStatsElements)
 
+    this.testEquipBtn = this.add
+      .text(795, 196, 'TEST EQUIP', {
+        fontFamily: FONT_FAMILY,
+        fontSize: 11,
+        color: '#ffffff',
+        backgroundColor: '#00695c',
+        padding: { x: 10, y: 7 },
+      })
+      .setOrigin(0.5, 0)
+      .setInteractive({ useHandCursor: true })
+    this.testEquipBtn.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      pointer.event?.stopPropagation?.()
+      this.toggleTestEquip()
+    })
+
+    this.testAttackBtn = this.add
+      .text(985, 196, 'TEST ATTACK', {
+        fontFamily: FONT_FAMILY,
+        fontSize: 11,
+        color: '#ffffff',
+        backgroundColor: '#c62828',
+        padding: { x: 10, y: 7 },
+      })
+      .setOrigin(0.5, 0)
+      .setInteractive({ useHandCursor: true })
+    this.testAttackBtn.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      pointer.event?.stopPropagation?.()
+      this.testAttack()
+    })
+
     const weaponHint1 = this.add
-      .text(890, 204, 'Click +/- (10) · Shift (50)', {
+      .text(890, 238, 'Click +/- (10) · Shift (50)', {
         fontFamily: FONT_FAMILY,
         fontSize: 11,
         color: DIM_COLOR,
       })
       .setOrigin(0.5, 0)
     const weaponHint2 = this.add
-      .text(890, 226, 'Click number to set exact', {
+      .text(890, 258, 'Click number to set exact', {
         fontFamily: FONT_FAMILY,
         fontSize: 11,
         color: DIM_COLOR,
       })
       .setOrigin(0.5, 0)
-    this.weaponStatsElements.push(weaponHint1, weaponHint2)
-    items.push(weaponHint1, weaponHint2)
+
+    this.panelFields.set('btn_test_equip', this.testEquipBtn)
+    this.panelFields.set('btn_test_attack', this.testAttackBtn)
+
+    this.weaponStatsElements.push(this.testEquipBtn, this.testAttackBtn, weaponHint1, weaponHint2)
+    items.push(this.testEquipBtn, this.testAttackBtn, weaponHint1, weaponHint2)
     this.weaponStatsElements.forEach((el) => el.setVisible(false))
 
     // ─── Section 4: Scale & Nudge ───
@@ -878,8 +965,11 @@ export class LevelEditorScene extends Phaser.Scene {
       return
     }
 
-    setField('x', Math.round(selected.x).toString())
-    setField('y', Math.round(selected.y).toString())
+    const savedPos = this.savedWeaponPositions.get(selected.id)
+    const displayX = savedPos ? savedPos.x : selected.x
+    const displayY = savedPos ? savedPos.y : selected.y
+    setField('x', Math.round(displayX).toString())
+    setField('y', Math.round(displayY).toString())
     setField('width', Math.round(selected.displayWidth).toString())
     setField('height', Math.round(selected.displayHeight).toString())
     setField('scaleX', selected.scaleX.toFixed(2))
@@ -942,6 +1032,7 @@ export class LevelEditorScene extends Phaser.Scene {
       setField('attackDurationMs', attackDur.toString())
       setField('holdOffsetX', holdX.toString())
       setField('holdOffsetY', holdY.toString())
+      this.updateTestEquipButtonState()
     } else {
       this.section3Title?.setText('STATS')
       setField('maxHealth', '--')
@@ -1025,6 +1116,10 @@ export class LevelEditorScene extends Phaser.Scene {
     if (property === 'attackDurationMs') GAME_WEAPON_CONFIG.attackDurationMs = nextValue
     if (property === 'holdOffsetX') GAME_WEAPON_CONFIG.holdOffsetX = nextValue
     if (property === 'holdOffsetY') GAME_WEAPON_CONFIG.holdOffsetY = nextValue
+
+    if (this.testEquippedWeaponId === selected.id) {
+      this.updateEquippedWeaponPosition(selected)
+    }
 
     this.history.push({
       type: 'property',
@@ -1129,6 +1224,10 @@ export class LevelEditorScene extends Phaser.Scene {
     if (property === 'holdOffsetX') GAME_WEAPON_CONFIG.holdOffsetX = nextValue
     if (property === 'holdOffsetY') GAME_WEAPON_CONFIG.holdOffsetY = nextValue
 
+    if (this.testEquippedWeaponId === selected.id) {
+      this.updateEquippedWeaponPosition(selected)
+    }
+
     this.history.push({
       type: 'property',
       objectId: selected.id,
@@ -1155,6 +1254,115 @@ export class LevelEditorScene extends Phaser.Scene {
       obj.y + obj.displayHeight / 2,
     )
     obj.label.setPosition(obj.x, obj.y - obj.displayHeight / 2 - 20)
+  }
+
+  public toggleTestEquip(weaponId?: string): void {
+    const id = weaponId ?? this.selectedId
+    if (!id) return
+    const weapon = this.editorObjects.find((o) => o.id === id && o.role === 'weapon')
+    if (!weapon) return
+
+    if (this.testEquippedWeaponId === weapon.id) {
+      this.testUnequip(weapon.id)
+    } else {
+      this.testEquip(weapon.id)
+    }
+  }
+
+  public testEquip(weaponId: string): void {
+    const weapon = this.editorObjects.find((o) => o.id === weaponId && o.role === 'weapon')
+    if (!weapon) return
+    const player = this.editorObjects.find((o) => o.role === 'player')
+    if (!player) return
+
+    if (this.testEquippedWeaponId && this.testEquippedWeaponId !== weapon.id) {
+      this.testUnequip(this.testEquippedWeaponId)
+    }
+
+    if (!this.savedWeaponPositions.has(weapon.id)) {
+      this.savedWeaponPositions.set(weapon.id, { x: weapon.x, y: weapon.y })
+    }
+
+    this.testEquippedWeaponId = weapon.id
+    this.updateEquippedWeaponPosition(weapon, player)
+    this.updateTestEquipButtonState()
+    this.updatePropertyPanel()
+  }
+
+  public testUnequip(weaponId: string): void {
+    this.stopTestAttack()
+    const weapon = this.editorObjects.find((o) => o.id === weaponId)
+    const saved = this.savedWeaponPositions.get(weaponId)
+    if (weapon && saved) {
+      weapon.x = saved.x
+      weapon.y = saved.y
+      this.updateObjectVisuals(weapon)
+    }
+    this.savedWeaponPositions.delete(weaponId)
+    if (this.testEquippedWeaponId === weaponId) {
+      this.testEquippedWeaponId = null
+    }
+    this.updateTestEquipButtonState()
+    this.updatePropertyPanel()
+  }
+
+  public testAttack(weaponId?: string): void {
+    const id = weaponId ?? this.selectedId
+    if (!id) return
+    const weapon = this.editorObjects.find((o) => o.id === id && o.role === 'weapon')
+    if (!weapon) return
+
+    if (this.testEquippedWeaponId !== weapon.id) {
+      this.testEquip(weapon.id)
+    }
+
+    this.stopTestAttack()
+
+    const durationMs = weapon.attackDurationMs ?? GAME_WEAPON_CONFIG.attackDurationMs
+    const attackDistance = weapon.attackDistance ?? GAME_WEAPON_CONFIG.attackDistance
+
+    this.testAttackAnimation = {
+      weaponId: weapon.id,
+      elapsedMs: 0,
+      durationMs,
+      attackDistance,
+    }
+  }
+
+  public stopTestAttack(): void {
+    if (this.testAttackAnimation) {
+      const weapon = this.editorObjects.find((o) => o.id === this.testAttackAnimation?.weaponId)
+      this.testAttackAnimation = null
+      if (weapon) {
+        if (this.testEquippedWeaponId === weapon.id) {
+          this.updateEquippedWeaponPosition(weapon)
+        } else {
+          this.updateObjectVisuals(weapon)
+        }
+      }
+    }
+  }
+
+  public updateEquippedWeaponPosition(
+    weapon: EditorObject,
+    player?: EditorObject,
+    attackTranslation = 0,
+  ): void {
+    const p = player ?? this.editorObjects.find((o) => o.role === 'player')
+    if (!p) return
+    const holdX = weapon.holdOffsetX ?? GAME_WEAPON_CONFIG.holdOffsetX
+    const holdY = weapon.holdOffsetY ?? GAME_WEAPON_CONFIG.holdOffsetY
+    weapon.x = p.x + holdX + attackTranslation
+    weapon.y = p.y + holdY
+    this.updateObjectVisuals(weapon)
+  }
+
+  private updateTestEquipButtonState(): void {
+    if (!this.testEquipBtn) return
+    const selected = this.getSelected()
+    const isEquipped = selected && this.testEquippedWeaponId === selected.id
+    this.testEquipBtn.setText(isEquipped ? 'TEST UNEQUIP' : 'TEST EQUIP')
+    this.testEquipBtn.setBackgroundColor(isEquipped ? '#d84315' : '#00695c')
   }
 
   private scaleSelected(factor: number): void {
@@ -1193,6 +1401,10 @@ export class LevelEditorScene extends Phaser.Scene {
     const selected = this.getSelected()
     if (!selected) return
 
+    if (this.testEquippedWeaponId === selected.id) {
+      this.testUnequip(selected.id)
+    }
+
     const prevX = selected.x
     const prevY = selected.y
     const nextX = snap(selected.x + dx)
@@ -1217,6 +1429,12 @@ export class LevelEditorScene extends Phaser.Scene {
     })
 
     this.updateObjectVisuals(selected)
+    if (selected.role === 'player' && this.testEquippedWeaponId) {
+      const weapon = this.editorObjects.find((o) => o.id === this.testEquippedWeaponId)
+      if (weapon) {
+        this.updateEquippedWeaponPosition(weapon, selected)
+      }
+    }
     this.updatePropertyPanel()
   }
 
@@ -1283,11 +1501,22 @@ export class LevelEditorScene extends Phaser.Scene {
     if (this.isDraggingObject) {
       const selected = this.getSelected()
       if (!selected) return
+      if (this.testEquippedWeaponId === selected.id) {
+        this.testUnequip(selected.id)
+        this.dragObjStartX = selected.x
+        this.dragObjStartY = selected.y
+      }
       const dx = pointer.worldX - this.dragStartX
       const dy = pointer.worldY - this.dragStartY
       selected.x = snap(this.dragObjStartX + dx)
       selected.y = snap(this.dragObjStartY + dy)
       this.updateObjectVisuals(selected)
+      if (selected.role === 'player' && this.testEquippedWeaponId) {
+        const weapon = this.editorObjects.find((o) => o.id === this.testEquippedWeaponId)
+        if (weapon) {
+          this.updateEquippedWeaponPosition(weapon, selected)
+        }
+      }
       this.updatePropertyPanel()
     }
 
@@ -1381,6 +1610,12 @@ export class LevelEditorScene extends Phaser.Scene {
 
     const selected = this.getSelected()
     if (!selected) return
+
+    if (event.key === ' ' && selected.role === 'weapon') {
+      event.preventDefault()
+      this.testAttack()
+      return
+    }
 
     const step = event.shiftKey ? 10 : 1
 
@@ -1512,11 +1747,15 @@ export class LevelEditorScene extends Phaser.Scene {
         speed = typeof obj.speed === 'number' ? obj.speed : (obj.maxSpeed ?? 210)
       }
 
+      const savedPos = this.savedWeaponPositions.get(obj.id)
+      const posX = savedPos ? savedPos.x : obj.x
+      const posY = savedPos ? savedPos.y : obj.y
+
       return {
         id: obj.id,
         role: obj.role,
-        x: Math.round(obj.x),
-        y: Math.round(obj.y),
+        x: Math.round(posX),
+        y: Math.round(posY),
         displayWidth: Math.round(obj.displayWidth),
         displayHeight: Math.round(obj.displayHeight),
         scaleX: Number(obj.scaleX.toFixed(2)),
@@ -1776,6 +2015,10 @@ export class LevelEditorScene extends Phaser.Scene {
       return false
     }
 
+    if (this.testEquippedWeaponId === id) {
+      this.testUnequip(id)
+    }
+
     const index = this.editorObjects.findIndex((obj) => obj.id === id)
     if (index === -1) return false
 
@@ -1865,10 +2108,11 @@ export class LevelEditorScene extends Phaser.Scene {
   }
 
   private createSnapshot(obj: EditorObject): ScalableMovableObject {
+    const savedPos = this.savedWeaponPositions.get(obj.id)
     return {
       id: obj.id,
-      x: obj.x,
-      y: obj.y,
+      x: savedPos ? savedPos.x : obj.x,
+      y: savedPos ? savedPos.y : obj.y,
       displayWidth: obj.displayWidth,
       displayHeight: obj.displayHeight,
       baseWidth: obj.baseWidth,

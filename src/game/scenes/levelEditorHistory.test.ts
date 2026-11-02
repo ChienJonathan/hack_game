@@ -607,6 +607,118 @@ describe('levelEditorHistory', () => {
       expect(weapon.attackDistance).toBe(30)
       expect(GAME_WEAPON_CONFIG.attackDistance).toBe(30)
     })
+
+    it('undoes all weapon property types and keeps GAME_WEAPON_CONFIG synchronized', () => {
+      const history = new EditorHistory()
+      const weapon = createTestObject({
+        id: 'dagger',
+        attackDistance: 30,
+        attackDurationMs: 200,
+        holdOffsetX: 44,
+        holdOffsetY: 38,
+      })
+
+      const changes: PropertyChange[] = [
+        {
+          type: 'property',
+          objectId: 'dagger',
+          property: 'attackDurationMs',
+          delta: 100,
+          prevValue: 200,
+          nextValue: 300,
+        },
+        {
+          type: 'property',
+          objectId: 'dagger',
+          property: 'holdOffsetX',
+          delta: 10,
+          prevValue: 44,
+          nextValue: 54,
+        },
+        {
+          type: 'property',
+          objectId: 'dagger',
+          property: 'holdOffsetY',
+          delta: -8,
+          prevValue: 38,
+          nextValue: 30,
+        },
+      ]
+
+      for (const change of changes) {
+        applyChange(weapon, change)
+        history.push(change)
+      }
+
+      expect(weapon.attackDurationMs).toBe(300)
+      expect(weapon.holdOffsetX).toBe(54)
+      expect(weapon.holdOffsetY).toBe(30)
+      expect(GAME_WEAPON_CONFIG.attackDurationMs).toBe(300)
+      expect(GAME_WEAPON_CONFIG.holdOffsetX).toBe(54)
+      expect(GAME_WEAPON_CONFIG.holdOffsetY).toBe(30)
+
+      // Undo holdOffsetY
+      history.undo((id) => (id === weapon.id ? weapon : undefined))
+      expect(weapon.holdOffsetY).toBe(38)
+      expect(GAME_WEAPON_CONFIG.holdOffsetY).toBe(38)
+
+      // Undo holdOffsetX
+      history.undo((id) => (id === weapon.id ? weapon : undefined))
+      expect(weapon.holdOffsetX).toBe(44)
+      expect(GAME_WEAPON_CONFIG.holdOffsetX).toBe(44)
+
+      // Undo attackDurationMs
+      history.undo((id) => (id === weapon.id ? weapon : undefined))
+      expect(weapon.attackDurationMs).toBe(200)
+      expect(GAME_WEAPON_CONFIG.attackDurationMs).toBe(200)
+    })
+
+    it('preserves weapon properties in snapshot during spawn and despawn undo', () => {
+      const history = new EditorHistory()
+      const weaponSnapshot = createTestObject({
+        id: 'dagger-2',
+        attackDistance: 45,
+        attackDurationMs: 250,
+        holdOffsetX: 50,
+        holdOffsetY: 35,
+      })
+
+      history.push({
+        type: 'spawn',
+        objectId: 'dagger-2',
+        role: 'weapon',
+        snapshot: weaponSnapshot,
+      })
+
+      const despawnReversed = history.undo(() => weaponSnapshot)
+      expect(despawnReversed).toEqual({
+        type: 'despawn',
+        objectId: 'dagger-2',
+        role: 'weapon',
+        snapshot: weaponSnapshot,
+      })
+
+      history.push({
+        type: 'despawn',
+        objectId: 'dagger-2',
+        role: 'weapon',
+        snapshot: weaponSnapshot,
+      })
+
+      const spawnReversed = history.undo(() => undefined)
+      expect(spawnReversed).toEqual({
+        type: 'spawn',
+        objectId: 'dagger-2',
+        role: 'weapon',
+        snapshot: weaponSnapshot,
+      })
+      if (spawnReversed && spawnReversed.type === 'spawn') {
+        expect(spawnReversed.snapshot.attackDistance).toBe(45)
+        expect(spawnReversed.snapshot.attackDurationMs).toBe(250)
+        expect(spawnReversed.snapshot.holdOffsetX).toBe(50)
+        expect(spawnReversed.snapshot.holdOffsetY).toBe(35)
+      }
+    })
   })
 })
 

@@ -52,8 +52,8 @@ export const ROOM1_OBJECTS: RoomObjectConfig[] = [
     scaleY: 1,
     attackDistance: 30,
     attackDurationMs: 200,
-    holdOffsetX: 14,
-    holdOffsetY: 8,
+    holdOffsetX: 37,
+    holdOffsetY: -2,
   },
   {
     id: "guard",
