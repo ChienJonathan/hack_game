@@ -12,7 +12,15 @@ import {
   computeDaggerAttackTranslation,
 } from '../content/room1Constants.ts'
 import { createInitialWorldState, computeCollisionSize } from '../content/room1WorldState.ts'
-import { ROOM1_OBJECTS, type PlayerSpeedConfig, type RoomObjectConfig, type WorldObjectRole } from '../content/room1.ts'
+import {
+  ROOM1_OBJECTS,
+  type MvAttrConfig,
+  type PlayerSpeedConfig,
+  type RoomObjectConfig,
+  type WorldObjectRole,
+} from '../content/room1.ts'
+import { GAME_MV_CONFIG, MIN_MV_MASS } from '../commands/mvConstants.ts'
+import { readMvAttrOverride } from '../domain/MvAttr.ts'
 import { generateRoom1Source } from '../content/room1Serializer.ts'
 import {
   WORLD_OBJECT_TEXTURE_URLS,
@@ -29,6 +37,8 @@ import {
   wouldOverlapAnyEditorObject,
   type ScalableMovableObject,
   type CharacterProperty,
+  type MvAttrKey,
+  setMvAttrValue,
 } from './levelEditorHistory.ts'
 import { SceneManager } from './SceneManager.ts'
 
@@ -62,6 +72,7 @@ export interface SpawnObjectConfig {
   holdOffsetY?: number
   colliderWidth?: number
   colliderHeight?: number
+  mv_attr?: MvAttrConfig
 }
 
 export interface EditorObject extends ScalableMovableObject {
@@ -104,6 +115,8 @@ export class LevelEditorScene extends Phaser.Scene {
   } | null = null
   private section3Title: Phaser.GameObjects.Text | undefined
   private naStatsText: Phaser.GameObjects.Text | undefined
+  private mvAttrElements: Phaser.GameObjects.Text[] = []
+  private mvAttrValues: Map<MvAttrKey, Phaser.GameObjects.Text> = new Map()
   private headerText: Phaser.GameObjects.Text | undefined
   private isDraggingObject = false
   private isDraggingScaleHandle = false
@@ -156,6 +169,8 @@ export class LevelEditorScene extends Phaser.Scene {
     this.testAttackAnimation = null
     this.section3Title = undefined
     this.naStatsText = undefined
+    this.mvAttrElements = []
+    this.mvAttrValues.clear()
     this.objectListButtons = []
     this.objectListTitle = undefined
     this.deleteButton = undefined
@@ -292,6 +307,8 @@ export class LevelEditorScene extends Phaser.Scene {
       this.testAttackBtn = undefined
       this.section3Title = undefined
       this.naStatsText = undefined
+      this.mvAttrElements = []
+      this.mvAttrValues.clear()
       this.objectListButtons = []
       this.objectListTitle = undefined
       this.deleteButton = undefined
@@ -518,9 +535,14 @@ export class LevelEditorScene extends Phaser.Scene {
       attackDurationMs,
       holdOffsetX,
       holdOffsetY,
+      ...this.mvAttrFields(readMvAttrOverride(state)),
     }
 
     this.editorObjects.push(editorObject)
+  }
+
+  private mvAttrFields(attr: MvAttrConfig | undefined): { mv_attr?: MvAttrConfig } {
+    return attr && Object.keys(attr).length > 0 ? { mv_attr: { ...attr } } : {}
   }
 
   private buildPropertyPanel(): void {
@@ -965,16 +987,16 @@ export class LevelEditorScene extends Phaser.Scene {
       .setOrigin(0.5, 0)
     items.push(section4Title)
 
-    const scalePlusBtn = this.createPanelButton(1200, 64, 'SCALE +', () =>
+    const scalePlusBtn = this.createPanelButton(1200, 50, 'SCALE +', () =>
       this.scaleSelected(1.1),
     )
-    const scaleMinusBtn = this.createPanelButton(1320, 64, 'SCALE -', () =>
+    const scaleMinusBtn = this.createPanelButton(1320, 50, 'SCALE -', () =>
       this.scaleSelected(1 / 1.1),
     )
-    const collScalePlusBtn = this.createPanelButton(1200, 106, 'BOX +', () =>
+    const collScalePlusBtn = this.createPanelButton(1200, 84, 'BOX +', () =>
       this.scaleSelectedCollider(1.1),
     )
-    const collScaleMinusBtn = this.createPanelButton(1320, 106, 'BOX -', () =>
+    const collScaleMinusBtn = this.createPanelButton(1320, 84, 'BOX -', () =>
       this.scaleSelectedCollider(1 / 1.1),
     )
     items.push(scalePlusBtn, scaleMinusBtn, collScalePlusBtn, collScaleMinusBtn)
@@ -986,7 +1008,7 @@ export class LevelEditorScene extends Phaser.Scene {
     ]
     for (let i = 0; i < hints.length; i++) {
       const hint = this.add
-        .text(1260, 155 + i * 28, hints[i], {
+        .text(1260, 120 + i * 16, hints[i], {
           fontFamily: FONT_FAMILY,
           fontSize: 11,
           color: DIM_COLOR,
@@ -994,6 +1016,58 @@ export class LevelEditorScene extends Phaser.Scene {
         .setOrigin(0.5, 0)
       items.push(hint)
     }
+
+    // MV attributes: per-object overrides of the global mv defaults (set in the Speed Editor)
+    const mvTitle = this.add
+      .text(1260, 172, 'MV ATTR (dim = default)', {
+        fontFamily: FONT_FAMILY,
+        fontSize: 11,
+        color: ACCENT_COLOR,
+      })
+      .setOrigin(0.5, 0)
+    items.push(mvTitle)
+    this.mvAttrElements = [mvTitle]
+    this.mvAttrValues.clear()
+
+    const mvRows: { key: MvAttrKey; label: string; y: number; step: number; shiftStep: number }[] = [
+      { key: 'drag', label: 'drag', y: 190, step: 0.1, shiftStep: 0.5 },
+      { key: 'mass', label: 'mass', y: 220, step: 0.1, shiftStep: 1 },
+      { key: 'max_velocity', label: 'max_vel', y: 250, step: 50, shiftStep: 100 },
+    ]
+    for (const row of mvRows) {
+      const label = this.add
+        .text(1112, row.y + 6, `${row.label}:`, {
+          fontFamily: FONT_FAMILY,
+          fontSize: 12,
+          color: DIM_COLOR,
+        })
+        .setOrigin(0, 0)
+      const val = this.add
+        .text(1262, row.y + 4, '--', {
+          fontFamily: FONT_FAMILY,
+          fontSize: 12,
+          color: DIM_COLOR,
+          backgroundColor: '#2a2a2a',
+          padding: { x: 6, y: 3 },
+        })
+        .setOrigin(1, 0)
+        .setInteractive({ useHandCursor: true })
+      val.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+        pointer.event?.stopPropagation?.()
+        this.promptMvAttr(row.key)
+      })
+      const minusBtn = this.createPanelButton(1292, row.y, '−', (pointer) => {
+        this.adjustMvAttr(row.key, pointer.event?.shiftKey ? -row.shiftStep : -row.step)
+      })
+      const plusBtn = this.createPanelButton(1337, row.y, '+', (pointer) => {
+        this.adjustMvAttr(row.key, pointer.event?.shiftKey ? row.shiftStep : row.step)
+      })
+      const resetBtn = this.createPanelButton(1388, row.y, 'R', () => this.resetMvAttr(row.key))
+      this.mvAttrValues.set(row.key, val)
+      this.mvAttrElements.push(label, val, minusBtn, plusBtn, resetBtn)
+      items.push(label, val, minusBtn, plusBtn, resetBtn)
+    }
+    this.mvAttrElements.forEach((el) => el.setVisible(false))
 
     // ─── Section 5: Save ───
     const section5Title = this.add
@@ -1118,8 +1192,11 @@ export class LevelEditorScene extends Phaser.Scene {
       this.playerStatsElements.forEach((el) => el.setVisible(false))
       this.weaponStatsElements.forEach((el) => el.setVisible(false))
       this.naStatsText?.setVisible(false)
+      this.mvAttrElements.forEach((el) => el.setVisible(false))
       return
     }
+
+    this.updateMvAttrFields(selected)
 
     const savedPos = this.savedWeaponPositions.get(selected.id)
     const displayX = savedPos ? savedPos.x : selected.x
@@ -1409,6 +1486,60 @@ export class LevelEditorScene extends Phaser.Scene {
     })
 
     this.updatePropertyPanel()
+  }
+
+  private updateMvAttrFields(selected: EditorObject): void {
+    this.mvAttrElements.forEach((el) => el.setVisible(true))
+    for (const [key, text] of this.mvAttrValues) {
+      const override = selected.mv_attr?.[key]
+      text.setText(String(override ?? GAME_MV_CONFIG[key]))
+      text.setColor(override === undefined ? DIM_COLOR : ACCENT_COLOR)
+    }
+  }
+
+  private commitMvAttr(key: MvAttrKey, next: number | undefined): void {
+    const selected = this.getSelected()
+    if (!selected) return
+
+    const prev = selected.mv_attr?.[key]
+    if (prev === next) return
+
+    setMvAttrValue(selected, key, next)
+    this.history.push({
+      type: 'mv_attr',
+      objectId: selected.id,
+      key,
+      prevValue: prev,
+      nextValue: next,
+    })
+    this.updatePropertyPanel()
+  }
+
+  private clampMvAttr(key: MvAttrKey, value: number): number {
+    const rounded = Math.round(value * 1000) / 1000
+    return key === 'mass' ? Math.max(MIN_MV_MASS, rounded) : rounded
+  }
+
+  public adjustMvAttr(key: MvAttrKey, delta: number): void {
+    const selected = this.getSelected()
+    if (!selected) return
+    const current = selected.mv_attr?.[key] ?? GAME_MV_CONFIG[key]
+    this.commitMvAttr(key, this.clampMvAttr(key, current + delta))
+  }
+
+  public promptMvAttr(key: MvAttrKey): void {
+    const selected = this.getSelected()
+    if (!selected) return
+    const current = selected.mv_attr?.[key] ?? GAME_MV_CONFIG[key]
+    const input = window.prompt(`Enter new ${key} for ${selected.id}:`, current.toString())
+    if (input === null) return
+    const parsed = parseFloat(input.trim())
+    if (!Number.isFinite(parsed)) return
+    this.commitMvAttr(key, this.clampMvAttr(key, parsed))
+  }
+
+  public resetMvAttr(key: MvAttrKey): void {
+    this.commitMvAttr(key, undefined)
   }
 
   private getSelected(): EditorObject | undefined {
@@ -2156,6 +2287,7 @@ export class LevelEditorScene extends Phaser.Scene {
           attackDurationMs: reversed.snapshot.attackDurationMs,
           holdOffsetX: reversed.snapshot.holdOffsetX,
           holdOffsetY: reversed.snapshot.holdOffsetY,
+          mv_attr: reversed.snapshot.mv_attr,
         },
         false,
       )
@@ -2238,6 +2370,7 @@ export class LevelEditorScene extends Phaser.Scene {
         ...(obj.holdOffsetY !== undefined ? { holdOffsetY: obj.holdOffsetY } : {}),
         ...(obj.colliderWidth !== undefined ? { colliderWidth: Math.round(obj.colliderWidth) } : {}),
         ...(obj.colliderHeight !== undefined ? { colliderHeight: Math.round(obj.colliderHeight) } : {}),
+        ...this.mvAttrFields(obj.mv_attr),
       }
     })
 
@@ -2354,6 +2487,7 @@ export class LevelEditorScene extends Phaser.Scene {
       if (config.colliderHeight !== undefined) existing.colliderHeight = config.colliderHeight
       if (config.maxHealth !== undefined) existing.maxHealth = config.maxHealth
       if (config.speed !== undefined) existing.speed = config.speed
+      if (config.mv_attr !== undefined) Object.assign(existing, this.mvAttrFields(config.mv_attr))
       if (config.attackDistance !== undefined) existing.attackDistance = config.attackDistance
       if (config.attackDurationMs !== undefined) existing.attackDurationMs = config.attackDurationMs
       if (config.holdOffsetX !== undefined) existing.holdOffsetX = config.holdOffsetX
@@ -2530,6 +2664,7 @@ export class LevelEditorScene extends Phaser.Scene {
       attackDurationMs: spawnAttackDurationMs,
       holdOffsetX: spawnHoldOffsetX,
       holdOffsetY: spawnHoldOffsetY,
+      ...this.mvAttrFields(config.mv_attr),
     }
 
     this.editorObjects.push(editorObject)
@@ -2667,6 +2802,7 @@ export class LevelEditorScene extends Phaser.Scene {
       attackDurationMs: obj.attackDurationMs,
       holdOffsetX: obj.holdOffsetX,
       holdOffsetY: obj.holdOffsetY,
+      ...this.mvAttrFields(obj.mv_attr),
     }
   }
 

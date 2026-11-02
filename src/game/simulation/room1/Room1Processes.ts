@@ -21,6 +21,8 @@ import type { CharacterState } from '../../domain/CharacterState.ts'
 import { AabbCollisionWorld, type Box } from '../../domain/CollisionWorld.ts'
 import { CombatService } from '../../domain/CombatService.ts'
 import { PICKUP_REACH, PickUpService } from '../../domain/PickUpService.ts'
+import { applyPlayerDefeat } from '../../domain/PlayerDefeat.ts'
+import { solidObstacles } from '../../domain/SolidObstacles.ts'
 import { weaponFor } from '../../domain/WeaponDefinition.ts'
 import { getMutableWorldObjectState, type MutableWorldObjectState } from '../../domain/WorldObjectState.ts'
 import type { ProcessTickContext, WorldObjectProcess } from '../TickSimulationEngine.ts'
@@ -87,87 +89,7 @@ function boxOf(entity: { x: number; y: number; width: number; height: number }) 
 }
 
 function getObstacles(context: ProcessTickContext, excludeId: string): Box[] {
-  const obstacles: Box[] = []
-  for (const obj of context.state.worldObjects) {
-    if (obj.id === excludeId) continue
-    if (obj.roomId !== context.state.currentRoomId) continue
-    if (obj.metadata.role === 'weapon') continue
-    const s = obj.state as Record<string, unknown>
-    if (s.alive === false) continue
-    if (typeof s.x !== 'number' || typeof s.y !== 'number') continue
-    if (typeof s.width !== 'number' || typeof s.height !== 'number') continue
-    obstacles.push({
-      x: s.x,
-      y: s.y,
-      width: s.width,
-      height: s.height,
-    })
-  }
-  return obstacles
-}
-
-export interface ThrownState {
-  targetX: number
-  targetY: number
-  targetObjectId?: string | null
-  speed: number
-}
-
-export function updateThrownState(
-  objState: Record<string, unknown>,
-  state: ProcessTickContext['state'],
-  tickDurationMs: number,
-): boolean {
-  const thrown = objState.thrown as ThrownState | undefined | null
-  if (!thrown) {
-    return false
-  }
-
-  let targetX = thrown.targetX
-  let targetY = thrown.targetY
-
-  if (thrown.targetObjectId) {
-    const targetObj = state.worldObjects.find((candidate) => candidate.id === thrown.targetObjectId)
-    if (targetObj) {
-      const targetState = getMutableWorldObjectState<{ x: number; y: number; discovered?: boolean }>(targetObj)
-      targetX = targetState.x
-      targetY = targetState.y
-      thrown.targetX = targetX
-      thrown.targetY = targetY
-    }
-  }
-
-  const currentX = (objState.x as number) ?? 0
-  const currentY = (objState.y as number) ?? 0
-  const deltaX = targetX - currentX
-  const deltaY = targetY - currentY
-  const remainingDistance = Math.hypot(deltaX, deltaY)
-  const maxDistance = (thrown.speed * tickDurationMs) / 1000
-
-  if (remainingDistance <= maxDistance || remainingDistance === 0) {
-    objState.x = targetX
-    objState.y = targetY
-    objState.vx = 0
-    objState.vy = 0
-    objState.thrown = null
-
-    if (thrown.targetObjectId) {
-      const targetObj = state.worldObjects.find((candidate) => candidate.id === thrown.targetObjectId)
-      if (targetObj) {
-        const targetState = getMutableWorldObjectState<{ discovered?: boolean }>(targetObj)
-        targetState.discovered = true
-      }
-    }
-    return true
-  }
-
-  const dirX = deltaX / remainingDistance
-  const dirY = deltaY / remainingDistance
-  objState.x = currentX + dirX * maxDistance
-  objState.y = currentY + dirY * maxDistance
-  objState.vx = dirX * thrown.speed
-  objState.vy = dirY * thrown.speed
-  return false
+  return solidObstacles(context.state, excludeId).map((obstacle) => obstacle.box)
 }
 
 export class PlayerMovementProcess implements WorldObjectProcess {
@@ -188,7 +110,6 @@ export class PlayerMovementProcess implements WorldObjectProcess {
     }
 
     if ((player as unknown as Record<string, unknown>).thrown) {
-      updateThrownState(player as unknown as Record<string, unknown>, context.state, context.tickDurationMs)
       Object.assign(player, collision.clampToBounds(boxOf(player), ROOM_BOUNDS))
 
       const exit = context.state.rooms
@@ -325,10 +246,6 @@ export class DaggerPickupProcess implements WorldObjectProcess {
     }
 
     const dagger = stateOf<DaggerState>(context)
-    if ((dagger as unknown as Record<string, unknown>).thrown) {
-      updateThrownState(dagger as unknown as Record<string, unknown>, context.state, context.tickDurationMs)
-    }
-
     if (!dagger.equippedBy) {
       const playerObj = context.state.worldObjects.find((candidate) => candidate.id === WORLD_OBJECT_IDS.player)
       if (playerObj) {
@@ -349,7 +266,10 @@ export class DaggerPickupProcess implements WorldObjectProcess {
       return
     }
 
-    (dagger as unknown as Record<string, unknown>).thrown = null
+    const equippedRecord = dagger as unknown as Record<string, unknown>
+    equippedRecord.thrown = null
+    equippedRecord.vx = 0
+    equippedRecord.vy = 0
     const holder = objectState<CharacterState>(context, dagger.equippedBy)
     if (holder) {
       const daggerRecord = dagger as unknown as Record<string, unknown>
@@ -401,7 +321,6 @@ export class GuardResponseProcess implements WorldObjectProcess {
     }
 
     if ((guard as unknown as Record<string, unknown>).thrown) {
-      updateThrownState(guard as unknown as Record<string, unknown>, context.state, context.tickDurationMs)
       return
     }
 
@@ -448,16 +367,11 @@ export class GuardResponseProcess implements WorldObjectProcess {
       }
     }
 
-    if (!player.alive) {
-      player.moveX = 0
-      player.moveY = 0
-      player.vx = 0
-      player.vy = 0
-      context.state.outcome = 'game-over'
-    }
+    applyPlayerDefeat(context.state)
   }
 }
 
+/** Thrown flight is owned by the engine's `ThrownFlight`; the boulder has no behavior of its own yet. */
 export class BoulderProcess implements WorldObjectProcess {
   readonly id = PROCESS_IDS.boulder
   readonly definitionId = PROCESS_IDS.boulder
@@ -466,12 +380,7 @@ export class BoulderProcess implements WorldObjectProcess {
     return context.worldObject.roomId === context.state.currentRoomId
   }
 
-  tick(context: ProcessTickContext): void {
-    const objState = getMutableWorldObjectState<MutableWorldObjectState>(context.worldObject)
-    if (objState.thrown) {
-      updateThrownState(objState as unknown as Record<string, unknown>, context.state, context.tickDurationMs)
-    }
-  }
+  tick(): void {}
 }
 
 export const ROOM1_PROCESSES: readonly WorldObjectProcess[] = [

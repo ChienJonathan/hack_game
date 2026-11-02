@@ -54,6 +54,16 @@ export function generateRoom1Source(objects: RoomObjectConfig[]): string {
     if (obj.colliderHeight !== undefined) {
       lines.push(`    colliderHeight: ${Math.round(obj.colliderHeight)},`)
     }
+    if (obj.mv_attr !== undefined) {
+      const attrLines = (['drag', 'mass', 'max_velocity'] as const)
+        .filter((key) => obj.mv_attr?.[key] !== undefined)
+        .map((key) => `      ${key}: ${obj.mv_attr?.[key]},`)
+      if (attrLines.length > 0) {
+        lines.push('    mv_attr: {')
+        lines.push(...attrLines)
+        lines.push('    },')
+      }
+    }
     return `  {\n${lines.join('\n')}\n  },`
   })
 
@@ -63,6 +73,13 @@ export function generateRoom1Source(objects: RoomObjectConfig[]): string {
   turnaroundAcceleration: number
   maxSpeed: number
   [key: string]: number
+}
+
+/** Per-object overrides of the global mv defaults; unset fields fall back to the defaults. */
+export interface MvAttrConfig {
+  drag?: number
+  mass?: number
+  max_velocity?: number
 }
 
 export type WorldObjectRole = 'player' | 'enemy' | 'weapon' | 'object' | 'guard'
@@ -84,6 +101,7 @@ export interface RoomObjectConfig {
   holdOffsetY?: number
   colliderWidth?: number
   colliderHeight?: number
+  mv_attr?: MvAttrConfig
 }
 
 export const ROOM1_OBJECTS: RoomObjectConfig[] = [

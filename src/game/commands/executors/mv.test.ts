@@ -74,10 +74,9 @@ describe('MvCommandExecutor', () => {
       targetX: guardState.x,
       targetY: guardState.y,
       targetObjectId: guardObj.id,
-      speed: 300,
+      hitIds: [],
     })
     expect(daggerState.discovered).toBe(true)
-    expect(daggerState.vx).toBeGreaterThan(0)
   })
 
   it('rejects command if extra arguments or options are provided', () => {
@@ -111,7 +110,6 @@ describe('MvCommandExecutor', () => {
     expect(daggerState.thrown).toMatchObject({
       targetX: ROOM_LAYOUT.exit.x,
       targetY: ROOM_LAYOUT.exit.y,
-      speed: 300,
     })
   })
 
@@ -132,38 +130,30 @@ describe('MvCommandExecutor', () => {
     expect(playerState.weaponId).toBeNull()
   })
 
-  it('uses custom mv_speed configuration when provided statically or dynamically', () => {
-    let dynamicSpeed = 450
-    const customExecutor = new MvCommandExecutor(() => dynamicSpeed)
-
+  it('starts a throw at rest: the executor sets no velocity, the flight accelerates it', () => {
     const state = createInitialWorldState()
     const daggerObj = state.worldObjects.find((o) => o.id === WORLD_OBJECT_IDS.dagger)!
     const daggerState = getMutableWorldObjectState<MutableWorldObjectState>(daggerObj)
 
-    customExecutor.execute({ name: 'mv', arguments: ['dagger', 'guard'], options: [] }, state)
-    expect(daggerState.thrown).toMatchObject({
-      speed: 450,
-    })
-
-    // Modify dynamic speed source as object with mv_speed
-    const dynamicConfig = { mv_speed: 600 }
-    const customExecutor2 = new MvCommandExecutor(() => dynamicConfig)
-    customExecutor2.execute({ name: 'mv', arguments: ['dagger', 'guard'], options: [] }, state)
-    expect(daggerState.thrown).toMatchObject({
-      speed: 600,
-    })
+    executor.execute({ name: 'mv', arguments: ['dagger', 'guard'], options: [] }, state)
+    expect(daggerState.vx ?? 0).toBe(0)
+    expect(daggerState.vy ?? 0).toBe(0)
   })
 
-  it('uses default decoupled mv_speed across rooms without room1 dependency', () => {
-    const defaultExecutor = new MvCommandExecutor()
+  it('keeps the current velocity and resets hitIds when thrown again mid-flight', () => {
     const state = createInitialWorldState()
     const daggerObj = state.worldObjects.find((o) => o.id === WORLD_OBJECT_IDS.dagger)!
     const daggerState = getMutableWorldObjectState<MutableWorldObjectState>(daggerObj)
 
-    defaultExecutor.execute({ name: 'mv', arguments: ['dagger', 'guard'], options: [] }, state)
-    expect(daggerState.thrown).toMatchObject({
-      speed: 300,
-    })
+    executor.execute({ name: 'mv', arguments: ['dagger', 'guard'], options: [] }, state)
+    daggerState.vx = 120
+    daggerState.vy = -30
+    ;(daggerState.thrown as { hitIds: string[] }).hitIds.push('guard')
+
+    executor.execute({ name: 'mv', arguments: ['dagger', 'room2'], options: [] }, state)
+    expect(daggerState.vx).toBe(120)
+    expect(daggerState.vy).toBe(-30)
+    expect((daggerState.thrown as { hitIds: string[] }).hitIds).toEqual([])
   })
 
   describe('boulder mv behavior', () => {
@@ -188,7 +178,7 @@ describe('MvCommandExecutor', () => {
         targetX: guardState.x,
         targetY: guardState.y,
         targetObjectId: guardObj.id,
-        speed: 300,
+        hitIds: [],
       })
       expect(boulderState.discovered).toBe(true)
 
@@ -205,13 +195,13 @@ describe('MvCommandExecutor', () => {
       const distAfter = Math.hypot((guardState.x as number) - nextX, (guardState.y as number) - nextY)
       expect(distAfter).toBeLessThan(distBefore)
 
-      // Advance long enough to reach target
+      // Guard-2 stands on the way: the boulder is blocked, stops there and ends its Throw
       engine.advance(state, 5000)
-      expect(boulderState.x).toBe(guardState.x)
-      expect(boulderState.y).toBe(guardState.y)
       expect(boulderState.thrown).toBeNull()
       expect(boulderState.vx).toBe(0)
       expect(boulderState.vy).toBe(0)
+      expect(boulderState.x as number).toBeLessThan(guardState.x as number)
+      expect(guardObj.state).toMatchObject({ health: 100 })
     })
 
     it('throws boulder to room exit', () => {
@@ -228,7 +218,6 @@ describe('MvCommandExecutor', () => {
       expect(boulderState.thrown).toMatchObject({
         targetX: ROOM_LAYOUT.exit.x,
         targetY: ROOM_LAYOUT.exit.y,
-        speed: 300,
       })
     })
 

@@ -8,6 +8,8 @@ import {
 import { CHARACTER_SIZE, DAGGER_SIZE, CHARACTER_BASE_SIZE } from './room1Constants.ts'
 import type { RoomObjectConfig } from './room1.ts'
 import { AabbCollisionWorld } from '../domain/CollisionWorld.ts'
+import { readMvAttrOverride } from '../domain/MvAttr.ts'
+import { colliderTagsOf } from '../domain/ColliderTag.ts'
 
 describe('room1WorldState scaled collision AABB', () => {
   it('resolves scale from explicit scaleX and scaleY', () => {
@@ -260,5 +262,35 @@ describe('room1WorldState scaled collision AABB', () => {
     expect(playerState.collisionBox).toEqual({ width: 80, height: 120 })
     expect(playerState.colliderWidth).toBe(80)
     expect(playerState.colliderHeight).toBe(120)
+  })
+})
+
+describe('createInitialWorldState mv_attr and collider tags', () => {
+  const dagger: RoomObjectConfig = {
+    id: 'dagger',
+    role: 'weapon',
+    x: 10,
+    y: 20,
+    displayWidth: 72,
+    displayHeight: 72,
+  }
+
+  it('copies the configured mv_attr overrides into the object state', () => {
+    const state = createInitialWorldState([{ ...dagger, mv_attr: { mass: 2 } }])
+    expect(readMvAttrOverride(state.worldObjects[0].state)).toEqual({ mass: 2 })
+  })
+
+  it('leaves state free of mv_attr when nothing is overridden', () => {
+    const state = createInitialWorldState([dagger])
+    expect((state.worldObjects[0].state as Record<string, unknown>).mv_attr).toBeUndefined()
+  })
+
+  it('derives collider tags from the role of every object', () => {
+    const state = createInitialWorldState()
+    const tags = Object.fromEntries(state.worldObjects.map((o) => [o.id, colliderTagsOf(o)]))
+    expect(tags.dagger).toEqual([{ class: 'weapon', impactDamageRate: 0.05 }])
+    expect(tags.player).toEqual([{ class: 'character' }])
+    expect(tags.guard).toEqual([{ class: 'character' }])
+    expect(tags.boulder).toEqual([])
   })
 })

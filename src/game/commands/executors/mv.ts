@@ -4,29 +4,6 @@ import type { WorldState } from '../../domain/WorldState.ts'
 import type { CommandExecutor } from './base.ts'
 import { getMutableWorldObjectState, type MutableWorldObjectState } from '../../domain/WorldObjectState.ts'
 import type { WorldObject } from '../../domain/WorldObject.ts'
-import {
-  DEFAULT_MV_SPEED,
-  GAME_MV_SPEED,
-  type MvSpeedConfig,
-} from '../mvConstants.ts'
-
-export type MvSpeedSource = number | MvSpeedConfig | (() => number | MvSpeedConfig)
-
-export function resolveMvSpeed(source?: MvSpeedSource): number {
-  if (typeof source === 'function') {
-    return resolveMvSpeed(source())
-  }
-  if (typeof source === 'number') {
-    return source
-  }
-  if (typeof source === 'object' && source !== null) {
-    if (typeof source.mv_speed === 'number') return source.mv_speed
-    if (typeof (source as Record<string, unknown>).mvSpeed === 'number') {
-      return (source as Record<string, unknown>).mvSpeed as number
-    }
-  }
-  return GAME_MV_SPEED.mv_speed ?? DEFAULT_MV_SPEED
-}
 
 export function findObjectInRoom(state: WorldState, label: string): WorldObject | undefined {
   const currentRoom = state.rooms.find((room) => room.id === state.currentRoomId)
@@ -88,12 +65,6 @@ function nextFreeName(base: string, taken: Set<string>, counter: { next: number 
 }
 
 export class MvCommandExecutor implements CommandExecutor {
-  private readonly speedSource?: MvSpeedSource
-
-  constructor(speedSource?: MvSpeedSource) {
-    this.speedSource = speedSource
-  }
-
   execute(command: ParsedCommand, state: WorldState): CommandResult {
     if (state.outcome !== 'playing') {
       return { status: 'rejected', feedback: { kind: 'popup', text: 'This game has ended.' } }
@@ -174,15 +145,13 @@ export class MvCommandExecutor implements CommandExecutor {
       }
     }
 
-    // Target exists: throw sources to target with speed
+    // Target exists: throw sources to target
     if (targetObject && sources.some((obj) => obj.id === targetObject.id)) {
       return {
         status: 'rejected',
         feedback: { kind: 'popup', text: `"${label1}" and "${label2}" are the same object.` },
       }
     }
-
-    const speed = resolveMvSpeed(this.speedSource)
 
     let targetX = 0
     let targetY = 0
@@ -229,13 +198,14 @@ export class MvCommandExecutor implements CommandExecutor {
         sourceState.vy = 0
         sourceState.thrown = null
       } else {
-        sourceState.vx = (deltaX / distance) * speed
-        sourceState.vy = (deltaY / distance) * speed
+        // The central flight keeps any current velocity and accelerates the object towards the target.
+        sourceState.vx = (sourceState.vx as number | undefined) ?? 0
+        sourceState.vy = (sourceState.vy as number | undefined) ?? 0
         sourceState.thrown = {
           targetX,
           targetY,
           targetObjectId: targetObjectId ?? null,
-          speed,
+          hitIds: [],
         }
       }
     }

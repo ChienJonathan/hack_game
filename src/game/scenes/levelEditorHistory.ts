@@ -1,4 +1,4 @@
-import type { PlayerSpeedConfig, WorldObjectRole } from '../content/room1.ts'
+import type { MvAttrConfig, PlayerSpeedConfig, WorldObjectRole } from '../content/room1.ts'
 import { GAME_WEAPON_CONFIG } from '../content/weaponConstants.ts'
 import { computeCollisionSize } from '../content/room1WorldState.ts'
 
@@ -80,6 +80,7 @@ export interface ScalableMovableObject {
   attackDurationMs?: number
   holdOffsetX?: number
   holdOffsetY?: number
+  mv_attr?: MvAttrConfig
 }
 
 export interface MoveChange {
@@ -139,6 +140,36 @@ export interface ColliderChange {
   readonly nextHeight: number
 }
 
+export type MvAttrKey = keyof MvAttrConfig
+
+/** Sets or clears (undefined) one per-object mv override; an emptied `mv_attr` is dropped. */
+export function setMvAttrValue(
+  target: ScalableMovableObject,
+  key: MvAttrKey,
+  value: number | undefined,
+): void {
+  const next: MvAttrConfig = { ...target.mv_attr }
+  if (value === undefined) {
+    delete next[key]
+  } else {
+    next[key] = value
+  }
+  if (Object.keys(next).length === 0) {
+    delete target.mv_attr
+  } else {
+    target.mv_attr = next
+  }
+}
+
+export interface MvAttrChange {
+  readonly type: 'mv_attr'
+  readonly objectId: string
+  readonly key: MvAttrKey
+  /** undefined means "no override, use the global default". */
+  readonly prevValue: number | undefined
+  readonly nextValue: number | undefined
+}
+
 export interface SpawnChange {
   readonly type: 'spawn'
   readonly objectId: string
@@ -158,6 +189,7 @@ export type EditorChange =
   | ScaleChange
   | PropertyChange
   | ColliderChange
+  | MvAttrChange
   | SpawnChange
   | DespawnChange
 
@@ -213,6 +245,14 @@ export function invertChange(change: EditorChange): EditorChange {
         prevHeight: change.nextHeight,
         nextWidth: change.prevWidth,
         nextHeight: change.prevHeight,
+      }
+    case 'mv_attr':
+      return {
+        type: 'mv_attr',
+        objectId: change.objectId,
+        key: change.key,
+        prevValue: change.nextValue,
+        nextValue: change.prevValue,
       }
     case 'spawn':
       return {
@@ -289,6 +329,10 @@ export function applyChange(target: ScalableMovableObject, change: EditorChange)
       if (change.property === 'holdOffsetY') GAME_WEAPON_CONFIG.holdOffsetY = change.nextValue
       if (change.property === 'colliderWidth') target.colliderWidth = change.nextValue
       if (change.property === 'colliderHeight') target.colliderHeight = change.nextValue
+      break
+    }
+    case 'mv_attr': {
+      setMvAttrValue(target, change.key, change.nextValue)
       break
     }
     case 'collider': {

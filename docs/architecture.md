@@ -15,6 +15,7 @@ Architecture specification for the command-driven RTS game and initial room (Vit
 - **Process Model**: `ProcessDefinition` is reusable behavior; `ProcessInstance` tracks runtime state per world object.
 - **Tick Engine**: `TickSimulationEngine` accumulates time into fixed 60 Hz (`1000/60` ms) ticks, running matching behavior processes per object in stable order.
 - **Collision & Reach**: Domain AABB logic (`CollisionWorld`) handles collision, reach, and targeting without Phaser physics (ADR 0007). Interaction ignores Discovery (ADR 0006).
+- **Contacts & Throws**: Collider Tags on objects and a generic `ContactResolver` decide what a touch does (ADR 0008); `mv` Throws are flown by one engine phase with force, drag, a speed cap and blocking by solid objects (ADR 0009).
 - **Persistence**: `SaveRepository` (`LocalStorageSaveRepository`) stores snapshots with domain state and command history.
 
 ## Runtime Responsibilities
@@ -58,13 +59,13 @@ Synchronous submission pipeline:
 
 - `WorldState`: Root aggregate for rooms, world objects, active process instances, current room, simulation tick, outcome, and command history.
 - `Room`: Enterable area owning exits.
-- `WorldObject`: Domain entity with identity, room ID, metadata, behavior rules, and runtime state. Roles include `player`, `enemy` (hostile characters such as guards), `weapon`, and `object` (such as environmental world objects like `boulder`, which execute `BoulderProcess` on simulation ticks when thrown).
+- `WorldObject`: Domain entity with identity, room ID, metadata, behavior rules, and runtime state. Roles include `player`, `enemy` (hostile characters such as guards), `weapon`, and `object` (such as environmental world objects like `boulder`; its `BoulderProcess` has no behavior of its own, thrown flight is owned by the engine).
 - `BehaviorRule`: Maps object condition to `ProcessDefinition`.
 - `VirtualWorldPathResolver`: Resolves virtual command paths to room/object IDs (no host filesystem access).
 
 ### Simulation Time
 
-`RealtimeSimulationClock` scales Phaser frame delta by active Time Scale (max 250 ms real delta clamped per frame). `TickSimulationEngine` accumulates game delta into fixed 60 Hz ticks. `GameSession.getRenderPosition` interpolates object positions between ticks for smooth visual rendering decoupled from tick rate.
+`RealtimeSimulationClock` scales Phaser frame delta by active Time Scale (max 250 ms real delta clamped per frame). `TickSimulationEngine` accumulates game delta into fixed 60 Hz ticks. `GameSession.getRenderPosition` interpolates object positions between ticks for smooth visual rendering decoupled from tick rate. Each tick first flies Thrown objects (move, contacts, velocity update; see Throw flight), then runs the object processes.
 
 ### Combat and Collision
 
@@ -77,6 +78,29 @@ Characters start with 100 Health. Weapon definitions scale cooldowns with simula
 | Guard | 20 | 1.0s | 5 px | Hostile guard attack |
 
 Attacks damage nearest character within Reach (bounding-box gap). Items (including Dagger) are automatically picked up when within `PICKUP_REACH = 10` px; both actions mark undiscovered targets discovered. Hitboxes scale proportionally via `scaleX`/`scaleY` from base dimensions (`CHARACTER_SIZE` 110×160, `DAGGER_SIZE` 72×72, `BOULDER_SIZE` 120×120).
+
+#### Collider Tags and Impact Damage
+
+Each World Object carries `metadata.colliderTags` (typed in `domain/ColliderTag.ts`), set from `role` when the object is built by `createInitialWorldState` (`defaultColliderTags`): a `weapon` role gets `{ class: 'weapon', impactDamageRate: 0.05 }`, `player`/`enemy` get `{ class: 'character' }`, and `object` (the boulder) gets no tag. The tags are not stored in `room1.ts` and no editor edits them.
+
+`simulation/ContactResolver.ts` visits every object in the current room that has `thrown` set, finds the other objects it overlaps (`CollisionWorld.gap === 0`), and runs the `ContactRule` registered for the pair of tag classes. The single rule, `weaponHitsCharacter`:
+- Applies only while the weapon is in flight (`thrown` set); a held or resting dagger never hurts.
+- Deals `impactDamageRate × |velocity|` (velocity in game-time px/s, so Time Scale does not change it) to each alive Character, at most once per Throw per Character (`thrown.hitIds`; zero-speed touches also use up the hit; a new `mv` resets `hitIds`). Health stays fractional and a Character is defeated at Health ≤ 0.
+- Is a trigger: the weapon keeps flying, nothing else changes, and the Character is not marked discovered. The thrower is not excluded and there is no friendly-fire exemption.
+- Thrown Characters and the boulder carry no weapon tag, so they hurt nobody.
+
+After the rules run, `applyPlayerDefeat` (`domain/PlayerDefeat.ts`) sets `game-over` if the Player Character was defeated; the guard's attack uses the same function. `TickSimulationEngine` takes the resolver through its options; the Speed Editor passes `contactResolver: null`, so contacts are off there.
+
+#### Throw flight (`mv`)
+
+`mv` stores `thrown: { targetX, targetY, targetObjectId, hitIds }` and leaves velocity alone (starts at rest; a re-`mv` keeps the current velocity and resets `hitIds`). `simulation/ThrownFlight.ts` then, per tick and per Thrown object (alive, in the current room):
+
+- **move**: tracks a moving target object's position; if the distance to the target centre is ≤ `max(step, ARRIVAL_RADIUS = 10 px)` the object snaps to the target, otherwise it moves by `velocity × dt`. A Thrown object with a collisionbox (Characters and the boulder) resolves that move against the other solid objects (`solidObstacles`, `resolveMovement`); if the move was cut short it stays where it was stopped. Either way the Throw ends this tick. Arriving, or being blocked by the target object itself, marks the target discovered; being blocked by any other object does not. Weapons have no collisionbox, so they are never blocked and fly through Characters. A blocked object does not push what blocked it (pushing and blocking weapons are deferred, ADR 0009).
+- **contacts**: `ContactResolver` runs at the speed the object moved with.
+- **accelerate**: finished Throws get `vx = vy = 0` and `thrown = null`; others get `v = v × max(0, 1 − drag × dt) + (mv_force ÷ mass) × dt × unit-vector-to-target`, then `|v|` is capped at `max_velocity` (`max(0, …)`).
+- The Player Character's process still clamps a thrown player to the room bounds and detects the exit; guards skip pursuit while thrown; a picked-up dagger has `thrown` cleared and its velocity zeroed by `DaggerPickupProcess`. The held dagger is re-picked up the tick after it is thrown if the player is unarmed and in reach, and a dagger in flight that comes within reach of an unarmed player is picked up after the contacts of that tick (expected behaviour).
+
+Parameters (`commands/mvConstants.ts`, `MvConfig`/`GAME_MV_CONFIG`): `mv_force` 1000 px/s² (global), and defaults `drag` 0.5 /s, `mass` 1, `max_velocity` 500 px/s. An object may override the last three in `state.mv_attr` (`{ drag?, mass?, max_velocity? }`, also `RoomObjectConfig.mv_attr`); unset fields fall back to the defaults at use time (`domain/MvAttr.ts`, `resolveMvAttr`). Only `mass ≥ 0.001` is enforced; other values are unrestricted (a `max_velocity` or `mv_force` of 0 leaves the object unable to arrive, and there is no flight timeout).
 
 ### Collisionbox & Solid Obstacle Resolution
 
@@ -92,7 +116,7 @@ All world objects besides weapons have a domain-owned `collisionBox` (`width`, `
 Room 1 initializes with Player Character (upper-left, named `hacker`), Dagger (lower-left), Boulder (environmental world object with role `object`), and Guards (hostile characters with role `enemy`, right). All World Object sprites are shown by default. Exiting right leads to Room 2:
 - Undiscovered world objects display a `?` overhead label at the top of their sprite; the player character displays `hacker` and is never `?`. The player character's label (`hacker`) is tab-completable in command line autocompletion.
 - `ls` discovers objects in the room and reveals their `?` labels to their respective names; direct player interaction (picking up an item or attacking a guard) also marks the target object discovered, while guard movement/pursuit and guard attacks do not discover the guard.
-- `mv <label1> <label2>` throws `<label1>` towards `<label2>` (an object or room exit) with speed `mv_speed` (`DEFAULT_MV_SPEED` 300 px/s in `src/game/commands/mvConstants.ts`, constant across all rooms), unequipping it if equipped; objects with role `object` (such as `boulder`) execute `BoulderProcess` on simulation ticks to update position and thrown state until arriving at the target. If `<label2>` does not exist in the room, it renames `<label1>` to `<label2>` and marks it discovered.
+- `mv <label1> <label2>` throws `<label1>` towards `<label2>` (an object or room exit) as a Throw flown by the engine (see Throw flight: it accelerates from rest under `mv_force`, drag and `max_velocity`, is stopped early by solid objects in its way, and a thrown Weapon hurts Characters it touches), unequipping it if equipped. If `<label2>` does not exist in the room, it renames `<label1>` to `<label2>` and marks it discovered.
 - `mv` Wildcard source: a `*` in `<label1>` (any run of characters, case-insensitive, any position, repeatable) is matched against the display names of every object in the current room (ignoring Discovery, player included). The typed command is not expanded; `<label2>` is always literal, so names may contain `*`. The target object is excluded from the matches (no same-object error); zero matches rejects with `Cannot find "<pattern>".`. With an existing target all matches are thrown and reported in one popup (`Threw a, b to target.`). With a non-existent target a single match is renamed to the plain target name, while two or more are renamed `<target>_0`, `<target>_1`, … (the counter skips names taken by non-source objects, exit labels or exit target room ids, and continues across sources).
 - The player walks with Arrows (turning left or right horizontally when pressing Left or Right Arrow, flipping the sprite and equipped weapon offset in presentation), automatically picks up the Dagger (and any items) on contact/reach, and attacks with Space or left click. Equipped weapons track the holder position in domain state (`dagger.x = holder.x, dagger.y = holder.y`, translating `dagger.x` forward during attack animation) while `PhaserRoomView` handles local coordinate attachment, mirroring, and attack translation animation. Typing any alphabet key directly switches to Command Mode and begins entering a command.
 - Guard pursues player when player enters room's right half; attacks within Reach.
@@ -182,14 +206,14 @@ src/
   ai/           behaviorTree/{BehaviorTreeTypes.ts, BehaviorTreeEvaluator.ts, BehaviorTreePresets.ts, BehaviorTreeProcess.ts, BehaviorTreeModel.ts}
   content/      room1.ts, room1Constants.ts, weaponConstants.ts, room1Commands.ts, room1Serializer.ts, room1WorldState.ts, createRoom1Session.ts
   scenes/       GameScene.ts, SceneManager.ts, LevelEditorScene.ts, levelEditorHistory.ts, SpeedEditorScene.ts, speedEditorSession.ts, BehaviorTreeEditorScene.ts, aiEditorSession.ts
-  domain/       WorldState.ts, Room.ts, WorldObject.ts, BasicWorldObject.ts, CharacterState.ts, CollisionWorld.ts, CombatService.ts, PickUpService.ts, WeaponDefinition.ts, ids.ts, JsonValue.ts, WorldPath.ts, WorldPathResolver.ts, VirtualWorldPathResolver.ts
+  domain/       WorldState.ts, Room.ts, WorldObject.ts, BasicWorldObject.ts, CharacterState.ts, CollisionWorld.ts, SolidObstacles.ts, ColliderTag.ts, MvAttr.ts, PlayerDefeat.ts, CombatService.ts, PickUpService.ts, WeaponDefinition.ts, ids.ts, JsonValue.ts, WorldPath.ts, WorldPathResolver.ts, VirtualWorldPathResolver.ts
   processes/    BehaviorRule.ts, ProcessDefinition.ts, ProcessInstance.ts
-  commands/     CommandSubmissionService.ts, CommandRegistry.ts, RegisteredCommandRegistry.ts, CommandParser.ts, VirtualCommandParser.ts, CommandRequirement.ts, CommandRequirementChecker.ts, EveryCommandRequirementChecker.ts, ParsedCommand.ts, CommandHistory.ts, CommandFeedback.ts, CommandResult.ts, executors/{base.ts, help.ts, ls.ts, mv.ts}
-  simulation/   SimulationClock.ts, SimulationEngine.ts, RealtimeSimulationClock.ts, TickSimulationEngine.ts, room1/Room1Processes.ts
+  commands/     mvConstants.ts, mvSerializer.ts, CommandSubmissionService.ts, CommandRegistry.ts, RegisteredCommandRegistry.ts, CommandParser.ts, VirtualCommandParser.ts, CommandRequirement.ts, CommandRequirementChecker.ts, EveryCommandRequirementChecker.ts, ParsedCommand.ts, CommandHistory.ts, CommandFeedback.ts, CommandResult.ts, executors/{base.ts, help.ts, ls.ts, mv.ts}
+  simulation/   SimulationClock.ts, SimulationEngine.ts, RealtimeSimulationClock.ts, TickSimulationEngine.ts, ThrownFlight.ts, ContactResolver.ts, room1/Room1Processes.ts
   persistence/  SaveSnapshot.ts, SaveRepository.ts, LocalStorageSaveRepository.ts, WorldStateCodec.ts, JsonWorldStateCodec.ts
   presentation/ GameOverMenu.ts, CommandInputView.ts, PhaserCommandInputView.ts, FeedbackView.ts, PhaserFeedbackView.ts, PhaserRoomView.ts, PhaserGameOutcomePanel.ts, InputBindings.ts, WorldObjectViewRegistry.ts
 assets/         fonts/, ui/, characters/{player, guard}/, items/weapons/
-docs/           architecture.md, adr/0001..0007
+docs/           architecture.md, adr/0001..0009
 ```
 
 ### Character Animations & Spritesheets
@@ -222,12 +246,13 @@ Editable configurations export directly to `room1.ts` (`ROOM1_OBJECTS`). Objects
 | **Selection** | Click sprite, panel list entry, or cycle with `Tab` / `Shift+Tab` |
 | **Character Stats** | Edit guard `max_health` & `speed`, or player `max_health` (`+/-` 10, Shift: 50, click value for prompt) |
 | **Weapon Stats** | Edit weapon `attack_dist`, `attack_dur`, `hold_offset_x`, `hold_offset_y` (`+/-` 10, Shift: 50, click value for prompt) |
+| **MV Attributes** | Per-object `drag`, `mass`, `max_velocity` overrides (`+/-`, click value for prompt, `R` resets one to the default; unset values show the global default dimmed). Written to `room1.ts` as `mv_attr`, only for the fields set |
 | **Test Equip** | `TEST EQUIP` / `TEST UNEQUIP` button toggles preview attachment to player at hold offsets, moving with player |
 | **Test Attack** | `TEST ATTACK` button (or `Space` with weapon selected) runs attack translation animation ($d(t) = \text{round}(\sin(t \cdot \pi) \cdot \text{dist})$) |
 | **Speed Editor Access** | `OPEN SPEED EDITOR (F3)` button or **F3** shortcut |
 | **AI Editor Access** | `AI EDITOR (F4)` button or **F4** shortcut |
 | **Return to Game** | **F2** or **Escape** (exits to active playable scene) |
-| **Undo / Redo** | `Ctrl+Z` reverses operations via invertible delta stack (move, scale, collider box, character/weapon stats, spawn/despawn) |
+| **Undo / Redo** | `Ctrl+Z` reverses operations via invertible delta stack (move, scale, collider box, character/weapon stats, MV attributes, spawn/despawn) |
 | **Toggle Panel** | **P** toggles bottom property panel visibility |
 | **Save** | `SAVE TO ROOM1.TS` overwrites file via `/api/save-room1` and syncs in-memory `ROOM1_OBJECTS` and `GAME_WEAPON_CONFIG` |
 
@@ -254,21 +279,26 @@ All weapon constants, animation translation curves, and runtime configurations a
 | `frictionAcceleration` | 3000 | px/s² | Braking deceleration when movement input stops |
 | `turnaroundAcceleration` | 1600 | px/s² | Snappy reversal acceleration opposing velocity |
 
-#### MV Command Speed
+#### MV Throw Defaults
 
 | Parameter | Default | Unit | Description |
 |---|:---:|:---:|---|
-| `mv_speed` | 300 | px/s | Velocity for thrown objects (`mv` command, constant across all rooms in `mvConstants.ts`) |
+| `mv_force` | 1000 | px/s² | Pull toward the target (global; acceleration = force ÷ mass) |
+| `drag` | 0.5 | 1/s | Default velocity loss per second for objects without a `mv_attr` override |
+| `mass` | 1 | - | Default mass (minimum 0.001) |
+| `max_velocity` | 500 | px/s | Default speed cap |
+
+These are the global defaults in `mvConstants.ts`; per-object overrides are set in the Level Editor.
 
 ### Features & Runtime Behavior
 
 - **Live Tuning While Moving**: Keyboard movement (Arrows) runs continuously during mouse interaction, giving immediate tactile feedback on physics changes.
-- **MV Command Tuning & Testing**: Dedicated parameter control for `mv_speed`, paired with an interactive `TEST MV (THROW DAGGER)` button to test thrown object velocity in real time.
+- **MV Command Tuning & Testing**: Dedicated controls for `mv_force`, `drag`, `mass` and `max_velocity`, paired with an interactive `TEST MV (THROW DAGGER)` button to test the throw in real time. The session runs without the contact resolver, so the thrown dagger does not hurt the static guards.
 - **Step & Direct Input**: Parameter buttons (`+` / `−` with step sizes, Shift: 5x multiplier) or click value for exact number prompt. Clamped to minimum safe values.
 - **Live Telemetry**: Displays real-time player speed (`px/s`), velocity vectors (`vx`, `vy`), input direction (`moveX`, `moveY`), dynamic visual speedometer gauge, and active `mv` thrown entity telemetry.
 - **Reset Position**: **R** (or `RESET POSITIONS (R)` button) snaps player and dagger back to start coordinates with zero velocity for clean trials.
-- **Reset Defaults**: Restores default physics values for both player and `mv_speed`.
-- **Save Changes**: `SAVE CHANGES` button writes updated player speed directly to `src/game/content/room1.ts` via `/api/save-room1` (`ROOM1_OBJECTS`) and saves `mv_speed` to `src/game/commands/mvConstants.ts` via `/api/save-mv`, syncing global runtime `GAME_MV_SPEED`.
+- **Reset Defaults**: Restores default physics values for both player and the mv defaults.
+- **Save Changes**: `SAVE CHANGES` button writes updated player speed directly to `src/game/content/room1.ts` via `/api/save-room1` (`ROOM1_OBJECTS`) and saves the four mv values to `src/game/commands/mvConstants.ts` via `/api/save-mv`, syncing global runtime `GAME_MV_CONFIG`.
 - **Navigation**: Accessible from anywhere via **F3**; **Escape** or **F3** exits to the current active playable scene (`'game'`), **F2** opens Level Editor, **F4** opens AI Editor.
 
 ## Behavior Tree & AI System

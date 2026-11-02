@@ -395,22 +395,21 @@ describe('commands', () => {
     expect(guard.discovered).toBe(true)
   })
 
-  it('moves thrown object at constant mv_speed across simulation ticks', () => {
+  it('accelerates a thrown object from rest across simulation ticks', () => {
     const session = newSession()
     const dagger = stateOf(session, 'dagger')
 
     session.submitCommand('mv dagger guard')
     const daggerRecord = dagger as unknown as Record<string, unknown>
-    const thrown = daggerRecord.thrown as { speed: number }
-    expect(thrown).toBeDefined()
-    expect(thrown.speed).toBe(300)
+    expect(daggerRecord.thrown).toMatchObject({ targetObjectId: 'guard', hitIds: [] })
+    expect(Math.hypot((dagger.vx as number) ?? 0, (dagger.vy as number) ?? 0)).toBe(0)
 
-    // Velocity is immediately at throw speed in direction of target
-    expect(Math.hypot(dagger.vx as number, dagger.vy as number)).toBeCloseTo(300, 1)
-
-    // Advance 1 simulation tick (~16.67ms): velocity remains constant at throw speed
     session.update(SIMULATION_TICK_MS)
-    expect(Math.hypot(dagger.vx as number, dagger.vy as number)).toBeCloseTo(300, 1)
+    const first = Math.hypot(dagger.vx as number, dagger.vy as number)
+    expect(first).toBeGreaterThan(0)
+
+    session.update(SIMULATION_TICK_MS)
+    expect(Math.hypot(dagger.vx as number, dagger.vy as number)).toBeGreaterThan(first)
   })
 
   it('unequips weapon when thrown and allows pickup when in reach', () => {
@@ -438,6 +437,10 @@ describe('commands', () => {
 
   it('throws player to exit zone and triggers congratulations upon reaching exit', () => {
     const session = newSession()
+    // Thrown characters are blocked by solid objects, so clear the path first.
+    for (const id of ['guard', 'guard-2', 'guard-3', 'boulder']) {
+      ;(stateOf(session, id) as unknown as { alive: boolean }).alive = false
+    }
     const result = session.submitCommand('mv hacker room2')
     expect(result.status).toBe('success')
 

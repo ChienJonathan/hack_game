@@ -52,6 +52,18 @@ _Avoid_: View visibility (when referring to the player's knowledge)
 A command-facing address that resolves to a room or world object inside the game.
 _Avoid_: File path, filesystem path (when referring to the host computer)
 
+**Throw**:
+The flight of a World Object from where it is towards a target after the player moves it with `mv`. It ends when the object arrives at the target or is blocked.
+_Avoid_: Shot, launch
+
+**Collider Tag**:
+A typed label on a World Object that says what kind of thing it is when it touches another object, such as Weapon or Character. What happens on contact depends only on the tags of the two objects.
+_Avoid_: Hitbox, collision type
+
+**Impact Damage**:
+The Health a Weapon in flight takes from a Character it touches, in proportion to the Weapon's speed. It is distinct from the damage of an attack.
+_Avoid_: Collision damage, throw damage
+
 **Wildcard**:
 A `*` in a Command argument that stands for any run of characters (including none). It is matched against World Object names, not expanded into the typed command.
 _Avoid_: Glob (when referring to the in-game `*`)
