@@ -113,7 +113,7 @@ describe('MvCommandExecutor', () => {
     })
   })
 
-  it('unequips weapon from holder when thrown', () => {
+  it('does not unequip weapon immediately when thrown; leaves it equipped until it exits reach', () => {
     const state = createInitialWorldState()
     const daggerObj = state.worldObjects.find((o) => o.id === WORLD_OBJECT_IDS.dagger)!
     const playerObj = state.worldObjects.find((o) => o.id === WORLD_OBJECT_IDS.player)!
@@ -126,8 +126,9 @@ describe('MvCommandExecutor', () => {
 
     executor.execute({ name: 'mv', arguments: ['dagger', 'guard'], options: [] }, state)
 
-    expect(daggerState.equippedBy).toBeNull()
-    expect(playerState.weaponId).toBeNull()
+    expect(daggerState.thrown).toBeDefined()
+    expect(daggerState.equippedBy).toBe(WORLD_OBJECT_IDS.player)
+    expect(playerState.weaponId).toBe('dagger')
   })
 
   it('starts a throw at rest: the executor sets no velocity, the flight accelerates it', () => {

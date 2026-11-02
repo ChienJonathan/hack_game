@@ -81,3 +81,39 @@ describe('pickUp', () => {
     expect(getMutableWorldObjectState(item)).toMatchObject({ equippedBy: 'player', discovered: true })
   })
 })
+
+describe('unequip and unequipIfOutOfReach', () => {
+  const pickUp = new PickUpService()
+
+  it('keeps weapon equipped when within pickup reach', () => {
+    const hero = player(0, 'dagger')
+    const item = dagger(SIZE + 5, { equippedBy: 'player' })
+    const state = worldOf(hero, item)
+
+    const unequipped = pickUp.unequipIfOutOfReach(state, 'dagger')
+    expect(unequipped).toBe(false)
+    expect(getMutableWorldObjectState(hero).weaponId).toBe('dagger')
+    expect(getMutableWorldObjectState(item).equippedBy).toBe('player')
+  })
+
+  it('unequips weapon when it exits pickup reach', () => {
+    const hero = player(0, 'dagger')
+    const item = dagger(SIZE + 15, { equippedBy: 'player' })
+    const state = worldOf(hero, item)
+
+    const unequipped = pickUp.unequipIfOutOfReach(state, 'dagger')
+    expect(unequipped).toBe(true)
+    expect(getMutableWorldObjectState(hero).weaponId).toBeNull()
+    expect(getMutableWorldObjectState(item).equippedBy).toBeNull()
+  })
+
+  it('unequips directly regardless of reach', () => {
+    const hero = player(0, 'dagger')
+    const item = dagger(0, { equippedBy: 'player' })
+    const state = worldOf(hero, item)
+
+    pickUp.unequip(state, 'dagger')
+    expect(getMutableWorldObjectState(hero).weaponId).toBeNull()
+    expect(getMutableWorldObjectState(item).equippedBy).toBeNull()
+  })
+})

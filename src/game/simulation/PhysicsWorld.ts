@@ -28,6 +28,7 @@ interface BodyState {
   forceY?: number
   alive?: boolean
   equippedBy?: string | null
+  thrown?: unknown
   frozen?: boolean
   [key: string]: unknown
 }
@@ -127,7 +128,7 @@ export class PhysicsWorld {
         !bodyState ||
         object.roomId !== state.currentRoomId ||
         bodyState.alive === false ||
-        bodyState.equippedBy
+        (bodyState.equippedBy && !bodyState.thrown)
       ) {
         continue
       }

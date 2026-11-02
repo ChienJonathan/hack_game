@@ -173,16 +173,6 @@ export class MvCommandExecutor implements CommandExecutor {
     for (const sourceObject of sources) {
       const sourceState = getMutableWorldObjectState<MutableWorldObjectState>(sourceObject)
 
-      // Unequip if currently equipped
-      if (sourceState.equippedBy) {
-        const holder = state.worldObjects.find((o) => o.id === sourceState.equippedBy)
-        if (holder) {
-          const holderState = getMutableWorldObjectState<{ weaponId?: string | null }>(holder)
-          holderState.weaponId = null
-        }
-        sourceState.equippedBy = null
-      }
-
       sourceState.discovered = true
 
       const currentX = (sourceState.x as number) ?? 0

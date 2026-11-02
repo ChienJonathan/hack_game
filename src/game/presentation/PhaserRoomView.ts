@@ -53,6 +53,7 @@ interface DisplayState {
   discovered?: unknown
   alive?: unknown
   equippedBy?: unknown
+  thrown?: unknown
   width?: unknown
   height?: unknown
   displayWidth?: unknown
@@ -202,7 +203,10 @@ export class PhaserRoomView {
       const objectState = displayState(worldObject)
       const inCurrentRoom = worldObject.roomId === state.currentRoomId
       const alive = objectState.alive !== false
-      const equipped = objectState.equippedBy !== null && objectState.equippedBy !== undefined
+      const equipped =
+        objectState.equippedBy !== null &&
+        objectState.equippedBy !== undefined &&
+        !objectState.thrown
       const rendered = positionOf(worldObject.id)
       const x = rendered?.x ?? (typeof objectState.x === 'number' ? objectState.x : 0)
       const y = rendered?.y ?? (typeof objectState.y === 'number' ? objectState.y : 0)

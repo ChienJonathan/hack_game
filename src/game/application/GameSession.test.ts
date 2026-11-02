@@ -414,7 +414,7 @@ describe('commands', () => {
     expect(Math.hypot(dagger.vx as number, dagger.vy as number)).toBeGreaterThan(first)
   })
 
-  it('unequips weapon when thrown and allows pickup when in reach', () => {
+  it('unequips weapon when thrown only when it exits pickup reach', () => {
     const session = newSession()
     const player = stateOf(session, 'player')
     const dagger = stateOf(session, 'dagger')
@@ -428,13 +428,21 @@ describe('commands', () => {
     // Throw dagger to guard
     const result = session.submitCommand('mv dagger guard')
     expect(result.status).toBe('success')
-    expect(player.weaponId).toBeNull()
-    expect((dagger as unknown as Record<string, unknown>).equippedBy).toBeNull()
+    // Still within pickup reach right after throwing
+    expect(player.weaponId).toBe('dagger')
+    expect((dagger as unknown as Record<string, unknown>).equippedBy).toBe('player')
 
-    // Since player is unarmed and within reach of the unequipped dagger, auto-pickup picks it up
+    // After 1 tick, dagger has accelerated slightly but is still within reach
     session.update(SIMULATION_TICK_MS)
     expect(player.weaponId).toBe('dagger')
     expect((dagger as unknown as Record<string, unknown>).equippedBy).toBe('player')
+
+    // Advance ticks until dagger exits pickup reach (> 10px)
+    for (let i = 0; i < 15; i++) {
+      session.update(SIMULATION_TICK_MS)
+    }
+    expect(player.weaponId).toBeNull()
+    expect((dagger as unknown as Record<string, unknown>).equippedBy).toBeNull()
   })
 
   it('throws player to exit zone and triggers congratulations upon reaching exit', () => {

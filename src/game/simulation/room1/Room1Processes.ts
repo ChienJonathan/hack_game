@@ -220,9 +220,10 @@ export class DaggerPickupProcess implements WorldObjectProcess {
     }
 
     const equippedRecord = dagger as unknown as Record<string, unknown>
-    equippedRecord.thrown = null
-    equippedRecord.vx = 0
-    equippedRecord.vy = 0
+    if (!equippedRecord.thrown) {
+      equippedRecord.vx = 0
+      equippedRecord.vy = 0
+    }
     const holder = objectState<CharacterState>(context, dagger.equippedBy)
     if (holder) {
       const daggerRecord = dagger as unknown as Record<string, unknown>
@@ -264,8 +265,13 @@ export class DaggerPickupProcess implements WorldObjectProcess {
     const dagger = stateOf<DaggerState>(context)
     const holder = dagger.equippedBy ? objectState<CharacterState>(context, dagger.equippedBy) : undefined
     if (holder) {
-      dagger.x = holder.x + dagger.attackOffsetX
-      dagger.y = holder.y
+      const daggerRecord = dagger as unknown as Record<string, unknown>
+      if (daggerRecord.thrown) {
+        pickUp.unequipIfOutOfReach(context.state, context.worldObject.id)
+      } else {
+        dagger.x = holder.x + dagger.attackOffsetX
+        dagger.y = holder.y
+      }
     }
   }
 }

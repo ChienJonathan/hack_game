@@ -72,6 +72,10 @@ export class PickUpService {
     const itemState = getMutableWorldObjectState<WeaponItemState>(target.worldObject)
     itemState.equippedBy = collectorId
     itemState.discovered = true
+    const itemRecord = itemState as unknown as Record<string, unknown>
+    itemRecord.thrown = null
+    itemRecord.vx = 0
+    itemRecord.vy = 0
     const weaponId =
       target.worldObject.metadata.weaponId ??
       (target.worldObject.metadata.role === 'weapon' ? target.worldObject.id : null)
@@ -79,5 +83,61 @@ export class PickUpService {
       collectorState.weaponId = String(weaponId)
     }
     return { status: 'picked-up', objectId: target.worldObject.id }
+  }
+
+  unequip(state: WorldState, objectId: string): void {
+    const object = state.worldObjects.find((worldObject) => worldObject.id === objectId)
+    if (!object) {
+      return
+    }
+
+    const itemState = getMutableWorldObjectState<WeaponItemState>(object)
+    if (!itemState.equippedBy) {
+      return
+    }
+
+    const holder = state.worldObjects.find((worldObject) => worldObject.id === itemState.equippedBy)
+    if (holder) {
+      const holderState = getMutableWorldObjectState<CollectorState>(holder)
+      const weaponId =
+        object.metadata.weaponId ??
+        (object.metadata.role === 'weapon' ? object.id : null)
+      if (holderState.weaponId === String(weaponId) || holderState.weaponId === object.id) {
+        holderState.weaponId = null
+      }
+    }
+    itemState.equippedBy = null
+  }
+
+  unequipIfOutOfReach(state: WorldState, objectId: string): boolean {
+    const object = state.worldObjects.find((worldObject) => worldObject.id === objectId)
+    if (!object) {
+      return false
+    }
+
+    const itemState = getMutableWorldObjectState<WeaponItemState>(object)
+    if (!itemState.equippedBy) {
+      return false
+    }
+
+    const holder = state.worldObjects.find((worldObject) => worldObject.id === itemState.equippedBy)
+    if (!holder) {
+      itemState.equippedBy = null
+      return true
+    }
+
+    if (this.collision.gap(boxOf(holder), boxOf(object)) > PICKUP_REACH) {
+      const holderState = getMutableWorldObjectState<CollectorState>(holder)
+      const weaponId =
+        object.metadata.weaponId ??
+        (object.metadata.role === 'weapon' ? object.id : null)
+      if (holderState.weaponId === String(weaponId) || holderState.weaponId === object.id) {
+        holderState.weaponId = null
+      }
+      itemState.equippedBy = null
+      return true
+    }
+
+    return false
   }
 }
