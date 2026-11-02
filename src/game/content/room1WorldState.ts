@@ -160,7 +160,7 @@ export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJE
       return createRoomWorldObject(
         obj.id,
         { name: obj.id, role: obj.role, discoverable: true },
-        [],
+        [alwaysActiveRule(PROCESS_IDS.boulder)],
         {
           x: obj.x,
           y: obj.y,

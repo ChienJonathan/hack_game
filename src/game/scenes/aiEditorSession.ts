@@ -14,7 +14,7 @@ import { LocalStorageSaveRepository } from '../persistence/LocalStorageSaveRepos
 import { INPUT_BINDINGS } from '../presentation/InputBindings.ts'
 import { RealtimeSimulationClock } from '../simulation/RealtimeSimulationClock.ts'
 import { TickSimulationEngine } from '../simulation/TickSimulationEngine.ts'
-import { DaggerPickupProcess, GuardResponseProcess, PlayerMovementProcess } from '../simulation/room1/Room1Processes.ts'
+import { BoulderProcess, DaggerPickupProcess, GuardResponseProcess, PlayerMovementProcess } from '../simulation/room1/Room1Processes.ts'
 import {
   BEHAVIOR_TREE_PROCESS_ID,
   BehaviorTreeProcess,
@@ -114,11 +114,12 @@ export function createAiEditorSession(options?: {
     })
   }
 
-  // Simulation engine reuses existing processes: Player movement + Dagger pickup + Guard response + Behavior Tree process
+  // Simulation engine reuses existing processes: Player movement + Dagger pickup + Guard response + Boulder + Behavior Tree process
   const simulationEngine = new TickSimulationEngine([
     new PlayerMovementProcess(),
     new DaggerPickupProcess(),
     new GuardResponseProcess(),
+    new BoulderProcess(),
     btProcess,
   ])
 

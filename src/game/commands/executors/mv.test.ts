@@ -3,6 +3,8 @@ import { MvCommandExecutor } from './mv.ts'
 import { createInitialWorldState } from '../../content/room1WorldState.ts'
 import { ROOM_LAYOUT, WORLD_OBJECT_IDS } from '../../content/room1Constants.ts'
 import { getMutableWorldObjectState, type MutableWorldObjectState } from '../../domain/WorldObjectState.ts'
+import { TickSimulationEngine } from '../../simulation/TickSimulationEngine.ts'
+import { ROOM1_PROCESSES } from '../../simulation/room1/Room1Processes.ts'
 
 describe('MvCommandExecutor', () => {
   const executor = new MvCommandExecutor()
@@ -161,6 +163,91 @@ describe('MvCommandExecutor', () => {
     defaultExecutor.execute({ name: 'mv', arguments: ['dagger', 'guard'], options: [] }, state)
     expect(daggerState.thrown).toMatchObject({
       speed: 300,
+    })
+  })
+
+  describe('boulder mv behavior', () => {
+    it('throws boulder to guard and advances position across simulation ticks', () => {
+      const state = createInitialWorldState()
+      const boulderObj = state.worldObjects.find((o) => o.id === WORLD_OBJECT_IDS.boulder)!
+      const guardObj = state.worldObjects.find((o) => o.id === WORLD_OBJECT_IDS.guard)!
+
+      const boulderState = getMutableWorldObjectState<MutableWorldObjectState>(boulderObj)
+      const guardState = getMutableWorldObjectState<MutableWorldObjectState>(guardObj)
+
+      const initialX = boulderState.x as number
+      const initialY = boulderState.y as number
+
+      const result = executor.execute({ name: 'mv', arguments: ['boulder', 'guard'], options: [] }, state)
+      expect(result).toEqual({
+        status: 'success',
+        feedback: [{ kind: 'popup', text: 'Threw boulder to guard.' }],
+      })
+
+      expect(boulderState.thrown).toMatchObject({
+        targetX: guardState.x,
+        targetY: guardState.y,
+        targetObjectId: guardObj.id,
+        speed: 300,
+      })
+      expect(boulderState.discovered).toBe(true)
+
+      // Run simulation engine with room 1 processes
+      const engine = new TickSimulationEngine(ROOM1_PROCESSES)
+      engine.advance(state, 100) // advance 100ms
+
+      const nextX = boulderState.x as number
+      const nextY = boulderState.y as number
+
+      // Boulder should have moved towards guard
+      expect(nextX).not.toBe(initialX)
+      const distBefore = Math.hypot((guardState.x as number) - initialX, (guardState.y as number) - initialY)
+      const distAfter = Math.hypot((guardState.x as number) - nextX, (guardState.y as number) - nextY)
+      expect(distAfter).toBeLessThan(distBefore)
+
+      // Advance long enough to reach target
+      engine.advance(state, 5000)
+      expect(boulderState.x).toBe(guardState.x)
+      expect(boulderState.y).toBe(guardState.y)
+      expect(boulderState.thrown).toBeNull()
+      expect(boulderState.vx).toBe(0)
+      expect(boulderState.vy).toBe(0)
+    })
+
+    it('throws boulder to room exit', () => {
+      const state = createInitialWorldState()
+      const boulderObj = state.worldObjects.find((o) => o.id === WORLD_OBJECT_IDS.boulder)!
+      const boulderState = getMutableWorldObjectState<MutableWorldObjectState>(boulderObj)
+
+      const result = executor.execute({ name: 'mv', arguments: ['boulder', 'room2'], options: [] }, state)
+      expect(result).toEqual({
+        status: 'success',
+        feedback: [{ kind: 'popup', text: 'Threw boulder to room2.' }],
+      })
+
+      expect(boulderState.thrown).toMatchObject({
+        targetX: ROOM_LAYOUT.exit.x,
+        targetY: ROOM_LAYOUT.exit.y,
+        speed: 300,
+      })
+    })
+
+    it('renames boulder when target does not exist, and renamed object can be thrown', () => {
+      const state = createInitialWorldState()
+      const boulderObj = state.worldObjects.find((o) => o.id === WORLD_OBJECT_IDS.boulder)!
+
+      const renameResult = executor.execute({ name: 'mv', arguments: ['boulder', 'rock'], options: [] }, state)
+      expect(renameResult).toEqual({
+        status: 'success',
+        feedback: [{ kind: 'popup', text: 'Renamed boulder to rock.' }],
+      })
+      expect(boulderObj.metadata.name).toBe('rock')
+
+      const throwResult = executor.execute({ name: 'mv', arguments: ['rock', 'guard'], options: [] }, state)
+      expect(throwResult).toEqual({
+        status: 'success',
+        feedback: [{ kind: 'popup', text: 'Threw rock to guard.' }],
+      })
     })
   })
 })

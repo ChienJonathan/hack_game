@@ -19,7 +19,7 @@ import { InputModeController } from '../application/InputModeController.ts'
 import { INPUT_BINDINGS } from '../presentation/InputBindings.ts'
 import { RealtimeSimulationClock } from '../simulation/RealtimeSimulationClock.ts'
 import { TickSimulationEngine } from '../simulation/TickSimulationEngine.ts'
-import { PlayerMovementProcess, DaggerPickupProcess } from '../simulation/room1/Room1Processes.ts'
+import { PlayerMovementProcess, DaggerPickupProcess, BoulderProcess } from '../simulation/room1/Room1Processes.ts'
 import { BasicWorldObject } from '../domain/BasicWorldObject.ts'
 import { CombatService } from '../domain/CombatService.ts'
 import { PickUpService } from '../domain/PickUpService.ts'
@@ -103,7 +103,13 @@ export function createSpeedEditorSession(options?: {
   // Clear behavior rules for guards so they remain static
   // landmarks and do not pursue or attack during speed tuning.
   worldState.worldObjects = worldState.worldObjects.map((obj) => {
-    if (obj.id !== WORLD_OBJECT_IDS.player && obj.id !== WORLD_OBJECT_IDS.dagger) {
+    if (
+      obj.id !== WORLD_OBJECT_IDS.player &&
+      obj.id !== WORLD_OBJECT_IDS.dagger &&
+      obj.id !== WORLD_OBJECT_IDS.boulder &&
+      obj.metadata.role !== 'obejct' &&
+      obj.metadata.role !== 'object'
+    ) {
       return new BasicWorldObject(obj.id, obj.roomId, obj.metadata, [], obj.state)
     }
     return obj
@@ -124,11 +130,12 @@ export function createSpeedEditorSession(options?: {
     state.vy = 0
   }
 
-  // Simulation engine runs PlayerMovementProcess and DaggerPickupProcess:
-  // guards will not pursue or attack, while player movement and thrown weapon physics execute.
+  // Simulation engine runs PlayerMovementProcess, DaggerPickupProcess, and BoulderProcess:
+  // guards will not pursue or attack, while player movement and thrown weapon/object physics execute.
   const simulationEngine = new TickSimulationEngine([
     new PlayerMovementProcess(),
     new DaggerPickupProcess(),
+    new BoulderProcess(),
   ])
   const session = new GameSession({
     worldState,

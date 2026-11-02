@@ -146,6 +146,12 @@ describe('room1WorldState scaled collision AABB', () => {
     expect(boulder.metadata.role).toBe('obejct')
     expect(boulder.metadata.discoverable).toBe(true)
     expect((boulder.state as Record<string, unknown>).discovered).toBe(false)
+    expect(boulder.behaviorRules).toEqual([
+      {
+        condition: { kind: 'always' },
+        processDefinitionId: 'boulder-behavior',
+      },
+    ])
   })
 
   it('computes collision size for obejct role correctly', () => {
