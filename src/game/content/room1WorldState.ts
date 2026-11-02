@@ -60,7 +60,7 @@ export function computeCollisionSize(
     }
   }
 
-  if (role === 'obejct' || role === 'object') {
+  if (role === 'object') {
     return {
       width: Math.max(16, Math.round(BOULDER_SIZE.width * scaleX)),
       height: Math.max(16, Math.round(BOULDER_SIZE.height * scaleY)),
@@ -160,12 +160,12 @@ export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJE
       )
     }
 
-    if (obj.role === 'obejct' || obj.role === 'object') {
+    if (obj.role === 'object') {
       const { scaleX, scaleY } = resolveScale(obj, BOULDER_BASE_SIZE.width, BOULDER_BASE_SIZE.height)
-      const { width, height } = computeCollisionSize(obj.role, scaleX, scaleY)
+      const { width, height } = computeCollisionSize('object', scaleX, scaleY)
       return createRoomWorldObject(
         obj.id,
-        { name: obj.id, role: obj.role, discoverable: true },
+        { name: obj.id, role: 'object', discoverable: true },
         [alwaysActiveRule(PROCESS_IDS.boulder)],
         {
           x: obj.x,
@@ -183,12 +183,13 @@ export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJE
       )
     }
 
-    // Default to guard
+    // Default to enemy/guard
     const { scaleX, scaleY } = resolveScale(obj, CHARACTER_BASE_SIZE.width, CHARACTER_BASE_SIZE.height)
-    const { width, height } = computeCollisionSize('guard', scaleX, scaleY)
+    const resolvedRole = obj.role === 'guard' ? 'enemy' : (obj.role ?? 'enemy')
+    const { width, height } = computeCollisionSize(resolvedRole, scaleX, scaleY)
     return createRoomWorldObject(
       obj.id,
-      { name: obj.id, role: 'guard', discoverable: true },
+      { name: obj.id, role: resolvedRole, discoverable: true },
       [alwaysActiveRule(PROCESS_IDS.guard)],
       {
         x: obj.x,

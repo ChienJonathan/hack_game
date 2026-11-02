@@ -343,11 +343,11 @@ export class PhaserRoomView {
     switch (worldObject.metadata.role) {
       case 'player':
         return PLAYER_TEXTURE_KEY
+      case 'enemy':
       case 'guard':
         return GUARD_TEXTURE_KEY
       case 'weapon':
         return DAGGER_TEXTURE_KEY
-      case 'obejct':
       case 'object':
         return BOULDER_TEXTURE_KEY
       default:

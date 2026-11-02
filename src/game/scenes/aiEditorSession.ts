@@ -73,7 +73,7 @@ export function createAiEditorSession(options?: {
   targetGuardId?: string
 }): AiEditorSessionBundle {
   const sourceObjects = options?.objects ?? ROOM1_OBJECTS
-  const targetGuardId = options?.targetGuardId ?? (sourceObjects.find((o) => o.role === 'guard')?.id ?? WORLD_OBJECT_IDS.guard)
+  const targetGuardId = options?.targetGuardId ?? (sourceObjects.find((o) => o.role === 'enemy' || o.role === 'guard')?.id ?? WORLD_OBJECT_IDS.guard)
   const activeTree = options?.tree ?? BOSS_CYBER_ENFORCER_TREE
   const btProcess = new BehaviorTreeProcess(activeTree)
 
@@ -158,7 +158,7 @@ export function createAiEditorSession(options?: {
 
     // Reset all guards
     for (const guardObj of worldState.worldObjects) {
-      if (guardObj.metadata.role === 'guard') {
+      if (guardObj.metadata.role === 'enemy' || guardObj.metadata.role === 'guard') {
         const initialGuardCfg = sourceObjects.find((o) => o.id === guardObj.id)
         const gState = guardObj.state as Record<string, unknown>
         gState.x = initialGuardCfg?.x ?? ROOM_LAYOUT.guardStart.x
@@ -182,7 +182,7 @@ export function createAiEditorSession(options?: {
 
   const setTargetGuard = (newGuardId: string): boolean => {
     const newGuard = worldState.worldObjects.find((o) => o.id === newGuardId)
-    if (!newGuard || newGuard.metadata.role !== 'guard') {
+    if (!newGuard || (newGuard.metadata.role !== 'enemy' && newGuard.metadata.role !== 'guard')) {
       return false
     }
 

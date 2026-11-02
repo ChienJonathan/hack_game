@@ -107,7 +107,6 @@ export function createSpeedEditorSession(options?: {
       obj.id !== WORLD_OBJECT_IDS.player &&
       obj.id !== WORLD_OBJECT_IDS.dagger &&
       obj.id !== WORLD_OBJECT_IDS.boulder &&
-      obj.metadata.role !== 'obejct' &&
       obj.metadata.role !== 'object'
     ) {
       return new BasicWorldObject(obj.id, obj.roomId, obj.metadata, [], obj.state)

@@ -58,7 +58,7 @@ Synchronous submission pipeline:
 
 - `WorldState`: Root aggregate for rooms, world objects, active process instances, current room, simulation tick, outcome, and command history.
 - `Room`: Enterable area owning exits.
-- `WorldObject`: Domain entity with identity, room ID, metadata, behavior rules, and runtime state. Roles include `player`, `guard`, `weapon`, and `obejct` (such as environmental world objects like `boulder`, which execute `BoulderProcess` on simulation ticks when thrown).
+- `WorldObject`: Domain entity with identity, room ID, metadata, behavior rules, and runtime state. Roles include `player`, `enemy` (hostile characters such as guards), `weapon`, and `object` (such as environmental world objects like `boulder`, which execute `BoulderProcess` on simulation ticks when thrown).
 - `BehaviorRule`: Maps object condition to `ProcessDefinition`.
 - `VirtualWorldPathResolver`: Resolves virtual command paths to room/object IDs (no host filesystem access).
 
@@ -80,7 +80,7 @@ Attacks damage nearest character within Reach (bounding-box gap). Items (includi
 
 ### Collisionbox & Solid Obstacle Resolution
 
-All world objects besides weapons have a domain-owned `collisionBox` (`width`, `height`) and physical collision footprint (`hasCollisionBox(role)` returns `true` for `player`, `guard`, `obejct`, `object`, and `false` for `weapon`). Weapons (`dagger`) have `collisionBox: null`, allowing characters to walk over them for pickup without collision blocking.
+All world objects besides weapons have a domain-owned `collisionBox` (`width`, `height`) and physical collision footprint (`hasCollisionBox(role)` returns `true` for `player`, `enemy`, `object`, and `false` for `weapon`). Weapons (`dagger`) have `collisionBox: null`, allowing characters to walk over them for pickup without collision blocking.
 
 `AabbCollisionWorld` provides `overlaps(a, b)` and `resolveMovement(currentBox, targetBox, obstacles, bounds)` to guarantee that collisionboxes never overlap each other:
 - In simulation (`PlayerMovementProcess`, `GuardResponseProcess`, `BehaviorTreeEvaluator`), moving entities resolve motion axis-by-axis against obstacles (all other alive room entities with collisionboxes) and room bounds, sliding smoothly along obstacle edges without penetrating or overlapping.
@@ -89,10 +89,10 @@ All world objects besides weapons have a domain-owned `collisionBox` (`width`, `
 
 ### First Room Behavior
 
-Room 1 initializes with Player Character (upper-left, named `hacker`), Dagger (lower-left), Boulder (environmental world object with role `obejct`), and Guards (right). All World Object sprites are shown by default. Exiting right leads to Room 2:
+Room 1 initializes with Player Character (upper-left, named `hacker`), Dagger (lower-left), Boulder (environmental world object with role `object`), and Guards (hostile characters with role `enemy`, right). All World Object sprites are shown by default. Exiting right leads to Room 2:
 - Undiscovered world objects display a `?` overhead label at the top of their sprite; the player character displays `hacker` and is never `?`.
 - `ls` discovers objects in the room and reveals their `?` labels to their respective names; direct player interaction (picking up an item or attacking a guard) also marks the target object discovered, while guard movement/pursuit and guard attacks do not discover the guard.
-- `mv <label1> <label2>` throws `<label1>` towards `<label2>` (an object or room exit) with speed `mv_speed` (`DEFAULT_MV_SPEED` 300 px/s in `src/game/commands/mvConstants.ts`, constant across all rooms), unequipping it if equipped; objects with role `obejct`/`object` (such as `boulder`) execute `BoulderProcess` on simulation ticks to update position and thrown state until arriving at the target. If `<label2>` does not exist in the room, it renames `<label1>` to `<label2>` and marks it discovered.
+- `mv <label1> <label2>` throws `<label1>` towards `<label2>` (an object or room exit) with speed `mv_speed` (`DEFAULT_MV_SPEED` 300 px/s in `src/game/commands/mvConstants.ts`, constant across all rooms), unequipping it if equipped; objects with role `object` (such as `boulder`) execute `BoulderProcess` on simulation ticks to update position and thrown state until arriving at the target. If `<label2>` does not exist in the room, it renames `<label1>` to `<label2>` and marks it discovered.
 - The player walks with Arrows (turning left or right horizontally when pressing Left or Right Arrow, flipping the sprite and equipped weapon offset in presentation), automatically picks up the Dagger (and any items) on contact/reach, and attacks with Space or left click. Equipped weapons track the holder position in domain state (`dagger.x = holder.x, dagger.y = holder.y`, translating `dagger.x` forward during attack animation) while `PhaserRoomView` handles local coordinate attachment, mirroring, and attack translation animation. Typing any alphabet key directly switches to Command Mode and begins entering a command.
 - Guard pursues player when player enters room's right half; attacks within Reach.
 - Player reaching 0 Health triggers `game-over`. Defeating guard stops pursuit. Reaching exit triggers `congratulations`.

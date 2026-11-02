@@ -146,7 +146,7 @@ describe('levelEditorHistory', () => {
       const spawnChange = {
         type: 'spawn' as const,
         objectId: 'guard-2',
-        role: 'guard' as const,
+        role: 'enemy' as const,
         snapshot,
       }
 
@@ -154,7 +154,7 @@ describe('levelEditorHistory', () => {
       expect(reverse).toEqual({
         type: 'despawn',
         objectId: 'guard-2',
-        role: 'guard',
+        role: 'enemy',
         snapshot,
       })
       expect(invertChange(reverse)).toEqual(spawnChange)
@@ -168,7 +168,7 @@ describe('levelEditorHistory', () => {
         applyChange(obj, {
           type: 'spawn',
           objectId: 'guard-2',
-          role: 'guard',
+          role: 'enemy',
           snapshot: obj,
         })
       }).not.toThrow()
@@ -178,7 +178,7 @@ describe('levelEditorHistory', () => {
         applyChange(obj, {
           type: 'despawn',
           objectId: 'guard-2',
-          role: 'guard',
+          role: 'enemy',
           snapshot: obj,
         })
       }).not.toThrow()
@@ -549,7 +549,7 @@ describe('levelEditorHistory', () => {
       history.push({
         type: 'spawn',
         objectId: 'guard-2',
-        role: 'guard',
+        role: 'enemy',
         snapshot,
       })
 
@@ -557,7 +557,7 @@ describe('levelEditorHistory', () => {
       expect(reversed).toEqual({
         type: 'despawn',
         objectId: 'guard-2',
-        role: 'guard',
+        role: 'enemy',
         snapshot,
       })
     })
@@ -568,7 +568,7 @@ describe('levelEditorHistory', () => {
       history.push({
         type: 'despawn',
         objectId: 'guard-2',
-        role: 'guard',
+        role: 'enemy',
         snapshot,
       })
 
@@ -576,7 +576,7 @@ describe('levelEditorHistory', () => {
       expect(reversed).toEqual({
         type: 'spawn',
         objectId: 'guard-2',
-        role: 'guard',
+        role: 'enemy',
         snapshot,
       })
     })
@@ -729,21 +729,21 @@ describe('levelEditorHistory', () => {
     })
 
     it('returns scaled collision box for characters and boulders', () => {
-      const guardBox = computeEditorCollisionBox('guard', 200, 300, 1, 1)
-      expect(guardBox).toEqual({ x: 200, y: 300, width: 110, height: 160 })
+      const enemyBox = computeEditorCollisionBox('enemy', 200, 300, 1, 1)
+      expect(enemyBox).toEqual({ x: 200, y: 300, width: 110, height: 160 })
 
-      const scaledGuard = computeEditorCollisionBox('guard', 200, 300, 0.5, 0.5)
-      expect(scaledGuard).toEqual({ x: 200, y: 300, width: 55, height: 80 })
+      const scaledEnemy = computeEditorCollisionBox('enemy', 200, 300, 0.5, 0.5)
+      expect(scaledEnemy).toEqual({ x: 200, y: 300, width: 55, height: 80 })
 
-      const boulderBox = computeEditorCollisionBox('obejct', 400, 500, 1, 1)
+      const boulderBox = computeEditorCollisionBox('object', 400, 500, 1, 1)
       expect(boulderBox).toEqual({ x: 400, y: 500, width: 120, height: 120 })
     })
   })
 
   describe('wouldOverlapAnyEditorObject', () => {
     const existing = [
-      { id: 'guard-1', role: 'guard' as const, x: 200, y: 200, scaleX: 1, scaleY: 1 },
-      { id: 'boulder-1', role: 'obejct' as const, x: 500, y: 200, scaleX: 1, scaleY: 1 },
+      { id: 'guard-1', role: 'enemy' as const, x: 200, y: 200, scaleX: 1, scaleY: 1 },
+      { id: 'boulder-1', role: 'object' as const, x: 500, y: 200, scaleX: 1, scaleY: 1 },
       { id: 'dagger-1', role: 'weapon' as const, x: 300, y: 200, scaleX: 1, scaleY: 1 },
     ]
 
@@ -781,7 +781,7 @@ describe('levelEditorHistory', () => {
 
     it('ignores itself by objectId', () => {
       // Testing guard-1 at its own position (200, 200)
-      const result = wouldOverlapAnyEditorObject('guard-1', 'guard', 200, 200, 1, 1, existing)
+      const result = wouldOverlapAnyEditorObject('guard-1', 'enemy', 200, 200, 1, 1, existing)
       expect(result).toBe(false)
     })
   })

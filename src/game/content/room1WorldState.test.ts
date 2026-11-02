@@ -139,12 +139,13 @@ describe('room1WorldState scaled collision AABB', () => {
     expect(dagger.metadata.discoverable).toBe(true)
     expect((dagger.state as Record<string, unknown>).discovered).toBe(false)
 
+    expect(guard.metadata.role).toBe('enemy')
     expect(guard.metadata.discoverable).toBe(true)
     expect((guard.state as Record<string, unknown>).discovered).toBe(false)
 
     expect(boulder).toBeDefined()
     expect(boulder.metadata.name).toBe('boulder')
-    expect(boulder.metadata.role).toBe('obejct')
+    expect(boulder.metadata.role).toBe('object')
     expect(boulder.metadata.discoverable).toBe(true)
     expect((boulder.state as Record<string, unknown>).discovered).toBe(false)
     expect(boulder.behaviorRules).toEqual([
@@ -155,12 +156,12 @@ describe('room1WorldState scaled collision AABB', () => {
     ])
   })
 
-  it('computes collision size for obejct role correctly', () => {
-    const size = computeCollisionSize('obejct', 1, 1)
+  it('computes collision size for object role correctly', () => {
+    const size = computeCollisionSize('object', 1, 1)
     expect(size.width).toBe(120)
     expect(size.height).toBe(120)
 
-    const scaled = computeCollisionSize('obejct', 0.5, 0.5)
+    const scaled = computeCollisionSize('object', 0.5, 0.5)
     expect(scaled.width).toBe(60)
     expect(scaled.height).toBe(60)
   })
@@ -188,8 +189,8 @@ describe('room1WorldState scaled collision AABB', () => {
 
   it('identifies collisionbox presence with hasCollisionBox for world object roles', () => {
     expect(hasCollisionBox('player')).toBe(true)
+    expect(hasCollisionBox('enemy')).toBe(true)
     expect(hasCollisionBox('guard')).toBe(true)
-    expect(hasCollisionBox('obejct')).toBe(true)
     expect(hasCollisionBox('object')).toBe(true)
     expect(hasCollisionBox('weapon')).toBe(false)
   })
