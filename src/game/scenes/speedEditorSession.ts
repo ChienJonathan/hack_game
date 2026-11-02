@@ -7,6 +7,7 @@ import {
   type RoomObjectConfig,
 } from '../content/room1.ts'
 import { GAME_MV_CONFIG, type MvConfig } from '../commands/mvConstants.ts'
+import { GAME_PHYSICS_CONFIG, type PhysicsConfig } from '../simulation/physicsConstants.ts'
 import { createInitialWorldState } from '../content/room1WorldState.ts'
 import { createRoom1CommandSubmissionService } from '../content/room1Commands.ts'
 import { GameSession } from '../application/GameSession.ts'
@@ -29,14 +30,28 @@ export const DEFAULT_SPEED_CONFIG: PlayerSpeedConfig = {
   maxSpeed: 300,
 }
 
-export { GAME_MV_CONFIG, type MvConfig }
+export { GAME_MV_CONFIG, GAME_PHYSICS_CONFIG, type MvConfig, type PhysicsConfig }
 
-export function getMvConfig(config?: Partial<MvConfig>): MvConfig {
+/** Everything the Speed Editor tunes for `mv` throws: the pull of `mv` and the global physics values. */
+export type TuningConfig = MvConfig & PhysicsConfig
+
+export function getTuningConfig(config?: Partial<TuningConfig>): TuningConfig {
   return {
     mv_force: config?.mv_force ?? GAME_MV_CONFIG.mv_force,
-    drag: config?.drag ?? GAME_MV_CONFIG.drag,
-    mass: config?.mass ?? GAME_MV_CONFIG.mass,
-    max_velocity: config?.max_velocity ?? GAME_MV_CONFIG.max_velocity,
+    drag: config?.drag ?? GAME_PHYSICS_CONFIG.drag,
+    mass: config?.mass ?? GAME_PHYSICS_CONFIG.mass,
+    max_velocity: config?.max_velocity ?? GAME_PHYSICS_CONFIG.max_velocity,
+    restitution: config?.restitution ?? GAME_PHYSICS_CONFIG.restitution,
+    min_velocity: config?.min_velocity ?? GAME_PHYSICS_CONFIG.min_velocity,
+    min_collide_move_velocity: config?.min_collide_move_velocity ?? GAME_PHYSICS_CONFIG.min_collide_move_velocity,
+  }
+}
+
+/** Copies a tuning config into the live global configs, so the running game uses it. */
+export function applyTuningConfig(config: TuningConfig): void {
+  GAME_MV_CONFIG.mv_force = config.mv_force
+  for (const key of Object.keys(GAME_PHYSICS_CONFIG)) {
+    GAME_PHYSICS_CONFIG[key] = config[key]
   }
 }
 
@@ -83,6 +98,7 @@ function getStorage(storage?: Storage): Storage {
 export function createSpeedEditorSession(options?: {
   playerSpeed?: PlayerSpeedConfig
   mvConfig?: () => MvConfig
+  physicsConfig?: () => PhysicsConfig
   storage?: Storage
   objects?: RoomObjectConfig[]
 }): SpeedEditorSessionBundle {
@@ -131,7 +147,7 @@ export function createSpeedEditorSession(options?: {
     [new PlayerMovementProcess(), new DaggerPickupProcess(), new BoulderProcess()],
     undefined,
     undefined,
-    { mvConfig: options?.mvConfig, contactResolver: null },
+    { mvConfig: options?.mvConfig, physicsConfig: options?.physicsConfig, contactResolver: null },
   )
   const session = new GameSession({
     worldState,

@@ -282,7 +282,9 @@ describe('commands', () => {
     runFor(session, 1000)
     const fastDistance = startX - slowDistance - guard.x
 
-    expect(slowDistance).toBeCloseTo(210 * 0.25, 0)
+    // 250 ms of game time at 210 px/s, less the short time the guard needs to pick up speed
+    expect(slowDistance).toBeGreaterThan(210 * 0.25 * 0.8)
+    expect(slowDistance).toBeLessThanOrEqual(210 * 0.25)
     expect(fastDistance).toBeGreaterThan(slowDistance * 3)
   })
 

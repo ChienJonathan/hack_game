@@ -1,3 +1,4 @@
+import { PHYSICS_ATTR_KEYS } from '../domain/PhysicsAttr.ts'
 import type { RoomObjectConfig } from './room1.ts'
 
 /**
@@ -54,14 +55,9 @@ export function generateRoom1Source(objects: RoomObjectConfig[]): string {
     if (obj.colliderHeight !== undefined) {
       lines.push(`    colliderHeight: ${Math.round(obj.colliderHeight)},`)
     }
-    if (obj.mv_attr !== undefined) {
-      const attrLines = (['drag', 'mass', 'max_velocity'] as const)
-        .filter((key) => obj.mv_attr?.[key] !== undefined)
-        .map((key) => `      ${key}: ${obj.mv_attr?.[key]},`)
-      if (attrLines.length > 0) {
-        lines.push('    mv_attr: {')
-        lines.push(...attrLines)
-        lines.push('    },')
+    for (const key of PHYSICS_ATTR_KEYS) {
+      if (obj[key] !== undefined) {
+        lines.push(`    ${key}: ${obj[key]},`)
       }
     }
     return `  {\n${lines.join('\n')}\n  },`
@@ -75,16 +71,17 @@ export function generateRoom1Source(objects: RoomObjectConfig[]): string {
   [key: string]: number
 }
 
-/** Per-object overrides of the global mv defaults; unset fields fall back to the defaults. */
-export interface MvAttrConfig {
+/** Per-object physics values; unset fields fall back to the global defaults. */
+export interface PhysicsAttrConfig {
   drag?: number
   mass?: number
   max_velocity?: number
+  restitution?: number
 }
 
 export type WorldObjectRole = 'player' | 'enemy' | 'weapon' | 'object' | 'guard'
 
-export interface RoomObjectConfig {
+export interface RoomObjectConfig extends PhysicsAttrConfig {
   id: string
   role: WorldObjectRole
   x: number
@@ -101,7 +98,6 @@ export interface RoomObjectConfig {
   holdOffsetY?: number
   colliderWidth?: number
   colliderHeight?: number
-  mv_attr?: MvAttrConfig
 }
 
 export const ROOM1_OBJECTS: RoomObjectConfig[] = [

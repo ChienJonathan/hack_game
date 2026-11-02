@@ -1,9 +1,11 @@
 import { ROOM_LAYOUT, WORLD_OBJECT_IDS } from '../../content/room1Constants.ts'
 import type { CharacterState } from '../../domain/CharacterState.ts'
 import { AabbCollisionWorld } from '../../domain/CollisionWorld.ts'
+import type { WorldObject } from '../../domain/WorldObject.ts'
 import { CombatService } from '../../domain/CombatService.ts'
 import { weaponFor } from '../../domain/WeaponDefinition.ts'
 import { getMutableWorldObjectState } from '../../domain/WorldObjectState.ts'
+import { accelerateToward, GUARD_ACCELERATION, steerAway, steerToward } from '../../simulation/Drive.ts'
 import type {
   BehaviorNodeParams,
   BehaviorTreeNodeDef,
@@ -13,13 +15,6 @@ import type {
 
 const collision = new AabbCollisionWorld()
 const combat = new CombatService(collision)
-
-const ROOM_BOUNDS = {
-  left: ROOM_LAYOUT.left,
-  top: ROOM_LAYOUT.top,
-  right: ROOM_LAYOUT.right,
-  bottom: ROOM_LAYOUT.bottom,
-}
 
 interface Box {
   x: number
@@ -36,76 +31,20 @@ function distance(a: { x: number; y: number }, b: { x: number; y: number }): num
   return Math.hypot(b.x - a.x, b.y - a.y)
 }
 
-function getObstacles(context: BehaviorTreeContext, excludeId: string): Box[] {
-  const obstacles: Box[] = []
-  for (const obj of context.state.worldObjects) {
-    if (obj.id === excludeId) continue
-    if (obj.roomId !== context.state.currentRoomId) continue
-    if (obj.metadata.role === 'weapon') continue
-    const s = obj.state as Record<string, unknown>
-    if (s.alive === false) continue
-    if (typeof s.x !== 'number' || typeof s.y !== 'number') continue
-    if (typeof s.width !== 'number' || typeof s.height !== 'number') continue
-    obstacles.push({
-      x: s.x,
-      y: s.y,
-      width: s.width,
-      height: s.height,
-    })
-  }
-  return obstacles
-}
-
+/** Drives the entity towards a point, stopping on it. */
 function moveToward(
-  position: { x: number; y: number; width: number; height: number },
+  entity: WorldObject,
   target: { x: number; y: number },
   speed: number,
   tickDurationMs: number,
-  obstacles: readonly Box[] = [],
+  stopDistance = 0,
 ): void {
-  const deltaX = target.x - position.x
-  const deltaY = target.y - position.y
-  const remainingDistance = Math.hypot(deltaX, deltaY)
-  const maxDistance = (speed * tickDurationMs) / 1000
-
-  let nextX = target.x
-  let nextY = target.y
-  if (remainingDistance > maxDistance && remainingDistance !== 0) {
-    nextX = position.x + (deltaX / remainingDistance) * maxDistance
-    nextY = position.y + (deltaY / remainingDistance) * maxDistance
-  }
-
-  const currentBox = boxOf(position)
-  const targetBox = { x: nextX, y: nextY, width: position.width, height: position.height }
-  const resolved = collision.resolveMovement(currentBox, targetBox, obstacles, ROOM_BOUNDS)
-  position.x = resolved.x
-  position.y = resolved.y
+  steerToward(entity, target, speed, GUARD_ACCELERATION, tickDurationMs, stopDistance)
 }
 
-function moveAway(
-  position: { x: number; y: number; width: number; height: number },
-  avoid: { x: number; y: number },
-  speed: number,
-  tickDurationMs: number,
-  obstacles: readonly Box[] = [],
-): void {
-  const deltaX = position.x - avoid.x
-  const deltaY = position.y - avoid.y
-  const remainingDistance = Math.hypot(deltaX, deltaY)
-  const maxDistance = (speed * tickDurationMs) / 1000
-
-  let nextX = position.x + maxDistance
-  let nextY = position.y
-  if (remainingDistance !== 0) {
-    nextX = position.x + (deltaX / remainingDistance) * maxDistance
-    nextY = position.y + (deltaY / remainingDistance) * maxDistance
-  }
-
-  const currentBox = boxOf(position)
-  const targetBox = { x: nextX, y: nextY, width: position.width, height: position.height }
-  const resolved = collision.resolveMovement(currentBox, targetBox, obstacles, ROOM_BOUNDS)
-  position.x = resolved.x
-  position.y = resolved.y
+/** Drives the entity directly away from a point. */
+function moveAway(entity: WorldObject, avoid: { x: number; y: number }, speed: number, tickDurationMs: number): void {
+  steerAway(entity, avoid, speed, GUARD_ACCELERATION, tickDurationMs)
 }
 
 export class BehaviorTreeEvaluator {
@@ -312,8 +251,9 @@ export class BehaviorTreeEvaluator {
     const baseSpeed = typeof entityState.speed === 'number' ? entityState.speed : 210
     const speed = baseSpeed * multiplier
 
-    const obstacles = getObstacles(context, context.entity.id)
-    moveToward(entityState, playerState, speed, context.tickDurationMs, obstacles)
+    // Slow down to stop with the target just within reach (centre distance minus the gap still to close).
+    const stopDistance = distance(entityState, playerState) - (gap - reach)
+    moveToward(context.entity, playerState, speed, context.tickDurationMs, stopDistance)
     entityState.chasing = true
     return 'RUNNING'
   }
@@ -394,11 +334,24 @@ export class BehaviorTreeEvaluator {
     charge.timer -= context.tickDurationMs
     const chargeSpeed = params?.chargeSpeed ?? ((typeof entityState.speed === 'number' ? entityState.speed : 210) * 2.2)
 
-    const prevX = entityState.x
-    const prevY = entityState.y
+    // Where the entity was a tick ago, to tell that the dash has run into something and stopped.
+    const lastKey = `_charge_last_${nodeId}`
+    const last = context.blackboard[lastKey] as { x: number; y: number } | undefined
+    context.blackboard[lastKey] = { x: entityState.x, y: entityState.y }
 
-    const obstacles = getObstacles(context, context.entity.id)
-    moveToward(entityState, { x: charge.targetX, y: charge.targetY }, chargeSpeed, context.tickDurationMs, obstacles)
+    // A dash does not slow down on the way: it runs at full speed in the direction of the locked target.
+    const dashX = charge.targetX - entityState.x
+    const dashY = charge.targetY - entityState.y
+    const dashLength = Math.hypot(dashX, dashY)
+    if (dashLength > 0) {
+      accelerateToward(
+        context.entity,
+        (dashX / dashLength) * chargeSpeed,
+        (dashY / dashLength) * chargeSpeed,
+        GUARD_ACCELERATION,
+        context.tickDurationMs,
+      )
+    }
 
     // Check collision / hit on player
     const gap = collision.gap(boxOf(entityState), boxOf(playerState))
@@ -415,12 +368,18 @@ export class BehaviorTreeEvaluator {
         context.state.outcome = 'game-over'
       }
       delete context.blackboard[chargeKey]
+      delete context.blackboard[lastKey]
       return 'SUCCESS'
     }
 
     // End condition: timer expired or hit wall (didn't move)
-    if (charge.timer <= 0 || (Math.abs(entityState.x - prevX) < 1 && Math.abs(entityState.y - prevY) < 1)) {
+    const hasPickedUpSpeed = charge.timer <= 500
+    const stalled =
+      hasPickedUpSpeed &&
+      last !== undefined && Math.abs(entityState.x - last.x) < 1 && Math.abs(entityState.y - last.y) < 1
+    if (charge.timer <= 0 || stalled) {
       delete context.blackboard[chargeKey]
+      delete context.blackboard[lastKey]
       return 'SUCCESS'
     }
 
@@ -447,8 +406,7 @@ export class BehaviorTreeEvaluator {
 
     const target = waypoints[index]
     const speed = (typeof entityState.speed === 'number' ? entityState.speed : 210) * (params?.speedMultiplier ?? 0.8)
-    const obstacles = getObstacles(context, context.entity.id)
-    moveToward(entityState, target, speed, context.tickDurationMs, obstacles)
+    moveToward(context.entity, target, speed, context.tickDurationMs)
 
     if (distance(entityState, target) < 16) {
       index = (index + 1) % waypoints.length
@@ -477,8 +435,7 @@ export class BehaviorTreeEvaluator {
     }
 
     const speed = (typeof entityState.speed === 'number' ? entityState.speed : 210) * (params?.speedMultiplier ?? 1.2)
-    const obstacles = getObstacles(context, context.entity.id)
-    moveAway(entityState, playerState, speed, context.tickDurationMs, obstacles)
+    moveAway(context.entity, playerState, speed, context.tickDurationMs)
     entityState.chasing = false
     return 'RUNNING'
   }

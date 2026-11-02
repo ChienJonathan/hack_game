@@ -14,13 +14,13 @@ import {
 import { createInitialWorldState, computeCollisionSize } from '../content/room1WorldState.ts'
 import {
   ROOM1_OBJECTS,
-  type MvAttrConfig,
+  type PhysicsAttrConfig,
   type PlayerSpeedConfig,
   type RoomObjectConfig,
   type WorldObjectRole,
 } from '../content/room1.ts'
-import { GAME_MV_CONFIG, MIN_MV_MASS } from '../commands/mvConstants.ts'
-import { readMvAttrOverride } from '../domain/MvAttr.ts'
+import { PHYSICS_ATTR_KEYS, readPhysicsAttrOverride } from '../domain/PhysicsAttr.ts'
+import { GAME_PHYSICS_CONFIG, MIN_MASS } from '../simulation/physicsConstants.ts'
 import { generateRoom1Source } from '../content/room1Serializer.ts'
 import {
   WORLD_OBJECT_TEXTURE_URLS,
@@ -37,8 +37,8 @@ import {
   wouldOverlapAnyEditorObject,
   type ScalableMovableObject,
   type CharacterProperty,
-  type MvAttrKey,
-  setMvAttrValue,
+  type PhysicsAttrKey,
+  setPhysicsAttrValue,
 } from './levelEditorHistory.ts'
 import { SceneManager } from './SceneManager.ts'
 
@@ -56,7 +56,7 @@ const PANEL_Y = 720
 const PANEL_WIDTH = 1728
 const PANEL_HEIGHT = 290
 
-export interface SpawnObjectConfig {
+export interface SpawnObjectConfig extends PhysicsAttrConfig {
   id?: string
   x?: number
   y?: number
@@ -72,7 +72,6 @@ export interface SpawnObjectConfig {
   holdOffsetY?: number
   colliderWidth?: number
   colliderHeight?: number
-  mv_attr?: MvAttrConfig
 }
 
 export interface EditorObject extends ScalableMovableObject {
@@ -116,7 +115,7 @@ export class LevelEditorScene extends Phaser.Scene {
   private section3Title: Phaser.GameObjects.Text | undefined
   private naStatsText: Phaser.GameObjects.Text | undefined
   private mvAttrElements: Phaser.GameObjects.Text[] = []
-  private mvAttrValues: Map<MvAttrKey, Phaser.GameObjects.Text> = new Map()
+  private mvAttrValues: Map<PhysicsAttrKey, Phaser.GameObjects.Text> = new Map()
   private headerText: Phaser.GameObjects.Text | undefined
   private isDraggingObject = false
   private isDraggingScaleHandle = false
@@ -535,14 +534,21 @@ export class LevelEditorScene extends Phaser.Scene {
       attackDurationMs,
       holdOffsetX,
       holdOffsetY,
-      ...this.mvAttrFields(readMvAttrOverride(state)),
+      ...this.physicsAttrFields(readPhysicsAttrOverride(state)),
     }
 
     this.editorObjects.push(editorObject)
   }
 
-  private mvAttrFields(attr: MvAttrConfig | undefined): { mv_attr?: MvAttrConfig } {
-    return attr && Object.keys(attr).length > 0 ? { mv_attr: { ...attr } } : {}
+  private physicsAttrFields(attr: PhysicsAttrConfig | undefined): PhysicsAttrConfig {
+    const fields: PhysicsAttrConfig = {}
+    for (const key of PHYSICS_ATTR_KEYS) {
+      const value = attr?.[key]
+      if (value !== undefined) {
+        fields[key] = value
+      }
+    }
+    return fields
   }
 
   private buildPropertyPanel(): void {
@@ -1019,7 +1025,7 @@ export class LevelEditorScene extends Phaser.Scene {
 
     // MV attributes: per-object overrides of the global mv defaults (set in the Speed Editor)
     const mvTitle = this.add
-      .text(1260, 172, 'MV ATTR (dim = default)', {
+      .text(1260, 172, 'PHYSICS (dim = default)', {
         fontFamily: FONT_FAMILY,
         fontSize: 11,
         color: ACCENT_COLOR,
@@ -1029,10 +1035,11 @@ export class LevelEditorScene extends Phaser.Scene {
     this.mvAttrElements = [mvTitle]
     this.mvAttrValues.clear()
 
-    const mvRows: { key: MvAttrKey; label: string; y: number; step: number; shiftStep: number }[] = [
+    const mvRows: { key: PhysicsAttrKey; label: string; y: number; step: number; shiftStep: number }[] = [
       { key: 'drag', label: 'drag', y: 190, step: 0.1, shiftStep: 0.5 },
       { key: 'mass', label: 'mass', y: 220, step: 0.1, shiftStep: 1 },
       { key: 'max_velocity', label: 'max_vel', y: 250, step: 50, shiftStep: 100 },
+      { key: 'restitution', label: 'restit', y: 280, step: 0.1, shiftStep: 0.5 },
     ]
     for (const row of mvRows) {
       const label = this.add
@@ -1491,22 +1498,22 @@ export class LevelEditorScene extends Phaser.Scene {
   private updateMvAttrFields(selected: EditorObject): void {
     this.mvAttrElements.forEach((el) => el.setVisible(true))
     for (const [key, text] of this.mvAttrValues) {
-      const override = selected.mv_attr?.[key]
-      text.setText(String(override ?? GAME_MV_CONFIG[key]))
+      const override = selected[key]
+      text.setText(String(override ?? GAME_PHYSICS_CONFIG[key]))
       text.setColor(override === undefined ? DIM_COLOR : ACCENT_COLOR)
     }
   }
 
-  private commitMvAttr(key: MvAttrKey, next: number | undefined): void {
+  private commitMvAttr(key: PhysicsAttrKey, next: number | undefined): void {
     const selected = this.getSelected()
     if (!selected) return
 
-    const prev = selected.mv_attr?.[key]
+    const prev = selected[key]
     if (prev === next) return
 
-    setMvAttrValue(selected, key, next)
+    setPhysicsAttrValue(selected, key, next)
     this.history.push({
-      type: 'mv_attr',
+      type: 'physics_attr',
       objectId: selected.id,
       key,
       prevValue: prev,
@@ -1515,22 +1522,22 @@ export class LevelEditorScene extends Phaser.Scene {
     this.updatePropertyPanel()
   }
 
-  private clampMvAttr(key: MvAttrKey, value: number): number {
+  private clampMvAttr(key: PhysicsAttrKey, value: number): number {
     const rounded = Math.round(value * 1000) / 1000
-    return key === 'mass' ? Math.max(MIN_MV_MASS, rounded) : rounded
+    return key === 'mass' ? Math.max(MIN_MASS, rounded) : rounded
   }
 
-  public adjustMvAttr(key: MvAttrKey, delta: number): void {
+  public adjustMvAttr(key: PhysicsAttrKey, delta: number): void {
     const selected = this.getSelected()
     if (!selected) return
-    const current = selected.mv_attr?.[key] ?? GAME_MV_CONFIG[key]
+    const current = selected[key] ?? GAME_PHYSICS_CONFIG[key]
     this.commitMvAttr(key, this.clampMvAttr(key, current + delta))
   }
 
-  public promptMvAttr(key: MvAttrKey): void {
+  public promptMvAttr(key: PhysicsAttrKey): void {
     const selected = this.getSelected()
     if (!selected) return
-    const current = selected.mv_attr?.[key] ?? GAME_MV_CONFIG[key]
+    const current = selected[key] ?? GAME_PHYSICS_CONFIG[key]
     const input = window.prompt(`Enter new ${key} for ${selected.id}:`, current.toString())
     if (input === null) return
     const parsed = parseFloat(input.trim())
@@ -1538,7 +1545,7 @@ export class LevelEditorScene extends Phaser.Scene {
     this.commitMvAttr(key, this.clampMvAttr(key, parsed))
   }
 
-  public resetMvAttr(key: MvAttrKey): void {
+  public resetMvAttr(key: PhysicsAttrKey): void {
     this.commitMvAttr(key, undefined)
   }
 
@@ -2287,7 +2294,7 @@ export class LevelEditorScene extends Phaser.Scene {
           attackDurationMs: reversed.snapshot.attackDurationMs,
           holdOffsetX: reversed.snapshot.holdOffsetX,
           holdOffsetY: reversed.snapshot.holdOffsetY,
-          mv_attr: reversed.snapshot.mv_attr,
+          ...this.physicsAttrFields(reversed.snapshot),
         },
         false,
       )
@@ -2370,7 +2377,7 @@ export class LevelEditorScene extends Phaser.Scene {
         ...(obj.holdOffsetY !== undefined ? { holdOffsetY: obj.holdOffsetY } : {}),
         ...(obj.colliderWidth !== undefined ? { colliderWidth: Math.round(obj.colliderWidth) } : {}),
         ...(obj.colliderHeight !== undefined ? { colliderHeight: Math.round(obj.colliderHeight) } : {}),
-        ...this.mvAttrFields(obj.mv_attr),
+        ...this.physicsAttrFields(obj),
       }
     })
 
@@ -2487,7 +2494,7 @@ export class LevelEditorScene extends Phaser.Scene {
       if (config.colliderHeight !== undefined) existing.colliderHeight = config.colliderHeight
       if (config.maxHealth !== undefined) existing.maxHealth = config.maxHealth
       if (config.speed !== undefined) existing.speed = config.speed
-      if (config.mv_attr !== undefined) Object.assign(existing, this.mvAttrFields(config.mv_attr))
+      Object.assign(existing, this.physicsAttrFields(config))
       if (config.attackDistance !== undefined) existing.attackDistance = config.attackDistance
       if (config.attackDurationMs !== undefined) existing.attackDurationMs = config.attackDurationMs
       if (config.holdOffsetX !== undefined) existing.holdOffsetX = config.holdOffsetX
@@ -2664,7 +2671,7 @@ export class LevelEditorScene extends Phaser.Scene {
       attackDurationMs: spawnAttackDurationMs,
       holdOffsetX: spawnHoldOffsetX,
       holdOffsetY: spawnHoldOffsetY,
-      ...this.mvAttrFields(config.mv_attr),
+      ...this.physicsAttrFields(config),
     }
 
     this.editorObjects.push(editorObject)
@@ -2802,7 +2809,7 @@ export class LevelEditorScene extends Phaser.Scene {
       attackDurationMs: obj.attackDurationMs,
       holdOffsetX: obj.holdOffsetX,
       holdOffsetY: obj.holdOffsetY,
-      ...this.mvAttrFields(obj.mv_attr),
+      ...this.physicsAttrFields(obj),
     }
   }
 

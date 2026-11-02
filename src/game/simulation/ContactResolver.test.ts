@@ -4,6 +4,7 @@ import { WORLD_OBJECT_IDS } from '../content/room1Constants.ts'
 import { colliderTagsOf } from '../domain/ColliderTag.ts'
 import { getMutableWorldObjectState } from '../domain/WorldObjectState.ts'
 import { ContactResolver } from './ContactResolver.ts'
+import { GAME_PHYSICS_CONFIG } from './physicsConstants.ts'
 import { SIMULATION_TICK_MS, TickSimulationEngine } from './TickSimulationEngine.ts'
 import { ROOM1_PROCESSES } from './room1/Room1Processes.ts'
 
@@ -46,10 +47,10 @@ describe('Collider Tags', () => {
     expect(tagsOf(WORLD_OBJECT_IDS.guard)).toEqual([{ class: 'character' }])
   })
 
-  it('gives the boulder no tag, so it never hurts anybody', () => {
+  it('gives the boulder an obstacle tag, which hurts nobody', () => {
     const { state, body, guard, resolver } = setup()
     const boulderObj = state.worldObjects.find((o) => o.id === WORLD_OBJECT_IDS.boulder)!
-    expect(colliderTagsOf(boulderObj)).toEqual([])
+    expect(colliderTagsOf(boulderObj)).toEqual([{ class: 'obstacle' }])
 
     const boulder = body(WORLD_OBJECT_IDS.boulder)
     boulder.x = guard.x
@@ -199,7 +200,7 @@ describe('tick order: move, contacts, then velocity update', () => {
       engine.advance(state, SIMULATION_TICK_MS)
     }
     expect(guard.health).toBeLessThan(100)
-    expect(guard.health).toBeGreaterThan(100 - 0.05 * 500 - 1e-9)
+    expect(guard.health).toBeGreaterThan(100 - 0.05 * GAME_PHYSICS_CONFIG.max_velocity - 1e-9)
     expect(guard.health).toBeCloseTo(100 - 0.05 * lastSpeedBeforeHit, 0)
 
     const afterHit = guard.health

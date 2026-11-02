@@ -907,42 +907,50 @@ describe('levelEditorHistory', () => {
     })
   })
 
-  describe('mv_attr changes', () => {
+  describe('physics_attr changes', () => {
     it('inverts by swapping prev and next, including "no override"', () => {
       expect(
-        invertChange({ type: 'mv_attr', objectId: 'o', key: 'drag', prevValue: undefined, nextValue: 2 }),
-      ).toEqual({ type: 'mv_attr', objectId: 'o', key: 'drag', prevValue: 2, nextValue: undefined })
+        invertChange({ type: 'physics_attr', objectId: 'o', key: 'drag', prevValue: undefined, nextValue: 2 }),
+      ).toEqual({ type: 'physics_attr', objectId: 'o', key: 'drag', prevValue: 2, nextValue: undefined })
     })
 
-    it('sets an override, then clears it and drops the emptied mv_attr on undo', () => {
+    it('sets a value, then clears it on undo', () => {
       const obj = createTestObject({ id: 'o' })
       const change: EditorChange = {
-        type: 'mv_attr',
+        type: 'physics_attr',
         objectId: 'o',
         key: 'mass',
         prevValue: undefined,
         nextValue: 3,
       }
       applyChange(obj, change)
-      expect(obj.mv_attr).toEqual({ mass: 3 })
+      expect(obj.mass).toBe(3)
 
       applyChange(obj, invertChange(change))
-      expect(obj.mv_attr).toBeUndefined()
+      expect(obj.mass).toBeUndefined()
+      expect('mass' in obj).toBe(false)
     })
 
-    it('keeps other overrides when one is cleared', () => {
-      const obj = createTestObject({ id: 'o', mv_attr: { drag: 1, mass: 2 } })
-      applyChange(obj, { type: 'mv_attr', objectId: 'o', key: 'drag', prevValue: 1, nextValue: undefined })
-      expect(obj.mv_attr).toEqual({ mass: 2 })
+    it('keeps other values when one is cleared', () => {
+      const obj = createTestObject({ id: 'o', drag: 1, mass: 2 })
+      applyChange(obj, { type: 'physics_attr', objectId: 'o', key: 'drag', prevValue: 1, nextValue: undefined })
+      expect(obj.drag).toBeUndefined()
+      expect(obj.mass).toBe(2)
+    })
+
+    it('handles restitution like the other values', () => {
+      const obj = createTestObject({ id: 'o' })
+      applyChange(obj, { type: 'physics_attr', objectId: 'o', key: 'restitution', prevValue: undefined, nextValue: 0.8 })
+      expect(obj.restitution).toBe(0.8)
     })
 
     it('is undone through EditorHistory', () => {
       const obj = createTestObject({ id: 'o' })
       const history = new EditorHistory()
-      applyChange(obj, { type: 'mv_attr', objectId: 'o', key: 'max_velocity', prevValue: undefined, nextValue: 80 })
-      history.push({ type: 'mv_attr', objectId: 'o', key: 'max_velocity', prevValue: undefined, nextValue: 80 })
+      applyChange(obj, { type: 'physics_attr', objectId: 'o', key: 'max_velocity', prevValue: undefined, nextValue: 80 })
+      history.push({ type: 'physics_attr', objectId: 'o', key: 'max_velocity', prevValue: undefined, nextValue: 80 })
       history.undo((id) => (id === 'o' ? obj : undefined))
-      expect(obj.mv_attr).toBeUndefined()
+      expect(obj.max_velocity).toBeUndefined()
     })
   })
 })

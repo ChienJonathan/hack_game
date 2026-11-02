@@ -6,7 +6,7 @@ import { applyPlayerDefeat } from '../domain/PlayerDefeat.ts'
 import type { WorldObject } from '../domain/WorldObject.ts'
 import { getMutableWorldObjectState } from '../domain/WorldObjectState.ts'
 import type { WorldState } from '../domain/WorldState.ts'
-import type { ThrownState } from './ThrownFlight.ts'
+import type { ThrownState } from './MvDrive.ts'
 
 interface BodyState {
   x: number

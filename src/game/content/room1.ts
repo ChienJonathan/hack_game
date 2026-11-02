@@ -6,16 +6,17 @@ export interface PlayerSpeedConfig {
   [key: string]: number
 }
 
-/** Per-object overrides of the global mv defaults; unset fields fall back to the defaults. */
-export interface MvAttrConfig {
+/** Per-object physics values; unset fields fall back to the global defaults. */
+export interface PhysicsAttrConfig {
   drag?: number
   mass?: number
   max_velocity?: number
+  restitution?: number
 }
 
 export type WorldObjectRole = 'player' | 'enemy' | 'weapon' | 'object' | 'guard'
 
-export interface RoomObjectConfig {
+export interface RoomObjectConfig extends PhysicsAttrConfig {
   id: string
   role: WorldObjectRole
   x: number
@@ -32,7 +33,6 @@ export interface RoomObjectConfig {
   holdOffsetY?: number
   colliderWidth?: number
   colliderHeight?: number
-  mv_attr?: MvAttrConfig
 }
 
 export const ROOM1_OBJECTS: RoomObjectConfig[] = [

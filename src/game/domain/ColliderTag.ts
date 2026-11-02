@@ -13,9 +13,13 @@ export type CharacterColliderTag = {
   readonly class: 'character'
 }
 
-export type ColliderTag = WeaponColliderTag | CharacterColliderTag
+export type ObstacleColliderTag = {
+  readonly class: 'obstacle'
+}
 
-/** Players and enemies are Characters, weapons are Weapons, other objects carry no tag. */
+export type ColliderTag = WeaponColliderTag | CharacterColliderTag | ObstacleColliderTag
+
+/** Players and enemies are Characters, weapons are Weapons, other objects (the boulder) are Obstacles. */
 export function defaultColliderTags(role: 'player' | 'enemy' | 'weapon' | 'object'): ColliderTag[] {
   switch (role) {
     case 'weapon':
@@ -24,7 +28,7 @@ export function defaultColliderTags(role: 'player' | 'enemy' | 'weapon' | 'objec
     case 'enemy':
       return [{ class: 'character' }]
     case 'object':
-      return []
+      return [{ class: 'obstacle' }]
   }
 }
 
@@ -35,6 +39,9 @@ function parseTag(raw: JsonValue): ColliderTag | undefined {
   const record = raw as { readonly [key: string]: JsonValue }
   if (record.class === 'character') {
     return { class: 'character' }
+  }
+  if (record.class === 'obstacle') {
+    return { class: 'obstacle' }
   }
   if (record.class === 'weapon' && typeof record.impactDamageRate === 'number') {
     return { class: 'weapon', impactDamageRate: record.impactDamageRate }
@@ -51,4 +58,24 @@ export function colliderTagsOf(worldObject: WorldObject): ColliderTag[] {
     const tag = parseTag(entry)
     return tag ? [tag] : []
   })
+}
+
+/** Pairs of tag classes that push each other apart. A Weapon passes through Characters and Weapons. */
+const PHYSICAL_COLLISIONS: ReadonlySet<string> = new Set([
+  'character|character',
+  'character|obstacle',
+  'obstacle|obstacle',
+  'obstacle|weapon',
+])
+
+function pairKey(first: ColliderTag['class'], second: ColliderTag['class']): string {
+  return first < second ? `${first}|${second}` : `${second}|${first}`
+}
+
+/** Whether two objects collide, decided by their Collider Tags alone. */
+export function collidesPhysically(a: WorldObject, b: WorldObject): boolean {
+  const tagsB = colliderTagsOf(b)
+  return colliderTagsOf(a).some((tagA) =>
+    tagsB.some((tagB) => PHYSICAL_COLLISIONS.has(pairKey(tagA.class, tagB.class))),
+  )
 }

@@ -3,7 +3,7 @@ import { MvCommandExecutor } from './mv.ts'
 import { createInitialWorldState } from '../../content/room1WorldState.ts'
 import { ROOM_LAYOUT, WORLD_OBJECT_IDS } from '../../content/room1Constants.ts'
 import { getMutableWorldObjectState, type MutableWorldObjectState } from '../../domain/WorldObjectState.ts'
-import { TickSimulationEngine } from '../../simulation/TickSimulationEngine.ts'
+import { SIMULATION_TICK_MS, TickSimulationEngine } from '../../simulation/TickSimulationEngine.ts'
 import { ROOM1_PROCESSES } from '../../simulation/room1/Room1Processes.ts'
 
 describe('MvCommandExecutor', () => {
@@ -195,12 +195,13 @@ describe('MvCommandExecutor', () => {
       const distAfter = Math.hypot((guardState.x as number) - nextX, (guardState.y as number) - nextY)
       expect(distAfter).toBeLessThan(distBefore)
 
-      // Guard-2 stands on the way: the boulder is blocked, stops there and ends its Throw
-      engine.advance(state, 5000)
+      // Guard-2 stands on the way: the boulder collides with it, which ends the Throw before it arrives
+      for (let i = 0; i < 600 && boulderState.thrown; i++) {
+        engine.advance(state, SIMULATION_TICK_MS)
+      }
       expect(boulderState.thrown).toBeNull()
-      expect(boulderState.vx).toBe(0)
-      expect(boulderState.vy).toBe(0)
       expect(boulderState.x as number).toBeLessThan(guardState.x as number)
+      expect(boulderState.discovered).toBe(true)
       expect(guardObj.state).toMatchObject({ health: 100 })
     })
 

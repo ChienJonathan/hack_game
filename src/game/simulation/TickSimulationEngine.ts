@@ -6,8 +6,10 @@ import type { WorldState } from '../domain/WorldState.ts'
 import type { ProcessDefinition } from '../processes/ProcessDefinition.ts'
 import type { ProcessInstance } from '../processes/ProcessInstance.ts'
 import { ContactResolver } from './ContactResolver.ts'
+import { MvDrive } from './MvDrive.ts'
+import type { PhysicsConfig } from './physicsConstants.ts'
+import { PhysicsWorld } from './PhysicsWorld.ts'
 import type { RenderPosition, SimulationEngine } from './SimulationEngine.ts'
-import { ThrownFlight } from './ThrownFlight.ts'
 
 export interface ProcessTickContext {
   readonly state: WorldState
@@ -18,7 +20,10 @@ export interface ProcessTickContext {
 
 export interface WorldObjectProcess extends ProcessDefinition {
   readonly definitionId: ProcessDefinitionId
+  /** Before the physics step: decides what the object does and applies its Forces. */
   tick(context: ProcessTickContext): void
+  /** After the physics step, with the positions of the tick: what depends on where bodies ended up. */
+  afterPhysics?(context: ProcessTickContext): void
 }
 
 export type BehaviorConditionEvaluator = (
@@ -30,6 +35,8 @@ export type BehaviorConditionEvaluator = (
 export interface TickSimulationEngineOptions {
   /** Global `mv` parameters, read each tick so live edits take effect. */
   readonly mvConfig?: () => MvConfig
+  /** Global physics parameters, read each tick so live edits take effect. */
+  readonly physicsConfig?: () => PhysicsConfig
   /** Resolves contacts between Thrown objects and others; `null` turns contacts off. */
   readonly contactResolver?: ContactResolver | null
 }
@@ -62,7 +69,8 @@ export class TickSimulationEngine implements SimulationEngine {
   private readonly processByDefinitionId: ReadonlyMap<ProcessDefinitionId, WorldObjectProcess>
   private readonly tickDurationMs: number
   private readonly conditionEvaluator: BehaviorConditionEvaluator
-  private readonly thrownFlight: ThrownFlight
+  private readonly mvDrive: MvDrive
+  private readonly physics: PhysicsWorld
   private readonly contactResolver: ContactResolver | null
   private accumulatedGameTimeMs = 0
   private readonly previousPositions = new Map<string, RenderPosition>()
@@ -80,7 +88,9 @@ export class TickSimulationEngine implements SimulationEngine {
 
     this.tickDurationMs = tickDurationMs
     this.conditionEvaluator = conditionEvaluator
-    this.thrownFlight = new ThrownFlight(options.mvConfig)
+    this.physics = new PhysicsWorld(options.physicsConfig)
+    this.mvDrive = new MvDrive(options.mvConfig)
+    this.mvDrive.attach(this.physics)
     this.contactResolver =
       options.contactResolver === undefined ? new ContactResolver() : options.contactResolver
     this.processByDefinitionId = new Map<ProcessDefinitionId, WorldObjectProcess>(
@@ -135,12 +145,24 @@ export class TickSimulationEngine implements SimulationEngine {
 
     state.simulationTick += 1
 
-    // Thrown objects move with last tick's velocity, touch things at that speed, then update velocity.
-    const finished = this.thrownFlight.move(state, this.tickDurationMs)
-    this.contactResolver?.resolve(state)
-    this.thrownFlight.accelerate(state, this.tickDurationMs, finished)
-    if (state.outcome !== 'playing') {
+    // Processes decide and apply Forces, then the physics step moves every body. What depends on the
+    // new positions runs afterwards; contacts see the speed the bodies moved with.
+    if (!this.runProcesses(state, 'tick')) {
       return
+    }
+    this.mvDrive.drive(state, this.tickDurationMs)
+    this.physics.step(state, this.tickDurationMs)
+    if (!this.runProcesses(state, 'afterPhysics')) {
+      return
+    }
+    this.contactResolver?.resolve(state)
+    this.mvDrive.settle(state)
+  }
+
+  /** Runs one phase of the active processes of every object; false once the game is no longer being played. */
+  private runProcesses(state: WorldState, phase: 'tick' | 'afterPhysics'): boolean {
+    if (state.outcome !== 'playing') {
+      return false
     }
 
     for (const worldObject of state.worldObjects) {
@@ -162,18 +184,24 @@ export class TickSimulationEngine implements SimulationEngine {
 
         activeDefinitions.add(rule.processDefinitionId)
         const processInstance = this.getOrCreateProcessInstance(state, worldObject, process)
-        process.tick({
+        const context = {
           state,
           worldObject,
           processInstance,
           tickDurationMs: this.tickDurationMs,
-        })
+        }
+        if (phase === 'tick') {
+          process.tick(context)
+        } else {
+          process.afterPhysics?.(context)
+        }
 
         if (state.outcome !== 'playing') {
-          return
+          return false
         }
       }
     }
+    return true
   }
 
   private getOrCreateProcessInstance(

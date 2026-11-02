@@ -176,8 +176,8 @@ describe('room1Serializer', () => {
   })
 })
 
-describe('generateRoom1Source mv_attr', () => {
-  it('writes only the mv_attr fields that are set', () => {
+describe('generateRoom1Source physics values', () => {
+  it('writes only the physics values that are set', () => {
     const source = generateRoom1Source([
       {
         id: 'dagger',
@@ -186,12 +186,14 @@ describe('generateRoom1Source mv_attr', () => {
         y: 2,
         displayWidth: 72,
         displayHeight: 72,
-        mv_attr: { drag: 1.5, max_velocity: 80 },
+        drag: 1.5,
+        max_velocity: 80,
+        restitution: 0.25,
       },
-      { id: 'guard', role: 'enemy', x: 1, y: 2, displayWidth: 72, displayHeight: 72, mv_attr: {} },
+      { id: 'guard', role: 'enemy', x: 1, y: 2, displayWidth: 72, displayHeight: 72 },
     ])
-    expect(source).toContain('mv_attr: {\n      drag: 1.5,\n      max_velocity: 80,\n    },')
-    expect(source).not.toContain('mass:')
-    expect(source.match(/mv_attr/g)).toHaveLength(2) // one in the object, one in the interface
+    expect(source).toContain('    drag: 1.5,\n    max_velocity: 80,\n    restitution: 0.25,\n')
+    expect(source).not.toContain('mass: ')
+    expect(source).not.toContain('mv_attr')
   })
 })

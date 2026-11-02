@@ -19,19 +19,23 @@ import { COMMAND_INPUT_TEXTURE_KEY } from '../presentation/PhaserCommandInputVie
 import type { WorldState } from '../domain/WorldState.ts'
 import {
   DEFAULT_SPEED_CONFIG,
-  GAME_MV_CONFIG,
-  type MvConfig,
+  type TuningConfig,
+  applyTuningConfig,
   getPlayerSpeedFromObjects,
-  getMvConfig,
+  getTuningConfig,
   createSpeedEditorSession,
 } from './speedEditorSession.ts'
+import { DEFAULT_MV_FORCE } from '../commands/mvConstants.ts'
 import {
-  DEFAULT_MV_DRAG,
-  DEFAULT_MV_FORCE,
-  DEFAULT_MV_MASS,
-  DEFAULT_MV_MAX_VELOCITY,
-  MIN_MV_MASS,
-} from '../commands/mvConstants.ts'
+  DEFAULT_DRAG,
+  DEFAULT_MASS,
+  DEFAULT_MAX_VELOCITY,
+  DEFAULT_MIN_COLLIDE_MOVE_VELOCITY,
+  DEFAULT_MIN_VELOCITY,
+  DEFAULT_RESTITUTION,
+  MIN_MASS,
+} from '../simulation/physicsConstants.ts'
+import { generatePhysicsConstantsSource } from '../simulation/physicsSerializer.ts'
 import { SceneManager } from './SceneManager.ts'
 
 const FONT_FAMILY = '"Press Start 2P", monospace'
@@ -50,7 +54,7 @@ export class SpeedEditorScene extends Phaser.Scene {
   private worldState!: WorldState
   private readonly roomView = new PhaserRoomView()
   private playerSpeed: PlayerSpeedConfig = { ...DEFAULT_SPEED_CONFIG }
-  private mvConfig: MvConfig = getMvConfig()
+  private mvConfig: TuningConfig = getTuningConfig()
 
   private panelContainer: Phaser.GameObjects.Container | undefined
   private headerText: Phaser.GameObjects.Text | undefined
@@ -59,7 +63,7 @@ export class SpeedEditorScene extends Phaser.Scene {
   private testMvButton: Phaser.GameObjects.Container | undefined
 
   private speedFields: Map<keyof PlayerSpeedConfig, Phaser.GameObjects.Text> = new Map()
-  private mvFields: Map<keyof MvConfig, Phaser.GameObjects.Text> = new Map()
+  private mvFields: Map<keyof TuningConfig, Phaser.GameObjects.Text> = new Map()
   private telemetrySpeedText: Phaser.GameObjects.Text | undefined
   private telemetryVelocityText: Phaser.GameObjects.Text | undefined
   private telemetryInputText: Phaser.GameObjects.Text | undefined
@@ -89,12 +93,13 @@ export class SpeedEditorScene extends Phaser.Scene {
 
     // Initialize player speed and mv speed
     this.playerSpeed = getPlayerSpeedFromObjects(ROOM1_OBJECTS)
-    this.mvConfig = getMvConfig(GAME_MV_CONFIG)
+    this.mvConfig = getTuningConfig()
 
     // Create session reusing main game movement code and dynamic mv speed
     const bundle = createSpeedEditorSession({
       playerSpeed: this.playerSpeed,
       mvConfig: () => this.mvConfig,
+      physicsConfig: () => this.mvConfig,
     })
     this.session = bundle.session
     this.worldState = bundle.worldState
@@ -245,10 +250,13 @@ export class SpeedEditorScene extends Phaser.Scene {
       .setOrigin(0.5, 0)
     items.push(mvTitle)
 
-    this.buildMvControlRow('mv_force', 'FORCE (px/s²)', 'Pull toward target (global)', 40, [-250, -50, 50, 250], items)
-    this.buildMvControlRow('drag', 'DRAG (1/s)', 'Default velocity loss per second', 92, [-0.5, -0.1, 0.1, 0.5], items)
-    this.buildMvControlRow('mass', 'MASS', 'Default mass (force ÷ mass)', 144, [-1, -0.1, 0.1, 1], items)
-    this.buildMvControlRow('max_velocity', 'MAX VELOCITY (px/s)', 'Default speed cap', 196, [-100, -50, 50, 100], items)
+    this.buildMvControlRow('mv_force', 'FORCE (px/s²)', 'mv pull toward target', 34, [-250, -50, 50, 250], items)
+    this.buildMvControlRow('drag', 'DRAG (1/s)', 'Default velocity loss per second', 72, [-0.5, -0.1, 0.1, 0.5], items)
+    this.buildMvControlRow('mass', 'MASS', 'Default mass (force ÷ mass)', 110, [-1, -0.1, 0.1, 1], items)
+    this.buildMvControlRow('max_velocity', 'MAX VELOCITY (px/s)', 'Default speed cap', 148, [-100, -50, 50, 100], items)
+    this.buildMvControlRow('restitution', 'RESTITUTION', 'Default bounce (pair = product)', 186, [-0.25, -0.05, 0.05, 0.25], items)
+    this.buildMvControlRow('min_velocity', 'MIN VELOCITY (px/s)', 'Below this, unpushed bodies rest', 224, [-5, -1, 1, 5], items)
+    this.buildMvControlRow('min_collide_move_velocity', 'MIN MOVE (px/s)', 'Rest bodies gaining less stay put', 262, [-50, -10, 10, 50], items)
 
     const testMvBtn = this.createButton(
       795,
@@ -436,7 +444,7 @@ export class SpeedEditorScene extends Phaser.Scene {
   }
 
   private buildMvControlRow(
-    property: keyof MvConfig,
+    property: keyof TuningConfig,
     title: string,
     subtitle: string,
     y: number,
@@ -655,10 +663,10 @@ export class SpeedEditorScene extends Phaser.Scene {
     this.refreshSpeedPanelFields()
   }
 
-  public setMvConfig(next: Partial<MvConfig>): void {
+  public setMvConfig(next: Partial<TuningConfig>): void {
     Object.assign(this.mvConfig, next)
-    this.mvConfig.mass = Math.max(MIN_MV_MASS, this.mvConfig.mass)
-    Object.assign(GAME_MV_CONFIG, this.mvConfig)
+    this.mvConfig.mass = Math.max(MIN_MASS, this.mvConfig.mass)
+    applyTuningConfig(this.mvConfig)
     this.refreshSpeedPanelFields()
   }
 
@@ -671,7 +679,7 @@ export class SpeedEditorScene extends Phaser.Scene {
     }
   }
 
-  public adjustMv(delta: number, property: keyof MvConfig): void {
+  public adjustMv(delta: number, property: keyof TuningConfig): void {
     const current = this.mvConfig[property]
     const next = Math.round((current + delta) * 1000) / 1000
     if (next !== current) {
@@ -695,7 +703,7 @@ export class SpeedEditorScene extends Phaser.Scene {
     }
   }
 
-  public promptMv(property: keyof MvConfig): void {
+  public promptMv(property: keyof TuningConfig): void {
     this.isPromptOpen = true
     this.session.releaseAllKeys()
     const current = this.mvConfig[property]
@@ -723,9 +731,12 @@ export class SpeedEditorScene extends Phaser.Scene {
     this.setPlayerSpeed(DEFAULT_SPEED_CONFIG)
     this.setMvConfig({
       mv_force: DEFAULT_MV_FORCE,
-      drag: DEFAULT_MV_DRAG,
-      mass: DEFAULT_MV_MASS,
-      max_velocity: DEFAULT_MV_MAX_VELOCITY,
+      drag: DEFAULT_DRAG,
+      mass: DEFAULT_MASS,
+      max_velocity: DEFAULT_MAX_VELOCITY,
+      restitution: DEFAULT_RESTITUTION,
+      min_velocity: DEFAULT_MIN_VELOCITY,
+      min_collide_move_velocity: DEFAULT_MIN_COLLIDE_MOVE_VELOCITY,
     })
   }
 
@@ -763,15 +774,16 @@ export class SpeedEditorScene extends Phaser.Scene {
     if (player) {
       player.speed = { ...this.playerSpeed }
     }
-    Object.assign(GAME_MV_CONFIG, this.mvConfig)
+    applyTuningConfig(this.mvConfig)
 
     const room1Source = generateRoom1Source(ROOM1_OBJECTS)
     const mvSource = generateMvConstantsSource(this.mvConfig)
+    const physicsSource = generatePhysicsConstantsSource(this.mvConfig)
     const bg = this.saveButton?.getAt(0) as Phaser.GameObjects.Rectangle | undefined
     const label = this.saveButton?.getAt(1) as Phaser.GameObjects.Text | undefined
 
     try {
-      const [room1Response, mvResponse] = await Promise.all([
+      const [room1Response, mvResponse, physicsResponse] = await Promise.all([
         fetch('/api/save-room1', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -782,6 +794,11 @@ export class SpeedEditorScene extends Phaser.Scene {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ content: mvSource }),
         }),
+        fetch('/api/save-physics', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: physicsSource }),
+        }),
       ])
 
       if (!room1Response.ok) {
@@ -789,6 +806,9 @@ export class SpeedEditorScene extends Phaser.Scene {
       }
       if (!mvResponse.ok) {
         throw new Error(`Server returned ${mvResponse.status} on save-mv: ${mvResponse.statusText}`)
+      }
+      if (!physicsResponse.ok) {
+        throw new Error(`Server returned ${physicsResponse.status} on save-physics: ${physicsResponse.statusText}`)
       }
 
       const room1Result = await room1Response.json()
@@ -799,6 +819,11 @@ export class SpeedEditorScene extends Phaser.Scene {
       const mvResult = await mvResponse.json()
       if (!mvResult.success) {
         throw new Error(mvResult.error ?? 'Unknown save-mv error')
+      }
+
+      const physicsResult = await physicsResponse.json()
+      if (!physicsResult.success) {
+        throw new Error(physicsResult.error ?? 'Unknown save-physics error')
       }
 
       if (bg && label) {

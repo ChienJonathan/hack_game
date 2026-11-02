@@ -1,4 +1,4 @@
-import type { MvAttrConfig, PlayerSpeedConfig, WorldObjectRole } from '../content/room1.ts'
+import type { PhysicsAttrConfig, PlayerSpeedConfig, WorldObjectRole } from '../content/room1.ts'
 import { GAME_WEAPON_CONFIG } from '../content/weaponConstants.ts'
 import { computeCollisionSize } from '../content/room1WorldState.ts'
 
@@ -80,7 +80,10 @@ export interface ScalableMovableObject {
   attackDurationMs?: number
   holdOffsetX?: number
   holdOffsetY?: number
-  mv_attr?: MvAttrConfig
+  drag?: number
+  mass?: number
+  max_velocity?: number
+  restitution?: number
 }
 
 export interface MoveChange {
@@ -140,31 +143,25 @@ export interface ColliderChange {
   readonly nextHeight: number
 }
 
-export type MvAttrKey = keyof MvAttrConfig
+export type PhysicsAttrKey = keyof PhysicsAttrConfig
 
-/** Sets or clears (undefined) one per-object mv override; an emptied `mv_attr` is dropped. */
-export function setMvAttrValue(
+/** Sets or clears (undefined) one per-object physics value; a cleared value falls back to the global default. */
+export function setPhysicsAttrValue(
   target: ScalableMovableObject,
-  key: MvAttrKey,
+  key: PhysicsAttrKey,
   value: number | undefined,
 ): void {
-  const next: MvAttrConfig = { ...target.mv_attr }
   if (value === undefined) {
-    delete next[key]
+    delete target[key]
   } else {
-    next[key] = value
-  }
-  if (Object.keys(next).length === 0) {
-    delete target.mv_attr
-  } else {
-    target.mv_attr = next
+    target[key] = value
   }
 }
 
-export interface MvAttrChange {
-  readonly type: 'mv_attr'
+export interface PhysicsAttrChange {
+  readonly type: 'physics_attr'
   readonly objectId: string
-  readonly key: MvAttrKey
+  readonly key: PhysicsAttrKey
   /** undefined means "no override, use the global default". */
   readonly prevValue: number | undefined
   readonly nextValue: number | undefined
@@ -189,7 +186,7 @@ export type EditorChange =
   | ScaleChange
   | PropertyChange
   | ColliderChange
-  | MvAttrChange
+  | PhysicsAttrChange
   | SpawnChange
   | DespawnChange
 
@@ -246,9 +243,9 @@ export function invertChange(change: EditorChange): EditorChange {
         nextWidth: change.prevWidth,
         nextHeight: change.prevHeight,
       }
-    case 'mv_attr':
+    case 'physics_attr':
       return {
-        type: 'mv_attr',
+        type: 'physics_attr',
         objectId: change.objectId,
         key: change.key,
         prevValue: change.nextValue,
@@ -331,8 +328,8 @@ export function applyChange(target: ScalableMovableObject, change: EditorChange)
       if (change.property === 'colliderHeight') target.colliderHeight = change.nextValue
       break
     }
-    case 'mv_attr': {
-      setMvAttrValue(target, change.key, change.nextValue)
+    case 'physics_attr': {
+      setPhysicsAttrValue(target, change.key, change.nextValue)
       break
     }
     case 'collider': {

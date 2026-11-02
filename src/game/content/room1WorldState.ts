@@ -3,6 +3,7 @@ import type { Room } from '../domain/Room.ts'
 import type { WorldObject } from '../domain/WorldObject.ts'
 import type { WorldState } from '../domain/WorldState.ts'
 import { defaultColliderTags } from '../domain/ColliderTag.ts'
+import { PHYSICS_ATTR_KEYS, type PhysicsAttrOverride } from '../domain/PhysicsAttr.ts'
 import { ALWAYS_ACTIVE_BEHAVIOR } from '../processes/BehaviorRule.ts'
 import {
   ROOM_IDS,
@@ -19,6 +20,13 @@ import {
 } from './room1Constants.ts'
 import { ROOM1_OBJECTS, type RoomObjectConfig, type WorldObjectRole } from './room1.ts'
 
+const ROOM_BOUNDS = {
+  left: ROOM_LAYOUT.left,
+  top: ROOM_LAYOUT.top,
+  right: ROOM_LAYOUT.right,
+  bottom: ROOM_LAYOUT.bottom,
+}
+
 const alwaysActiveRule = (processDefinitionId: string) => ({
   condition: ALWAYS_ACTIVE_BEHAVIOR,
   processDefinitionId,
@@ -33,8 +41,15 @@ function createRoomWorldObject(
   return new BasicWorldObject(id, ROOM_IDS.first, metadata, behaviorRules, state)
 }
 
-function mvAttrState(obj: RoomObjectConfig): { mv_attr?: { drag?: number; mass?: number; max_velocity?: number } } {
-  return obj.mv_attr ? { mv_attr: { ...obj.mv_attr } } : {}
+function physicsAttrState(obj: RoomObjectConfig): PhysicsAttrOverride {
+  const attrs: PhysicsAttrOverride = {}
+  for (const key of PHYSICS_ATTR_KEYS) {
+    const value = obj[key]
+    if (typeof value === 'number') {
+      attrs[key] = value
+    }
+  }
+  return attrs
 }
 
 export function resolveScale(
@@ -49,10 +64,6 @@ export function resolveScale(
   return { scaleX, scaleY }
 }
 
-export function hasCollisionBox(role: WorldObjectRole): boolean {
-  return role !== 'weapon'
-}
-
 export function computeCollisionSize(
   role: WorldObjectRole,
   scaleX: number,
@@ -60,17 +71,19 @@ export function computeCollisionSize(
   explicitWidth?: number,
   explicitHeight?: number,
 ): { width: number; height: number } {
-  if (role === 'weapon') {
-    return {
-      width: Math.max(12, Math.round(DAGGER_SIZE.width * scaleX)),
-      height: Math.max(12, Math.round(DAGGER_SIZE.height * scaleY)),
-    }
-  }
+  const minSize = role === 'weapon' ? 12 : 16
 
   if (typeof explicitWidth === 'number' && typeof explicitHeight === 'number') {
     return {
-      width: Math.max(16, Math.round(explicitWidth)),
-      height: Math.max(16, Math.round(explicitHeight)),
+      width: Math.max(minSize, Math.round(explicitWidth)),
+      height: Math.max(minSize, Math.round(explicitHeight)),
+    }
+  }
+
+  if (role === 'weapon') {
+    return {
+      width: Math.max(minSize, Math.round(DAGGER_SIZE.width * scaleX)),
+      height: Math.max(minSize, Math.round(DAGGER_SIZE.height * scaleY)),
     }
   }
 
@@ -99,7 +112,7 @@ export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJE
         {
           x: obj.x,
           y: obj.y,
-          ...mvAttrState(obj),
+          ...physicsAttrState(obj),
           width,
           height,
           collisionBox: { width, height },
@@ -149,7 +162,7 @@ export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJE
 
     if (obj.role === 'weapon') {
       const { scaleX, scaleY } = resolveScale(obj, DAGGER_SIZE.width, DAGGER_SIZE.height)
-      const { width, height } = computeCollisionSize('weapon', scaleX, scaleY)
+      const { width, height } = computeCollisionSize('weapon', scaleX, scaleY, obj.colliderWidth, obj.colliderHeight)
       return createRoomWorldObject(
         obj.id,
         { name: obj.id, role: 'weapon', weaponId: 'dagger', discoverable: true, colliderTags: defaultColliderTags('weapon') },
@@ -157,10 +170,12 @@ export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJE
         {
           x: obj.x,
           y: obj.y,
-          ...mvAttrState(obj),
+          ...physicsAttrState(obj),
           width,
           height,
-          collisionBox: null,
+          collisionBox: { width, height },
+          colliderWidth: obj.colliderWidth ?? width,
+          colliderHeight: obj.colliderHeight ?? height,
           displayWidth: obj.displayWidth,
           displayHeight: obj.displayHeight,
           scaleX,
@@ -188,7 +203,7 @@ export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJE
         {
           x: obj.x,
           y: obj.y,
-          ...mvAttrState(obj),
+          ...physicsAttrState(obj),
           width,
           height,
           collisionBox: { width, height },
@@ -215,7 +230,7 @@ export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJE
       {
         x: obj.x,
         y: obj.y,
-        ...mvAttrState(obj),
+        ...physicsAttrState(obj),
         width,
         height,
         collisionBox: { width, height },
@@ -245,6 +260,7 @@ export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJE
     objectIds: worldObjects.map((o) => o.id),
     exits: [{ targetRoomId: ROOM_IDS.second, label: ROOM_NAMES[ROOM_IDS.second], ...ROOM_LAYOUT.exit }],
     state: { name: ROOM_NAMES[ROOM_IDS.first], width: ROOM_LAYOUT.width, height: ROOM_LAYOUT.height },
+    bounds: ROOM_BOUNDS,
   }
 
   const secondRoom: Room = {
@@ -252,6 +268,7 @@ export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJE
     objectIds: [],
     exits: [],
     state: { name: ROOM_NAMES[ROOM_IDS.second], width: ROOM_LAYOUT.width, height: ROOM_LAYOUT.height },
+    bounds: ROOM_BOUNDS,
   }
 
   return {

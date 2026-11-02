@@ -3,12 +3,15 @@ import {
   createSpeedEditorSession,
   DEFAULT_SPEED_CONFIG,
   getPlayerSpeedFromObjects,
-  getMvConfig,
+  getTuningConfig,
   GAME_MV_CONFIG,
+  GAME_PHYSICS_CONFIG,
+  applyTuningConfig,
 } from './speedEditorSession.ts'
 import { WORLD_OBJECT_IDS } from '../content/room1Constants.ts'
 import { generateRoom1Source } from '../content/room1Serializer.ts'
 import { generateMvConstantsSource } from '../commands/mvSerializer.ts'
+import { generatePhysicsConstantsSource } from '../simulation/physicsSerializer.ts'
 import type { RoomObjectConfig } from '../content/room1.ts'
 
 describe('SpeedEditorScene', () => {
@@ -57,14 +60,15 @@ describe('SpeedEditorScene', () => {
     })
   })
 
-  describe('getMvConfig', () => {
-    it('returns the global mv config when no override is given', () => {
-      expect(getMvConfig()).toEqual({ ...GAME_MV_CONFIG })
+  describe('getTuningConfig', () => {
+    it('returns the global mv and physics config when no override is given', () => {
+      expect(getTuningConfig()).toEqual({ ...GAME_MV_CONFIG, ...GAME_PHYSICS_CONFIG })
     })
 
     it('overrides only the given fields', () => {
-      expect(getMvConfig({ mv_force: 1500, drag: 2 })).toEqual({
+      expect(getTuningConfig({ mv_force: 1500, drag: 2 })).toEqual({
         ...GAME_MV_CONFIG,
+        ...GAME_PHYSICS_CONFIG,
         mv_force: 1500,
         drag: 2,
       })
@@ -281,14 +285,43 @@ describe('SpeedEditorScene', () => {
     })
 
     it('serializes the mv config to mv constants', () => {
-      const source = generateMvConstantsSource({ mv_force: 1200, drag: 0.4, mass: 2, max_velocity: 450 })
+      const source = generateMvConstantsSource({ mv_force: 1200 })
 
       expect(source).toContain('export const DEFAULT_MV_FORCE = 1200')
-      expect(source).toContain('export const DEFAULT_MV_DRAG = 0.4')
-      expect(source).toContain('export const DEFAULT_MV_MASS = 2')
-      expect(source).toContain('export const DEFAULT_MV_MAX_VELOCITY = 450')
       expect(source).toContain('export const GAME_MV_CONFIG: MvConfig = {')
+      expect(source).not.toContain('DEFAULT_MV_DRAG')
       expect(source).not.toContain('mv_speed')
+    })
+
+    it('serializes the physics config to physics constants', () => {
+      const source = generatePhysicsConstantsSource({
+        drag: 0.4,
+        mass: 2,
+        max_velocity: 450,
+        restitution: 0.3,
+        min_velocity: 4,
+        min_collide_move_velocity: 60,
+      })
+
+      expect(source).toContain('export const DEFAULT_DRAG = 0.4')
+      expect(source).toContain('export const DEFAULT_MASS = 2')
+      expect(source).toContain('export const DEFAULT_MAX_VELOCITY = 450')
+      expect(source).toContain('export const DEFAULT_RESTITUTION = 0.3')
+      expect(source).toContain('export const DEFAULT_MIN_VELOCITY = 4')
+      expect(source).toContain('export const DEFAULT_MIN_COLLIDE_MOVE_VELOCITY = 60')
+      expect(source).toContain('export const GAME_PHYSICS_CONFIG: PhysicsConfig = {')
+    })
+
+    it('copies a tuning config into the live mv and physics configs', () => {
+      const before = { mv: { ...GAME_MV_CONFIG }, physics: { ...GAME_PHYSICS_CONFIG } }
+      try {
+        applyTuningConfig({ ...getTuningConfig(), mv_force: 123, restitution: 0.9 })
+        expect(GAME_MV_CONFIG.mv_force).toBe(123)
+        expect(GAME_PHYSICS_CONFIG.restitution).toBe(0.9)
+      } finally {
+        Object.assign(GAME_MV_CONFIG, before.mv)
+        Object.assign(GAME_PHYSICS_CONFIG, before.physics)
+      }
     })
   })
 })
