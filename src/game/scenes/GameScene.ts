@@ -151,6 +151,15 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.session.inputMode === 'movement') {
+      if (INPUT_BINDINGS.enterCommandMode.includes(key)) {
+        event.preventDefault()
+        if (!event.repeat) {
+          this.session.enterCommandMode()
+          this.commandInputView?.setInputEnabled(true)
+        }
+        return false
+      }
+
       if (INPUT_BINDINGS.attack.keys.includes(key)) {
         event.preventDefault()
         if (!event.repeat) {

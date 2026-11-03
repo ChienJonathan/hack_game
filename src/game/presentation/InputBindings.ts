@@ -9,6 +9,7 @@ interface ActionBinding {
 
 export interface InputBindings {
   readonly movement: MovementBindings
+  readonly enterCommandMode: readonly string[]
   readonly exitCommandMode: readonly string[]
   readonly attack: ActionBinding
 }
@@ -21,6 +22,7 @@ export const INPUT_BINDINGS: InputBindings = {
     left: ['arrowleft'],
     right: ['arrowright'],
   },
+  enterCommandMode: ['enter'],
   exitCommandMode: ['escape'],
   attack: { keys: [' ', 'space'], mouseButtons: ['left'] },
 }

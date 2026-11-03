@@ -501,6 +501,11 @@ describe('input bindings and mode switching', () => {
     expect(INPUT_BINDINGS.attack.mouseButtons).toContain('left')
   })
 
+  it('INPUT_BINDINGS binds enter to enter command mode and escape to exit', () => {
+    expect(INPUT_BINDINGS.enterCommandMode).toContain('enter')
+    expect(INPUT_BINDINGS.exitCommandMode).toContain('escape')
+  })
+
   it('GameSession can enter and exit command mode explicitly', () => {
     const session = newSession()
     expect(session.inputMode).toBe('movement')

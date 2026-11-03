@@ -31,8 +31,8 @@ describe('INPUT_BINDINGS', () => {
     expect(INPUT_BINDINGS.exitCommandMode).toContain('escape')
   })
 
-  it('does not bind enter to enter or toggle shell mode', () => {
-    expect('toggleMode' in INPUT_BINDINGS).toBe(false)
+  it('binds enter to enter command mode', () => {
+    expect(INPUT_BINDINGS.enterCommandMode).toContain('enter')
   })
 })
 
