@@ -240,7 +240,7 @@ export class LevelEditorScene extends Phaser.Scene {
 
     // Back-to-game key hint
     const backHint = this.add
-      .text(ROOM_LAYOUT.right, 16, 'PgUp/PgDn: Rooms · P: Panel · F3: Speed · F4: AI · F2/ESC: Game', {
+      .text(ROOM_LAYOUT.right, 16, 'PgUp/PgDn: Rooms · P: Panel · F1: Command · F3: Speed · F4: AI · F2/ESC: Game', {
         fontFamily: FONT_FAMILY,
         fontSize: 11,
         color: DIM_COLOR,

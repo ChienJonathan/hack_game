@@ -254,9 +254,11 @@ classDiagram
   LevelEditorScene --> EditorHistory : manages undo stack
   LevelEditorScene ..> room1Serializer : serializes RoomObjectConfig[]
   SceneManager ..> GameScene : manages transitions & hotkeys
+  SceneManager ..> CommandEditorOverlay : manages F1 toggle & Esc
   SceneManager ..> LevelEditorScene : manages transitions (F2 toggle / Esc)
   SceneManager ..> SpeedEditorScene : manages transitions (F3 toggle / Esc)
   SceneManager ..> BehaviorTreeEditorScene : manages transitions (F4 toggle / Esc)
+  CommandEditorOverlay ..> GameScene : overlays gameplay level & reuses live simulation
   SpeedEditorScene ..> room1 : reads & overwrites ROOM1_OBJECTS
   SpeedEditorScene ..> speedEditorSession : wraps GameSession & TickSimulationEngine
   speedEditorSession --> PlayerMovementProcess : reuses main movement physics
@@ -274,7 +276,7 @@ src/
   application/  GameSession.ts, InputModeController.ts
   ai/           behaviorTree/{BehaviorTreeTypes.ts, BehaviorTreeEvaluator.ts, BehaviorTreePresets.ts, BehaviorTreeProcess.ts, BehaviorTreeModel.ts}
   content/      room1.ts, room1Constants.ts, weaponConstants.ts, archerConstants.ts, room1Commands.ts, room1Serializer.ts, room1WorldState.ts, createRoom1Session.ts, roomPieces.ts, tutorialRooms.ts, homeArea.ts
-  scenes/       GameScene.ts, SceneManager.ts, LevelEditorScene.ts, levelEditorHistory.ts, SpeedEditorScene.ts, speedEditorSession.ts, BehaviorTreeEditorScene.ts, aiEditorSession.ts
+  scenes/       GameScene.ts, SceneManager.ts, CommandEditorOverlay.ts, LevelEditorScene.ts, levelEditorHistory.ts, SpeedEditorScene.ts, speedEditorSession.ts, BehaviorTreeEditorScene.ts, aiEditorSession.ts
   domain/       WorldState.ts, Room.ts, WorldObject.ts, BasicWorldObject.ts, CharacterState.ts, CollisionWorld.ts, CollisionResponse.ts, ColliderTag.ts, PhysicsAttr.ts, PlayerDefeat.ts, RoomTravel.ts, PressurePlate.ts, CombatService.ts, PickUpService.ts, WeaponDefinition.ts, ids.ts, JsonValue.ts, WorldPath.ts, WorldPathResolver.ts, VirtualWorldPathResolver.ts
   processes/    BehaviorRule.ts, ProcessDefinition.ts, ProcessInstance.ts
   commands/     mvConstants.ts, mvSerializer.ts, CommandSubmissionService.ts, CommandRegistry.ts, RegisteredCommandRegistry.ts, CommandParser.ts, VirtualCommandParser.ts, CommandRequirement.ts, CommandRequirementChecker.ts, EveryCommandRequirementChecker.ts, ParsedCommand.ts, CommandHistory.ts, CommandFeedback.ts, CommandResult.ts, executors/{base.ts, help.ts, ls.ts, mv.ts, cd.ts}
@@ -332,6 +334,7 @@ Editable configurations in `room1` export directly to `room1.ts` (`ROOM1_OBJECTS
 | **Physics** | Per-object `drag`, `friction`, `mass`, `max_velocity`, `restitution` values (`+/-`, click value for prompt, `R` resets one to the default; unset values show the global default dimmed). Written to `room1.ts` as top-level fields, only for the fields set |
 | **Test Equip** | `TEST EQUIP` / `TEST UNEQUIP` button toggles preview attachment to player at hold offsets, moving with player |
 | **Test Attack** | `TEST ATTACK` button (or `Space` with weapon selected) runs attack translation animation ($d(t) = \text{round}(\sin(t \cdot \pi) \cdot \text{dist})$) |
+| **Command Editor Access** | **F1** shortcut |
 | **Speed Editor Access** | `OPEN SPEED EDITOR (F3)` button or **F3** shortcut |
 | **AI Editor Access** | `AI EDITOR (F4)` button or **F4** shortcut |
 | **Return to Game** | **F2**, **Escape**, top hint, or `PLAY <ROOM> (F2)` button (plays game directly from currently selected room) |
@@ -347,9 +350,38 @@ All weapon constants, animation translation curves, and runtime configurations a
 - **Easing Curve**: `computeDaggerAttackTranslation(elapsedMs, durationMs, distance)` applies half-sine easing $d(t) = \text{round}(\sin(t \cdot \pi) \cdot \text{distance})$ extending the weapon outward to max distance at midpoint and returning smoothly to baseline.
 - **Runtime Mutability & Serialization**: Shared `GAME_WEAPON_CONFIG` allows live updates from `LevelEditorScene` and undo/redo stacks. Object configs in `ROOM1_OBJECTS` (`src/game/content/room1.ts`) optionally persist custom `attackDistance`, `attackDurationMs`, `holdOffsetX`, and `holdOffsetY` per weapon instance, formatted and exported via `room1Serializer.ts`. Backwards compatibility is preserved through re-exports in `room1Constants.ts`.
 
+## Command Editor
+
+`CommandEditorOverlay` provides live in-game command tuning overlaying the gameplay level (`GameScene`). Accessible from anywhere via **F1**; pressing **F1**, **Escape**, or the `CLOSE (F1 / ESC)` button closes the overlay.
+
+The Command Editor directly overlays the active gameplay level and reuses its live simulation, room view, world state, and command terminal without creating an isolated mock session.
+
+### Parameters (MV & Physics Defaults)
+
+| Parameter | Default | Unit | Description |
+|---|:---:|:---:|---|
+| `mv_acceleration` | 5000 | px/s² | Pull toward target (global; Force is mass × this, so mass does not change it) |
+| `drag` | 0.5 | 1/s | Default air loss of speed per second for objects without their own value |
+| `friction` | 1 | 1/s | Default ground loss of speed per second; not applied while Thrown |
+| `mass` | 1 | - | Default mass (minimum 0.001) |
+| `max_velocity` | 1000 | px/s | Default speed cap on force-added velocity |
+| `restitution` | 0.5 | - | Default bounce; a Collision uses the product of both objects' values |
+| `min_velocity` | 5 | px/s | Below this, an unpushed body rests |
+| `min_collide_move_velocity` | 50 | px/s | A resting body gaining less in a Collision stays put |
+
+### Features & Runtime Behavior
+
+- **Gameplay Level Overlay**: Mounts directly on `GameScene` at `y = 670..1040` (depth 100), keeping the active room chamber visible above so players can observe Throws in real time.
+- **Direct Code & Session Reuse**: Calls `session.submitCommand` directly on the active room's `GameSession`, updating the live world state and streaming feedback into `PhaserCommandInputView`.
+- **Live MV Telemetry**: Tracks active thrown entity state (object ID, real-time speed in `px/s`, velocity vectors, target) directly from the room's live simulation ticks as commands are entered in the terminal.
+- **Step & Direct Input**: `+` / `−` step buttons (Shift for 5x multiplier) or click parameter values for prompt number input. Clamped to safe thresholds.
+- **Save Changes**: `SAVE CHANGES` button writes `mv_acceleration` to `src/game/commands/mvConstants.ts` via `/api/save-mv` and global physics defaults to `src/game/simulation/physicsConstants.ts` via `/api/save-physics`, immediately syncing runtime `GAME_MV_CONFIG` and `GAME_PHYSICS_CONFIG`.
+- **Reset Defaults**: Restores default values for `mv_acceleration` and the seven global physics parameters.
+- **Navigation & Hotkeys**: **F1** toggles the Command Editor from `GameScene` or returns to the active game scene with the overlay open from any other editor. **Escape** closes the overlay.
+
 ## Speed Editor
 
-`SpeedEditorScene` (`'speed-editor'`) tunes player movement and `mv` throw physics in real time. It directly reuses main game simulation (`GameSession`, `InputModeController`, `TickSimulationEngine`, `PlayerMovementProcess`, `DaggerPickupProcess`).
+`SpeedEditorScene` (`'speed-editor'`) tunes player movement speed in real time. (MV throw physics tuning has moved to the **Command Editor** accessible via **F1**). It reuses main game movement simulation (`GameSession`, `InputModeController`, `TickSimulationEngine`, `PlayerMovementProcess`).
 
 ### Physics Parameters
 
@@ -362,31 +394,15 @@ All weapon constants, animation translation curves, and runtime configurations a
 | `frictionAcceleration` | 3000 | px/s² | Braking deceleration when movement input stops |
 | `turnaroundAcceleration` | 1600 | px/s² | Snappy reversal acceleration opposing velocity |
 
-#### MV and Physics Defaults
-
-| Parameter | Default | Unit | Description |
-|---|:---:|:---:|---|
-| `mv_acceleration` | 5000 | px/s² | Pull toward the target (global; the Force is mass × this, so mass does not change it) |
-| `drag` | 0.5 | 1/s | Default air loss of speed per second for objects without their own value |
-| `friction` | 1 | 1/s | Default ground loss of speed per second; not applied while Thrown |
-| `mass` | 1 | - | Default mass (minimum 0.001) |
-| `max_velocity` | 1000 | px/s | Default speed cap |
-| `restitution` | 0.5 | - | Default bounce; a Collision uses the product of both objects' values |
-| `min_velocity` | 5 | px/s | Below this, a body with no Force applied is set to rest |
-| `min_collide_move_velocity` | 50 | px/s | A resting body that would gain less than this in a Collision counts as infinitely heavy |
-
-`mv_acceleration` is in `mvConstants.ts`; the rest are the global defaults in `physicsConstants.ts`. Per-object values are set in the Level Editor.
-
 ### Features & Runtime Behavior
 
 - **Live Tuning While Moving**: Keyboard movement (Arrows) runs continuously during mouse interaction, giving immediate tactile feedback on physics changes.
-- **MV Command Tuning & Testing**: Dedicated controls for `mv_acceleration` and the seven physics defaults, paired with an interactive `TEST MV (THROW DAGGER)` button to test the throw in real time. The session runs without the contact resolver, so the thrown dagger does not hurt the static guards; the physics step stays on.
 - **Step & Direct Input**: Parameter buttons (`+` / `−` with step sizes, Shift: 5x multiplier) or click value for exact number prompt. Clamped to minimum safe values.
-- **Live Telemetry**: Displays real-time player speed (`px/s`), velocity vectors (`vx`, `vy`), input direction (`moveX`, `moveY`), dynamic visual speedometer gauge, and active `mv` thrown entity telemetry.
+- **Live Telemetry & Speedometer**: Displays real-time player speed (`px/s`), velocity vectors (`vx`, `vy`), input direction (`moveX`, `moveY`), and dynamic visual speedometer gauge bar.
 - **Reset Position**: **R** (or `RESET POSITIONS (R)` button) snaps player and dagger back to start coordinates with zero velocity for clean trials.
-- **Reset Defaults**: Restores default physics values for both player and the mv and physics defaults.
-- **Save Changes**: `SAVE CHANGES` button writes updated player speed directly to `src/game/content/room1.ts` via `/api/save-room1` (`ROOM1_OBJECTS`) saves `mv_acceleration` to `src/game/commands/mvConstants.ts` via `/api/save-mv` and the physics defaults to `src/game/simulation/physicsConstants.ts` via `/api/save-physics`, syncing the global runtime `GAME_MV_CONFIG` and `GAME_PHYSICS_CONFIG`.
-- **Navigation**: Accessible from anywhere via **F3**; **Escape** or **F3** exits to the current active playable scene (`'game'`), **F2** opens Level Editor, **F4** opens AI Editor.
+- **Reset Defaults**: Restores default player movement physics values.
+- **Save Changes**: `SAVE CHANGES` button writes updated player speed directly to `src/game/content/room1.ts` via `/api/save-room1` (`ROOM1_OBJECTS`).
+- **Navigation**: Accessible from anywhere via **F3**; **Escape** or **F3** exits to the current active playable scene (`'game'`), **F1** opens Command Editor, **F2** opens Level Editor, **F4** opens AI Editor.
 
 ## Behavior Tree & AI System
 
@@ -431,7 +447,7 @@ Each node evaluates to one of three statuses per simulation tick:
 
 2. **Top Navigation & Simulation Toolbar (`y = 14..62`)**:
    - Organized in a dual-row header preventing UI overlaps:
-     - Row 1 (`y = 14`): Scene title and clean navigation hotkey hints (**R** for reset, **P** for panel toggle, **F2** for Level Editor, **F3** for Speed Editor, **F4** / **ESC** for Game).
+     - Row 1 (`y = 14`): Scene title and clean navigation hotkey hints (**R** for reset, **P** for panel toggle, **F1** for Command Editor, **F2** for Level Editor, **F3** for Speed Editor, **F4** / **ESC** for Game).
      - Row 2 (`y = 48`): Preset selector buttons (`STD GUARD`, `PATROL GUARD`, `CYBER BOSS`, `HIT & RUN`, `TANK BOSS`) with active selection highlights on the left; playback controls on the right (`PAUSE (SPC)` / `RESUME (SPC)`, `STEP (T)`, `RESET (R)`).
 
 3. **Bottom Dock Panel (`y = 720..1015`, toggleable with P key)**:
@@ -444,6 +460,7 @@ Each node evaluates to one of three statuses per simulation tick:
 | Action | Control |
 |---|---|
 | **Open AI Editor** | **F4** (from anywhere) or **AI EDITOR (F4)** button in Level Editor |
+| **Open Command Editor** | **F1** |
 | **Open Level Editor** | **F2** |
 | **Open Speed Editor** | **F3** |
 | **Move Player in Room** | **Arrow keys** |

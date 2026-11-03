@@ -81,7 +81,7 @@ export class SceneManager {
   }
 
   public isEditorScene(key: string): boolean {
-    return this.editors.some((e) => e.key === key)
+    return key === 'command-editor' || this.editors.some((e) => e.key === key)
   }
 
   public isPlayableScene(key: string): boolean {
@@ -120,7 +120,45 @@ export class SceneManager {
     return this.currentSceneKey
   }
 
+  public openCommandEditor(): void {
+    const activeScene = this.getActiveScene()
+    const activeKey = this.getActiveSceneKey()
+    if (this.isEditorScene(activeKey) && activeKey !== 'command-editor') {
+      this.exitEditor({ openCommandEditor: true })
+    } else if (activeScene && typeof (activeScene as any).openCommandEditor === 'function') {
+      (activeScene as any).openCommandEditor()
+    }
+  }
+
+  public closeCommandEditor(): void {
+    const activeScene = this.getActiveScene()
+    if (activeScene && typeof (activeScene as any).closeCommandEditor === 'function') {
+      (activeScene as any).closeCommandEditor()
+    }
+  }
+
+  public toggleCommandEditor(): void {
+    const activeScene = this.getActiveScene()
+    const activeKey = this.getActiveSceneKey()
+    if (this.isEditorScene(activeKey) && activeKey !== 'command-editor') {
+      this.exitEditor({ openCommandEditor: true })
+    } else if (activeScene && typeof (activeScene as any).toggleCommandEditor === 'function') {
+      (activeScene as any).toggleCommandEditor()
+    }
+  }
+
+  public isCommandEditorOpen(): boolean {
+    const activeScene = this.getActiveScene()
+    return typeof (activeScene as any)?.isCommandEditorOpen === 'function'
+      ? (activeScene as any).isCommandEditorOpen()
+      : false
+  }
+
   public openEditor(editorKey: string, data?: object): void {
+    if (editorKey === 'command-editor') {
+      this.openCommandEditor()
+      return
+    }
     const activeScene = this.getActiveScene()
     if (activeScene) {
       if (this.isPlayableScene(activeScene.scene.key)) {
@@ -183,11 +221,23 @@ export class SceneManager {
     const key = event.key.toUpperCase()
     const activeKey = this.getActiveSceneKey()
 
+    // 0. Check if F1 was pressed (Command Editor overlay toggle)
+    if (key === 'F1') {
+      event.preventDefault?.()
+      if (typeof event.stopImmediatePropagation === 'function') {
+        event.stopImmediatePropagation()
+      }
+      this.toggleCommandEditor()
+      return true
+    }
+
     // 1. Check if an editor's hotkey was pressed (e.g. F2, F3, F4)
     const editorConfig = this.getEditorForHotkey(key)
     if (editorConfig) {
-      event.preventDefault()
-      event.stopImmediatePropagation?.()
+      event.preventDefault?.()
+      if (typeof event.stopImmediatePropagation === 'function') {
+        event.stopImmediatePropagation()
+      }
 
       if (activeKey === editorConfig.key) {
         // Pressing an editor's own hotkey exits to active playable scene
@@ -207,10 +257,26 @@ export class SceneManager {
 
     // 2. Check if Escape was pressed
     if (key === 'ESCAPE') {
+      const activeScene = this.getActiveScene()
+      if (
+        activeScene &&
+        typeof (activeScene as any).isCommandEditorOpen === 'function' &&
+        (activeScene as any).isCommandEditorOpen()
+      ) {
+        event.preventDefault?.()
+        if (typeof event.stopImmediatePropagation === 'function') {
+          event.stopImmediatePropagation()
+        }
+        (activeScene as any).closeCommandEditor()
+        return true
+      }
+
       if (this.isEditorScene(activeKey)) {
         // In an editor, Escape exits to active playable scene
-        event.preventDefault()
-        event.stopImmediatePropagation?.()
+        event.preventDefault?.()
+        if (typeof event.stopImmediatePropagation === 'function') {
+          event.stopImmediatePropagation()
+        }
         this.exitEditor()
         return true
       }

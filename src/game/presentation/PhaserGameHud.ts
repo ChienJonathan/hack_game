@@ -22,7 +22,7 @@ export class PhaserGameHud {
     const panel = scene.add.rectangle(32, 760, 1016, 288, 0x101d26, 0.96)
       .setOrigin(0).setStrokeStyle(2, 0x314854)
     this.roomText = label(96, 38, '', 22, '#b7d9d1')
-    const navigation = label(1824, 38, 'F2 Layout   F3 Speed   F4 AI', 18).setOrigin(1, 0)
+    const navigation = label(1824, 38, 'F1 Command   F2 Layout   F3 Speed   F4 AI', 18).setOrigin(1, 0)
     const name = label(64, 786, 'HACKER', 26, '#e7eee4')
     this.modeText = label(1016, 790, '', 18, '#8fd6c5').setOrigin(1, 0)
     const track = scene.add.rectangle(64, 840, 360, 14, 0x293c44).setOrigin(0)

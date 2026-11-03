@@ -48,14 +48,25 @@ describe('GameScene key handling', () => {
     }
 
     // Assign private session and commandInputView for targeted handler testing
+    const mockCommandEditor = {
+      isOpen: vi.fn(() => false),
+      isModalPromptOpen: vi.fn(() => false),
+      open: vi.fn(),
+      close: vi.fn(),
+      toggle: vi.fn(),
+      update: vi.fn(),
+      destroy: vi.fn(),
+    }
+
     Object.assign(scene, {
       session,
       commandInputView: mockCommandInputView,
+      commandEditor: mockCommandEditor,
     })
 
     const handleKeyDown = (scene as unknown as { handleKeyDown: (event: KeyboardEvent) => boolean }).handleKeyDown
 
-    return { scene, session, mockCommandInputView, handleKeyDown }
+    return { scene, session, mockCommandInputView, mockCommandEditor, handleKeyDown }
   }
 
   it('enters command mode when Enter is pressed in movement mode', () => {
@@ -125,5 +136,50 @@ describe('GameScene key handling', () => {
     expect(mockCommandInputView.clearInput).toHaveBeenCalled()
     expect(mockCommandInputView.setInputEnabled).toHaveBeenCalledWith(false)
     expect(result).toBe(false)
+  })
+
+  describe('command editor overlay integration (F1)', () => {
+    it('toggles command editor when F1 is pressed', () => {
+      const { scene, mockCommandEditor, handleKeyDown } = setupScene()
+      const toggleSpy = vi.spyOn(scene, 'toggleCommandEditor')
+
+      const preventDefault = vi.fn()
+      const result = handleKeyDown({
+        key: 'F1',
+        repeat: false,
+        preventDefault,
+      } as unknown as KeyboardEvent)
+
+      expect(preventDefault).toHaveBeenCalled()
+      expect(toggleSpy).toHaveBeenCalled()
+      expect(mockCommandEditor.toggle).toHaveBeenCalled()
+      expect(result).toBe(false)
+    })
+
+    it('closes command editor when Escape is pressed while command editor is open', () => {
+      const { scene, mockCommandEditor, handleKeyDown, mockCommandInputView } = setupScene()
+      mockCommandEditor.isOpen.mockReturnValue(true)
+      const closeSpy = vi.spyOn(scene, 'closeCommandEditor')
+
+      const preventDefault = vi.fn()
+      const result = handleKeyDown({
+        key: 'Escape',
+        repeat: false,
+        preventDefault,
+      } as unknown as KeyboardEvent)
+
+      expect(preventDefault).toHaveBeenCalled()
+      expect(closeSpy).toHaveBeenCalled()
+      expect(mockCommandEditor.close).toHaveBeenCalled()
+      // Does not pass to command input view clearInput
+      expect(mockCommandInputView.clearInput).not.toHaveBeenCalled()
+      expect(result).toBe(false)
+    })
+
+    it('initializes with openCommandEditor flag from init data', () => {
+      const scene = new GameScene()
+      scene.init({ openCommandEditor: true })
+      expect((scene as any).initialOpenCommandEditor).toBe(true)
+    })
   })
 })

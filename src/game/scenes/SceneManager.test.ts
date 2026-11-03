@@ -347,6 +347,80 @@ describe('SceneManager', () => {
     })
   })
 
+  describe('Command Editor (F1) overlay management', () => {
+    it('toggles Command Editor via F1 in playable game scene', () => {
+      const toggleSpy = vi.fn()
+      const gameScene = createMockScene('game', {
+        toggleCommandEditor: toggleSpy,
+      })
+      const mockGame = createMockGame(gameScene)
+      const manager = new SceneManager(mockGame)
+
+      const event = createMockKeyboardEvent('F1')
+      const handled = manager.handleKeyDown(event)
+
+      expect(handled).toBe(true)
+      expect(event.preventDefault).toHaveBeenCalled()
+      expect(event.stopImmediatePropagation).toHaveBeenCalled()
+      expect(toggleSpy).toHaveBeenCalled()
+    })
+
+    it('exits an editor to playable game scene with openCommandEditor when F1 is pressed in editor', () => {
+      const syncSpy = vi.fn()
+      const levelEditorScene = createMockScene('level-editor', {
+        syncToRoom1Objects: syncSpy,
+      })
+      const mockGame = createMockGame(levelEditorScene)
+      const manager = new SceneManager(mockGame)
+      manager.setActivePlayableScene('game')
+
+      const event = createMockKeyboardEvent('F1')
+      const handled = manager.handleKeyDown(event)
+
+      expect(handled).toBe(true)
+      expect(levelEditorScene.scene.start).toHaveBeenCalledWith('game', { openCommandEditor: true })
+    })
+
+    it('closes Command Editor when Escape is pressed while Command Editor is open in playable scene', () => {
+      const closeSpy = vi.fn()
+      const gameScene = createMockScene('game', {
+        isCommandEditorOpen: () => true,
+        closeCommandEditor: closeSpy,
+      })
+      const mockGame = createMockGame(gameScene)
+      const manager = new SceneManager(mockGame)
+
+      const event = createMockKeyboardEvent('Escape')
+      const handled = manager.handleKeyDown(event)
+
+      expect(handled).toBe(true)
+      expect(event.preventDefault).toHaveBeenCalled()
+      expect(closeSpy).toHaveBeenCalled()
+    })
+
+    it('openCommandEditor / closeCommandEditor / toggleCommandEditor helper methods delegate appropriately', () => {
+      const openSpy = vi.fn()
+      const closeSpy = vi.fn()
+      const toggleSpy = vi.fn()
+      const gameScene = createMockScene('game', {
+        openCommandEditor: openSpy,
+        closeCommandEditor: closeSpy,
+        toggleCommandEditor: toggleSpy,
+        isCommandEditorOpen: () => true,
+      })
+      const mockGame = createMockGame(gameScene)
+      const manager = new SceneManager(mockGame)
+
+      expect(manager.isCommandEditorOpen()).toBe(true)
+      manager.openCommandEditor()
+      expect(openSpy).toHaveBeenCalled()
+      manager.closeCommandEditor()
+      expect(closeSpy).toHaveBeenCalled()
+      manager.toggleCommandEditor()
+      expect(toggleSpy).toHaveBeenCalled()
+    })
+  })
+
   describe('lifecycle & cleanup', () => {
     it('registers on game registry and cleans up on destroy', () => {
       const gameScene = createMockScene('game')
