@@ -16,7 +16,7 @@ export const HOME_AREA_IDS = {
   gate: 'gate',
 } as const
 
-export const HOME_AREA_ROOMS: readonly RoomDefinition[] = [
+export const HOME_AREA_ROOMS: RoomDefinition[] = [
   {
     // A wall splits the room; the only gap is plugged by a crate. Shove it through, or `mv` it out of the way.
     id: HOME_AREA_IDS.home,

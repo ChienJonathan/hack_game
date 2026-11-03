@@ -98,6 +98,23 @@ describe('SceneManager', () => {
       expect(manager.getActivePlayableScene()).toBe('game')
     })
 
+    it('opens LevelEditor via F2 passing currentRoomId when active scene has world state session', () => {
+      const gameScene = createMockScene('game', {
+        session: {
+          getWorldState: () => ({ currentRoomId: 'storage' }),
+        },
+      })
+      const mockGame = createMockGame(gameScene)
+      const manager = new SceneManager(mockGame)
+
+      const event = createMockKeyboardEvent('F2')
+      const handled = manager.handleKeyDown(event)
+
+      expect(handled).toBe(true)
+      expect(gameScene.scene.start).toHaveBeenCalledWith('level-editor', { roomId: 'storage' })
+      expect(manager.getActivePlayableScene()).toBe('game')
+    })
+
     it('opens SpeedEditor via F3 from playable game scene', () => {
       const gameScene = createMockScene('game')
       const mockGame = createMockGame(gameScene)
@@ -188,6 +205,42 @@ describe('SceneManager', () => {
       expect(handled).toBe(true)
       expect(syncSpy).toHaveBeenCalled()
       expect(levelEditorScene.scene.start).toHaveBeenCalledWith('game')
+    })
+
+    it('exits LevelEditor via F2 passing startingRoomId when scene provides getCurrentRoomId', () => {
+      const syncSpy = vi.fn()
+      const levelEditorScene = createMockScene('level-editor', {
+        syncToRoom1Objects: syncSpy,
+        getCurrentRoomId: () => 'storage',
+      })
+      const mockGame = createMockGame(levelEditorScene)
+      const manager = new SceneManager(mockGame)
+      manager.setActivePlayableScene('game')
+
+      const event = createMockKeyboardEvent('F2')
+      const handled = manager.handleKeyDown(event)
+
+      expect(handled).toBe(true)
+      expect(syncSpy).toHaveBeenCalled()
+      expect(levelEditorScene.scene.start).toHaveBeenCalledWith('game', { startingRoomId: 'storage' })
+    })
+
+    it('exits LevelEditor via Escape passing startingRoomId when scene provides getCurrentRoomId', () => {
+      const syncSpy = vi.fn()
+      const levelEditorScene = createMockScene('level-editor', {
+        syncToRoom1Objects: syncSpy,
+        getCurrentRoomId: () => 'yard',
+      })
+      const mockGame = createMockGame(levelEditorScene)
+      const manager = new SceneManager(mockGame)
+      manager.setActivePlayableScene('game')
+
+      const event = createMockKeyboardEvent('Escape')
+      const handled = manager.handleKeyDown(event)
+
+      expect(handled).toBe(true)
+      expect(syncSpy).toHaveBeenCalled()
+      expect(levelEditorScene.scene.start).toHaveBeenCalledWith('game', { startingRoomId: 'yard' })
     })
 
     it('exits LevelEditor when pressing Escape to active playable scene', () => {

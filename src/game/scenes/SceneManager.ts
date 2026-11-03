@@ -120,7 +120,7 @@ export class SceneManager {
     return this.currentSceneKey
   }
 
-  public openEditor(editorKey: string): void {
+  public openEditor(editorKey: string, data?: object): void {
     const activeScene = this.getActiveScene()
     if (activeScene) {
       if (this.isPlayableScene(activeScene.scene.key)) {
@@ -128,25 +128,52 @@ export class SceneManager {
       }
       this.beforeLeave(activeScene)
       this.currentSceneKey = editorKey
-      activeScene.scene.start(editorKey)
+      if (data !== undefined) {
+        activeScene.scene.start(editorKey, data)
+      } else {
+        activeScene.scene.start(editorKey)
+      }
     } else if (this.game) {
       this.currentSceneKey = editorKey
-      this.game.scene.start(editorKey)
+      if (data !== undefined) {
+        this.game.scene.start(editorKey, data)
+      } else {
+        this.game.scene.start(editorKey)
+      }
     } else {
       this.currentSceneKey = editorKey
     }
   }
 
-  public exitEditor(): void {
+  public exitEditor(data?: object): void {
     const activeScene = this.getActiveScene()
     const targetKey = this.activePlayableSceneKey
+
+    let transitionData = data
+    if (!transitionData && activeScene) {
+      if (typeof (activeScene as any).getCurrentRoomId === 'function') {
+        const roomId = (activeScene as any).getCurrentRoomId()
+        if (roomId) {
+          transitionData = { startingRoomId: roomId }
+        }
+      }
+    }
+
     if (activeScene) {
       this.beforeLeave(activeScene)
       this.currentSceneKey = targetKey
-      activeScene.scene.start(targetKey)
+      if (transitionData !== undefined) {
+        activeScene.scene.start(targetKey, transitionData)
+      } else {
+        activeScene.scene.start(targetKey)
+      }
     } else if (this.game) {
       this.currentSceneKey = targetKey
-      this.game.scene.start(targetKey)
+      if (transitionData !== undefined) {
+        this.game.scene.start(targetKey, transitionData)
+      } else {
+        this.game.scene.start(targetKey)
+      }
     } else {
       this.currentSceneKey = targetKey
     }
@@ -167,7 +194,13 @@ export class SceneManager {
         this.exitEditor()
       } else {
         // Pressing another editor's hotkey opens that editor
-        this.openEditor(editorConfig.key)
+        let data: object | undefined = undefined
+        const activeScene = this.getActiveScene()
+        const currentRoomId = (activeScene as any)?.session?.getWorldState?.()?.currentRoomId
+        if (currentRoomId && editorConfig.key === 'level-editor') {
+          data = { roomId: currentRoomId }
+        }
+        this.openEditor(editorConfig.key, data)
       }
       return true
     }

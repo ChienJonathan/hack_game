@@ -16,7 +16,7 @@ export const TUTORIAL_ROOM_IDS = {
   slowTime: 'tutorial4',
 } as const
 
-export const TUTORIAL_ROOMS: readonly RoomDefinition[] = [
+export const TUTORIAL_ROOMS: RoomDefinition[] = [
   {
     id: TUTORIAL_ROOM_IDS.move,
     hint:
@@ -85,14 +85,17 @@ export const TUTORIAL_ROOMS: readonly RoomDefinition[] = [
   },
 ]
 
-const ROOM1_HINT =
+export const ROOM1_HINT =
   'The real thing: guards rush you once you cross the middle of the room. Use ls, mv and your dagger to reach room2.'
 
 /**
  * The whole game: the tutorial rooms, the home area, then room1 (and the room2 ending). The Player Character
  * starts in tutorial1 with the stats configured for room1's player.
  */
-export function createGameWorldState(room1Objects: readonly RoomObjectConfig[] = ROOM1_OBJECTS): WorldState {
+export function createGameWorldState(
+  room1Objects: readonly RoomObjectConfig[] = ROOM1_OBJECTS,
+  startingRoomId?: string,
+): WorldState {
   const room1 = createInitialWorldState([...room1Objects])
   const playerConfig = room1Objects.find((obj) => obj.role === 'player')
   const playerId = playerConfig?.id ?? 'player'
@@ -111,10 +114,67 @@ export function createGameWorldState(room1Objects: readonly RoomObjectConfig[] =
       : room,
   )
 
+  const allRooms = [...built.rooms, ...room1Rooms]
+  const allWorldObjects = [
+    ...built.worldObjects,
+    ...room1.worldObjects.filter((worldObject) => worldObject.id !== playerId),
+  ]
+
+  const effectiveStartingRoomId =
+    startingRoomId && allRooms.some((r) => r.id === startingRoomId)
+      ? startingRoomId
+      : TUTORIAL_ROOM_IDS.move
+
+  const playerObject = allWorldObjects.find((wo) => wo.id === playerId)
+
+  if (playerObject) {
+    const targetRoom = allRooms.find((r) => r.id === effectiveStartingRoomId)
+    playerObject.roomId = effectiveStartingRoomId
+
+    let startPos = targetRoom?.entry ?? ROOM_ENTRY
+    if (effectiveStartingRoomId === ROOM_IDS.first && playerConfig) {
+      startPos = { x: playerConfig.x, y: playerConfig.y }
+    } else {
+      const allDefs = [...TUTORIAL_ROOMS, ...HOME_AREA_ROOMS]
+      const roomDef = allDefs.find((d) => d.id === effectiveStartingRoomId)
+      const defPlayer = roomDef?.objects.find((o) => o.role === 'player' || o.id === playerId)
+      if (defPlayer) {
+        startPos = { x: defPlayer.x, y: defPlayer.y }
+      }
+    }
+
+    const playerState = playerObject.state as Record<string, unknown>
+    playerState.x = startPos.x
+    playerState.y = startPos.y
+    playerState.vx = 0
+    playerState.vy = 0
+    playerState.forceX = 0
+    playerState.forceY = 0
+    playerState.alive = true
+    if (typeof playerState.maxHealth === 'number') {
+      playerState.health = playerState.maxHealth
+    }
+    playerState.weaponId = null
+  }
+
+  const finalRooms = allRooms.map((room) => {
+    if (room.id === effectiveStartingRoomId) {
+      return {
+        ...room,
+        objectIds: room.objectIds.includes(playerId) ? room.objectIds : [...room.objectIds, playerId],
+      }
+    } else {
+      return {
+        ...room,
+        objectIds: room.objectIds.filter((id) => id !== playerId),
+      }
+    }
+  })
+
   return {
     ...room1,
-    rooms: [...built.rooms, ...room1Rooms],
-    worldObjects: [...built.worldObjects, ...room1.worldObjects.filter((worldObject) => worldObject.id !== playerId)],
-    currentRoomId: TUTORIAL_ROOM_IDS.move,
+    rooms: finalRooms,
+    worldObjects: allWorldObjects,
+    currentRoomId: effectiveStartingRoomId,
   }
 }

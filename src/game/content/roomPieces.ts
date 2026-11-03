@@ -105,7 +105,7 @@ export interface RoomDefinition {
   /** On-screen teaching text; rooms that teach by their layout leave it out. */
   readonly hint?: string
   readonly goal: string
-  readonly objects: readonly RoomObjectConfig[]
+  objects: RoomObjectConfig[]
   readonly walls?: readonly Box[]
   readonly exit: Pick<RoomExit, 'targetRoomId' | 'label' | 'requires'>
 }

@@ -299,18 +299,32 @@ docs/           architecture.md, adr/0001..0013
 
 ## Level Editor
 
-`LevelEditorScene` (`'level-editor'`) provides visual editing of room1 world object positions, sizes, character stats, and weapon parameters. Accessible from anywhere via **F2**; pressing **F2** or **Escape** returns to the current active playable scene (`'game'`).
+`LevelEditorScene` (`'level-editor'`) provides visual editing of world object positions, sizes, character stats, weapon parameters, and collision shapes across all rooms in the game. Accessible from anywhere via **F2**; pressing **F2** or **Escape** returns to the current active playable scene (`'game'`). When opened via **F2** during gameplay, `SceneManager` reads the player's current room ID from `getWorldState().currentRoomId` and starts the editor focused on that room. When exiting the editor (via **F2**, **Escape**, top-right key hint, or the `PLAY <ROOM> (F2)` button), `SceneManager.exitEditor()` passes `{ startingRoomId }` to `GameScene`, seamlessly launching gameplay right from the currently edited room.
 
-Editable configurations export directly to `room1.ts` (`ROOM1_OBJECTS`). Objects use base sizes (`CHARACTER_BASE_SIZE` 176×176, `DAGGER_SIZE` 72×72) with default 1.00 scales. Editor controls dock below room view (`y = 720..1010`), leaving room area (`y = 80..700`) unobstructed. Editor navigation and hotkeys are managed centrally by `SceneManager`.
+The editor supports all tutorial rooms (`tutorial1`, `tutorial2`, `tutorial3`, `tutorial4`), home area rooms (`home`, `storage`, `yard`, `lane`, `gate`), and main rooms (`room1`, `room2`) through a unified room registry (`src/game/content/roomRegistry.ts`).
+
+Editable configurations in `room1` export directly to `room1.ts` (`ROOM1_OBJECTS`) via `/api/save-room1`. Other rooms sync live to in-memory room configurations (`TUTORIAL_ROOMS`, `HOME_AREA_ROOMS`), allowing seamless editing and testing. Objects use base sizes (`CHARACTER_BASE_SIZE` 176×176, `DAGGER_SIZE` 72×72) with default 1.00 scales. Editor controls dock below room view (`y = 720..1010`), leaving room area (`y = 80..700`) unobstructed. Editor navigation and hotkeys are managed centrally by `SceneManager`.
+
+### Room Selection & Geometry
+
+- **Room Selection Bar**: Positioned at Row 2 (`y = 44`), featuring a `ROOM:` label, `◄` / `►` step buttons, and clickable pills for each room ordered by progression.
+- **Room Cycling Hotkeys**: `PageUp` navigates to the previous room; `PageDown` navigates to the next room (with wrap-around).
+- **Auto-Sync on Transition**: Switching rooms automatically syncs the current room's objects to memory before loading the next room's layout.
+- **Play from Current Level**: Exiting the level editor starts `GameScene` directly at the room currently open in the editor (`startingRoomId`). `createGameWorldState` positions the player in that room, establishes a save point on entry, and configures the room's specific goals, hints, obstacles, and door lock states.
+- **Dynamic Room Geometry**:
+  - Immovable solid walls (`def.walls`) are drawn with stone texture and mortar lines for rooms with walls (`home`, `storage`, `yard`, `lane`, `gate`).
+  - Room dividers are conditionally rendered only for rooms with dividers (`room1` and `tutorial4`).
+  - Exit door label and goal text update dynamically to match the active room's exit destination and objective.
 
 ### Features & Controls
 
 | Action | Control |
 |---|---|
+| **Room Navigation** | Room pills at `y = 44`, `◄` / `►` buttons, or `PageUp` / `PageDown` hotkeys |
 | **Reposition** | Drag sprite, or arrow keys (1 px, Shift: 10 px; blocked from collisionbox overlap) |
 | **Uniform Scale** | Drag yellow corner handle, `+`/`-` keys, or panel `×1.1` / `÷1.1` buttons (blocked from collisionbox overlap) |
-| **Spawn / Despawn** | `+ GUARD`, `+ DAGGER` buttons (spawns in non-overlapping spot using `<name><num>` naming for multi-instances such as `guard2`, `guard3`, `dagger2`); despawn with `REMOVE SELECTED` or `Del`/`Backspace` |
-| **Collisionboxes** | Non-weapon objects render green collider outlines: rectangles (`110×scaleX` by `160×scaleY` for characters, or custom `colliderWidth`×`colliderHeight`), or circles of diameter `colliderWidth` for `colliderShape: 'circle'` (the boulder); weapons have no collisionbox |
+| **Spawn / Despawn** | `+ GUARD`, `+ DAGGER`, `+ CRATE`, `+ BOULDER` buttons (spawns in non-overlapping spot using `<name><num>` naming for multi-instances such as `guard2`, `guard3`, `dagger2`, `crate2`); despawn with `REMOVE SELECTED` or `Del`/`Backspace` |
+| **Collisionboxes** | Non-weapon objects render green collider outlines: rectangles (`110×scaleX` by `160×scaleY` for characters, or custom `colliderWidth`×`colliderHeight`), or circles of diameter `colliderWidth` for `colliderShape: 'circle'` (the boulder); weapons have no collisionbox; pressure plates (`kind: 'plate'`) allow overlap |
 | **Collider Box Editing** | Drag green corner handle, hotkeys `[` / `]`, panel `BOX +` / `BOX -` buttons, or inspector `box_w` / `box_h` fields (+/- 10, Shift: 50, click for prompt; blocked from collisionbox overlap). For a circle, either field sets the diameter |
 | **Selection** | Click sprite, panel list entry, or cycle with `Tab` / `Shift+Tab` |
 | **Character Stats** | Edit guard `max_health` & `speed`, or player `max_health` (`+/-` 10, Shift: 50, click value for prompt) |
@@ -320,10 +334,10 @@ Editable configurations export directly to `room1.ts` (`ROOM1_OBJECTS`). Objects
 | **Test Attack** | `TEST ATTACK` button (or `Space` with weapon selected) runs attack translation animation ($d(t) = \text{round}(\sin(t \cdot \pi) \cdot \text{dist})$) |
 | **Speed Editor Access** | `OPEN SPEED EDITOR (F3)` button or **F3** shortcut |
 | **AI Editor Access** | `AI EDITOR (F4)` button or **F4** shortcut |
-| **Return to Game** | **F2** or **Escape** (exits to active playable scene) |
+| **Return to Game** | **F2**, **Escape**, top hint, or `PLAY <ROOM> (F2)` button (plays game directly from currently selected room) |
 | **Undo / Redo** | `Ctrl+Z` reverses operations via invertible delta stack (move, scale, collider box, character/weapon stats, physics values, spawn/despawn) |
 | **Toggle Panel** | **P** toggles bottom property panel visibility |
-| **Save** | `SAVE TO ROOM1.TS` overwrites file via `/api/save-room1` and syncs in-memory `ROOM1_OBJECTS` and `GAME_WEAPON_CONFIG` |
+| **Save** | `SAVE TO ROOM1.TS` (for `room1`) overwrites file via `/api/save-room1` and syncs in-memory `ROOM1_OBJECTS` and `GAME_WEAPON_CONFIG`; for other rooms, `SAVE <ROOM>` syncs to in-memory definitions with confirmation toast |
 
 ### Weapon Configuration Subsystem
 

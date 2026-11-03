@@ -11,14 +11,22 @@ import {
   GAME_WEAPON_CONFIG,
   computeDaggerAttackTranslation,
 } from '../content/room1Constants.ts'
-import { createInitialWorldState, computeCollisionSize } from '../content/room1WorldState.ts'
-import {
-  ROOM1_OBJECTS,
-  type PhysicsAttrConfig,
-  type PlayerSpeedConfig,
-  type RoomObjectConfig,
-  type WorldObjectRole,
+import { createRoomObjects, computeCollisionSize } from '../content/room1WorldState.ts'
+import type {
+  PhysicsAttrConfig,
+  PlayerSpeedConfig,
+  RoomObjectConfig,
+  WorldObjectRole,
 } from '../content/room1.ts'
+import {
+  EDITOR_ROOM_IDS,
+  getRoomDefinition,
+  getRoomObjectConfigs,
+  setRoomObjectConfigs,
+  getNextRoomId,
+  getPreviousRoomId,
+} from '../content/roomRegistry.ts'
+import { TUTORIAL_ROOM_IDS } from '../content/tutorialRooms.ts'
 import type { ColliderShape } from '../domain/CollisionWorld.ts'
 import { PHYSICS_ATTR_KEYS, readPhysicsAttrOverride } from '../domain/PhysicsAttr.ts'
 import { GAME_PHYSICS_CONFIG, MIN_MASS } from '../simulation/physicsConstants.ts'
@@ -59,8 +67,18 @@ const PANEL_Y = 720
 const PANEL_WIDTH = 1728
 const PANEL_HEIGHT = 290
 
+const KIND_TEXTURES: Readonly<Record<string, string>> = {
+  archer: 'archer',
+  arrow: 'arrow',
+  crate: 'crate',
+  plate: 'plate',
+}
+
 export interface SpawnObjectConfig extends PhysicsAttrConfig {
   id?: string
+  name?: string
+  kind?: 'crate' | 'plate' | 'archer'
+  passive?: boolean
   x?: number
   y?: number
   displayWidth?: number
@@ -83,6 +101,9 @@ type ColliderOutline = Phaser.GameObjects.Rectangle | Phaser.GameObjects.Ellipse
 
 export interface EditorObject extends ScalableMovableObject {
   role: WorldObjectRole
+  name?: string
+  kind?: 'crate' | 'plate' | 'archer'
+  passive?: boolean
   sprite: Phaser.GameObjects.Image
   outline: Phaser.GameObjects.Rectangle
   collisionBox?: ColliderOutline
@@ -143,10 +164,24 @@ export class LevelEditorScene extends Phaser.Scene {
   private colliderStartPointerX = 0
   private colliderStartPointerY = 0
   private exportButton!: Phaser.GameObjects.Container
+  private playButton!: Phaser.GameObjects.Container
   private instructionText: Phaser.GameObjects.Text | undefined
+  private currentRoomId: string = ROOM_IDS.first
+  private wallGraphics!: Phaser.GameObjects.Graphics
+  private roomSelectorButtons: Map<string, Phaser.GameObjects.Text> = new Map()
+  private prevRoomBtn: Phaser.GameObjects.Text | undefined
+  private nextRoomBtn: Phaser.GameObjects.Text | undefined
+  private roomGoalText: Phaser.GameObjects.Text | undefined
+  private section5Desc: Phaser.GameObjects.Text | undefined
 
   constructor() {
     super({ key: 'level-editor' })
+  }
+
+  init(data?: { roomId?: string }): void {
+    if (data?.roomId && (EDITOR_ROOM_IDS as readonly string[]).includes(data.roomId)) {
+      this.currentRoomId = data.roomId
+    }
   }
 
   preload(): void {
@@ -182,15 +217,104 @@ export class LevelEditorScene extends Phaser.Scene {
     this.deleteButton = undefined
     this.history.clear()
 
-    // Title
+    this.roomSelectorButtons.clear()
+
+    // Title Row (y = 16)
     this.headerText = this.add
-      .text(ROOM_LAYOUT.left, 24, 'LEVEL EDITOR — room1', {
+      .text(ROOM_LAYOUT.left, 16, 'LEVEL EDITOR — ' + this.currentRoomId, {
         fontFamily: FONT_FAMILY,
-        fontSize: 20,
+        fontSize: 18,
         color: ACCENT_COLOR,
       })
       .setOrigin(0, 0)
       .setDepth(50)
+
+    this.roomGoalText = this.add
+      .text(ROOM_LAYOUT.left + 460, 19, '', {
+        fontFamily: FONT_FAMILY,
+        fontSize: 11,
+        color: DIM_COLOR,
+      })
+      .setOrigin(0, 0)
+      .setDepth(50)
+
+    // Back-to-game key hint
+    const backHint = this.add
+      .text(ROOM_LAYOUT.right, 16, 'PgUp/PgDn: Rooms · P: Panel · F3: Speed · F4: AI · F2/ESC: Game', {
+        fontFamily: FONT_FAMILY,
+        fontSize: 11,
+        color: DIM_COLOR,
+      })
+      .setOrigin(1, 0)
+      .setDepth(50)
+      .setInteractive({ useHandCursor: true })
+    backHint.on('pointerdown', () => {
+      this.returnToGame()
+    })
+
+    // Room Selection Row (y = 44)
+    this.add
+      .text(ROOM_LAYOUT.left, 47, 'ROOM:', {
+        fontFamily: FONT_FAMILY,
+        fontSize: 12,
+        color: ACCENT_COLOR,
+      })
+      .setOrigin(0, 0)
+      .setDepth(50)
+
+    this.prevRoomBtn = this.add
+      .text(ROOM_LAYOUT.left + 65, 44, '◄', {
+        fontFamily: FONT_FAMILY,
+        fontSize: 12,
+        color: '#ffffff',
+        backgroundColor: '#37474f',
+        padding: { x: 7, y: 3 },
+      })
+      .setOrigin(0, 0)
+      .setDepth(50)
+      .setInteractive({ useHandCursor: true })
+    this.prevRoomBtn.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      pointer.event?.stopPropagation?.()
+      this.selectPreviousRoom()
+    })
+
+    let currX = ROOM_LAYOUT.left + 95
+    for (const roomId of EDITOR_ROOM_IDS) {
+      const isSelected = roomId === this.currentRoomId
+      const btn = this.add
+        .text(currX, 44, roomId, {
+          fontFamily: FONT_FAMILY,
+          fontSize: 10,
+          color: isSelected ? '#ffffff' : '#90a4ae',
+          backgroundColor: isSelected ? '#0288d1' : '#263238',
+          padding: { x: 7, y: 4 },
+        })
+        .setOrigin(0, 0)
+        .setDepth(50)
+        .setInteractive({ useHandCursor: true })
+      btn.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+        pointer.event?.stopPropagation?.()
+        this.selectRoom(roomId)
+      })
+      this.roomSelectorButtons.set(roomId, btn)
+      currX += btn.width + 6
+    }
+
+    this.nextRoomBtn = this.add
+      .text(currX, 44, '►', {
+        fontFamily: FONT_FAMILY,
+        fontSize: 12,
+        color: '#ffffff',
+        backgroundColor: '#37474f',
+        padding: { x: 7, y: 3 },
+      })
+      .setOrigin(0, 0)
+      .setDepth(50)
+      .setInteractive({ useHandCursor: true })
+    this.nextRoomBtn.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      pointer.event?.stopPropagation?.()
+      this.selectNextRoom()
+    })
 
     // Draw room frame (same as PhaserRoomView)
     this.roomFrame = this.add.graphics().setDepth(0)
@@ -207,7 +331,7 @@ export class LevelEditorScene extends Phaser.Scene {
       this.roomFrame.lineBetween(ROOM_LAYOUT.left + 4, y, ROOM_LAYOUT.right - 4, y)
     }
 
-    // Room divider
+    // Room divider (dashed midpoint threshold)
     this.roomDivider = this.add.graphics().setDepth(0)
     this.roomDivider.lineStyle(2, 0x3c3c3c, 0.8)
     for (let y = ROOM_LAYOUT.top + 8; y < ROOM_LAYOUT.bottom; y += 24) {
@@ -236,21 +360,19 @@ export class LevelEditorScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(2)
 
-    // Create world objects from initial state
-    const worldState = createInitialWorldState()
-    for (const worldObject of worldState.worldObjects) {
-      this.createEditorObject(worldObject)
-    }
+    // Walls graphics layer
+    this.wallGraphics = this.add.graphics().setDepth(1)
 
-    // Build property panel
+    // Build property panel & export button
     this.buildPropertyPanel()
-
-    // Build export button
     this.buildExportButton()
+
+    // Select the current room and load its geometry and objects
+    this.selectRoom(this.currentRoomId)
 
     // Instructions
     this.instructionText = this.add
-      .text(960, 1045, 'Click to select · Drag to move · Shift+Drag: Scale · Arrows: Nudge · Ctrl+Z: Undo · Del: Remove', {
+      .text(960, 1045, 'Click to select · Drag to move · Shift+Drag: Scale · Arrows: Nudge · Ctrl+Z: Undo · Del: Remove · PgUp/PgDn: Rooms', {
         fontFamily: FONT_FAMILY,
         fontSize: 14,
         color: DIM_COLOR,
@@ -264,31 +386,25 @@ export class LevelEditorScene extends Phaser.Scene {
     this.input.on('pointerup', this.onPointerUp, this)
     this.input.keyboard?.on('keydown', this.onKeyDown, this)
 
-    // Back-to-game key hint
-    this.add
-      .text(ROOM_LAYOUT.right, 26, 'P: Panel · F3: Speed · F4: AI Editor · F2 / ESC: Game', {
-        fontFamily: FONT_FAMILY,
-        fontSize: 12,
-        color: DIM_COLOR,
-      })
-      .setOrigin(1, 0)
-      .setDepth(50)
-
-    // Select the first object by default
-    if (this.editorObjects.length > 0) {
-      this.selectObject(this.editorObjects[0].id)
-    }
-
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.input.off('pointerdown', this.onPointerDown, this)
       this.input.off('pointermove', this.onPointerMove, this)
       this.input.off('pointerup', this.onPointerUp, this)
       this.input.keyboard?.off('keydown', this.onKeyDown, this)
       this.headerText?.destroy()
+      this.roomGoalText?.destroy()
+      this.prevRoomBtn?.destroy()
+      this.nextRoomBtn?.destroy()
       this.doorLabel?.destroy()
       this.instructionText?.destroy()
       this.panelContainer?.destroy(true)
       this.exportButton?.destroy(true)
+      this.playButton?.destroy(true)
+      for (const btn of this.roomSelectorButtons.values()) {
+        btn.destroy()
+      }
+      this.roomSelectorButtons.clear()
+      this.wallGraphics?.destroy()
       for (const obj of this.editorObjects) {
         obj.sprite.destroy()
         obj.outline.destroy()
@@ -386,7 +502,12 @@ export class LevelEditorScene extends Phaser.Scene {
     const acceleration = speedConfig?.acceleration
     const frictionAcceleration = speedConfig?.frictionAcceleration
     const turnaroundAcceleration = speedConfig?.turnaroundAcceleration
-    const roomObj = ROOM1_OBJECTS.find((o) => o.id === worldObject.id)
+    const roomObjects = getRoomObjectConfigs(this.currentRoomId)
+    const roomObj = roomObjects.find((o) => o.id === worldObject.id)
+    const name = roomObj?.name ?? (typeof worldObject.metadata.name === 'string' ? worldObject.metadata.name : undefined)
+    const kind = (roomObj?.kind ?? worldObject.metadata.kind) as 'crate' | 'plate' | 'archer' | undefined
+    const passive = roomObj?.passive
+
     const attackDistance = isWeapon
       ? typeof state.weaponAttackDistance === 'number'
         ? state.weaponAttackDistance
@@ -411,12 +532,23 @@ export class LevelEditorScene extends Phaser.Scene {
         ? state.holdOffsetY
         : (roomObj?.holdOffsetY ?? GAME_WEAPON_CONFIG.holdOffsetY)
       : undefined
+
+    const isCrate = kind === 'crate'
+    const isPlate = kind === 'plate'
     const defaultBaseWidth = isWeapon
       ? DAGGER_SIZE.width
-      : (role === 'object' ? BOULDER_BASE_SIZE.width : CHARACTER_BASE_SIZE.width)
+      : isCrate
+        ? 88
+        : isPlate
+          ? 96
+          : (role === 'object' ? BOULDER_BASE_SIZE.width : CHARACTER_BASE_SIZE.width)
     const defaultBaseHeight = isWeapon
       ? DAGGER_SIZE.height
-      : (role === 'object' ? BOULDER_BASE_SIZE.height : CHARACTER_BASE_SIZE.height)
+      : isCrate
+        ? 88
+        : isPlate
+          ? 96
+          : (role === 'object' ? BOULDER_BASE_SIZE.height : CHARACTER_BASE_SIZE.height)
 
     const displayWidth = typeof state.displayWidth === 'number'
       ? state.displayWidth
@@ -435,7 +567,7 @@ export class LevelEditorScene extends Phaser.Scene {
     const baseWidth = scaleX !== 0 ? displayWidth / scaleX : defaultBaseWidth
     const baseHeight = scaleY !== 0 ? displayHeight / scaleY : defaultBaseHeight
 
-    const sprite = this.add.image(x, y, textureKey).setDepth(3)
+    const sprite = this.add.image(x, y, textureKey).setDepth(kind === 'plate' ? 2 : 3)
     sprite.setDisplaySize(displayWidth, displayHeight)
     sprite.setAlpha(0.9)
 
@@ -513,6 +645,9 @@ export class LevelEditorScene extends Phaser.Scene {
 
     const editorObject: EditorObject = {
       id: worldObject.id,
+      name,
+      kind,
+      passive,
       role,
       sprite,
       outline,
@@ -584,11 +719,11 @@ export class LevelEditorScene extends Phaser.Scene {
       .setOrigin(0.5, 0)
     items.push(this.objectListTitle)
 
-    // Spawn buttons
+    // Spawn buttons (Row 1: Guard & Dagger, Row 2: Crate & Boulder)
     const spawnGuardBtn = this.add
-      .text(75, 42, '+ GUARD', {
+      .text(75, 38, '+ GUARD', {
         fontFamily: FONT_FAMILY,
-        fontSize: 11,
+        fontSize: 10,
         color: '#ffffff',
         backgroundColor: '#1b5e20',
         padding: { x: 8, y: 4 },
@@ -599,12 +734,11 @@ export class LevelEditorScene extends Phaser.Scene {
       pointer.event?.stopPropagation?.()
       this.spawnWorldObject('enemy')
     })
-    items.push(spawnGuardBtn)
 
     const spawnDaggerBtn = this.add
-      .text(205, 42, '+ DAGGER', {
+      .text(205, 38, '+ DAGGER', {
         fontFamily: FONT_FAMILY,
-        fontSize: 11,
+        fontSize: 10,
         color: '#ffffff',
         backgroundColor: '#0d47a1',
         padding: { x: 8, y: 4 },
@@ -615,7 +749,47 @@ export class LevelEditorScene extends Phaser.Scene {
       pointer.event?.stopPropagation?.()
       this.spawnWorldObject('weapon')
     })
-    items.push(spawnDaggerBtn)
+
+    const spawnCrateBtn = this.add
+      .text(75, 66, '+ CRATE', {
+        fontFamily: FONT_FAMILY,
+        fontSize: 10,
+        color: '#ffffff',
+        backgroundColor: '#e65100',
+        padding: { x: 8, y: 4 },
+      })
+      .setOrigin(0.5, 0)
+      .setInteractive({ useHandCursor: true })
+    spawnCrateBtn.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      pointer.event?.stopPropagation?.()
+      this.spawnWorldObject('object', { kind: 'crate', colliderWidth: 80, colliderHeight: 80, mass: 3 })
+    })
+
+    const spawnBoulderBtn = this.add
+      .text(205, 66, '+ BOULDER', {
+        fontFamily: FONT_FAMILY,
+        fontSize: 10,
+        color: '#ffffff',
+        backgroundColor: '#4e342e',
+        padding: { x: 8, y: 4 },
+      })
+      .setOrigin(0.5, 0)
+      .setInteractive({ useHandCursor: true })
+    spawnBoulderBtn.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      pointer.event?.stopPropagation?.()
+      this.spawnWorldObject('object', {
+        colliderShape: 'circle',
+        colliderWidth: 128,
+        colliderHeight: 128,
+        mass: 100,
+        displayWidth: 154,
+        displayHeight: 154,
+        scaleX: 1.28,
+        scaleY: 1.28,
+      })
+    })
+
+    items.push(spawnGuardBtn, spawnDaggerBtn, spawnCrateBtn, spawnBoulderBtn)
 
     // Remove selected object button
     this.deleteButton = this.add
@@ -1092,14 +1266,14 @@ export class LevelEditorScene extends Phaser.Scene {
         color: ACCENT_COLOR,
       })
       .setOrigin(0.5, 0)
-    const exportDesc = this.add
+    this.section5Desc = this.add
       .text(1574, 75, 'Overwrite room1.ts directly:', {
         fontFamily: FONT_FAMILY,
         fontSize: 13,
         color: DIM_COLOR,
       })
       .setOrigin(0.5, 0)
-    items.push(section5Title, exportDesc)
+    items.push(section5Title, this.section5Desc)
 
     this.panelContainer = this.add.container(PANEL_X, PANEL_Y, items).setDepth(40)
     this.refreshObjectList()
@@ -1150,6 +1324,29 @@ export class LevelEditorScene extends Phaser.Scene {
     this.exportButton.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       pointer.event?.stopPropagation?.()
       this.saveLayout()
+    })
+
+    const playBtnX = PANEL_X + 1574
+    const playBtnY = PANEL_Y + 198
+    const playBg = this.add
+      .rectangle(0, 0, 260, 42, 0x1565c0, 1)
+      .setStrokeStyle(2, 0x42a5f5, 1)
+    const playLabel = this.add
+      .text(0, 0, `PLAY ${this.currentRoomId.toUpperCase()} (F2)`, {
+        fontFamily: FONT_FAMILY,
+        fontSize: 13,
+        color: '#ffffff',
+      })
+      .setOrigin(0.5, 0.5)
+
+    this.playButton = this.add
+      .container(playBtnX, playBtnY, [playBg, playLabel])
+      .setDepth(50)
+      .setSize(260, 42)
+      .setInteractive({ useHandCursor: true })
+    this.playButton.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      pointer.event?.stopPropagation?.()
+      this.returnToGame()
     })
   }
 
@@ -2226,6 +2423,16 @@ export class LevelEditorScene extends Phaser.Scene {
     }
 
     if (!event.ctrlKey && !event.metaKey && !event.altKey) {
+      if (event.key === 'PageUp') {
+        event.preventDefault()
+        this.selectPreviousRoom()
+        return
+      }
+      if (event.key === 'PageDown') {
+        event.preventDefault()
+        this.selectNextRoom()
+        return
+      }
       if (event.key === 'p' || event.key === 'P') {
         event.preventDefault()
         this.togglePanel()
@@ -2296,6 +2503,7 @@ export class LevelEditorScene extends Phaser.Scene {
     const isVisible = !this.panelContainer.visible
     this.panelContainer.setVisible(isVisible)
     this.exportButton.setVisible(isVisible)
+    this.playButton?.setVisible(isVisible)
   }
 
   private undo(): void {
@@ -2312,6 +2520,9 @@ export class LevelEditorScene extends Phaser.Scene {
         reversed.role,
         {
           id: reversed.objectId,
+          name: reversed.snapshot.name,
+          kind: reversed.snapshot.kind,
+          passive: reversed.snapshot.passive,
           x: reversed.snapshot.x,
           y: reversed.snapshot.y,
           displayWidth: reversed.snapshot.displayWidth,
@@ -2353,7 +2564,140 @@ export class LevelEditorScene extends Phaser.Scene {
     this.selectObject(this.editorObjects[nextIndex].id)
   }
 
-  public syncToRoom1Objects(): RoomObjectConfig[] {
+  public getCurrentRoomId(): string {
+    return this.currentRoomId
+  }
+
+  public selectRoom(roomId: string): void {
+    const isInitial = this.editorObjects.length === 0
+    if (this.currentRoomId === roomId && !isInitial) {
+      return
+    }
+
+    if (this.editorObjects.length > 0) {
+      this.syncCurrentRoomObjects()
+    }
+
+    this.currentRoomId = roomId
+
+    if (this.testEquippedWeaponId) {
+      this.testUnequip(this.testEquippedWeaponId)
+    }
+    this.testEquippedWeaponId = null
+    this.savedWeaponPositions.clear()
+    this.testAttackAnimation = null
+
+    for (const obj of this.editorObjects) {
+      obj.sprite.destroy()
+      obj.outline.destroy()
+      obj.collisionBox?.destroy()
+      obj.colliderHandle?.destroy()
+      obj.scaleHandle.destroy()
+      obj.label.destroy()
+    }
+    this.editorObjects = []
+    this.selectedId = null
+    this.history.clear()
+
+    this.updateHeaderAndSelector()
+    this.drawRoomGeometry(roomId)
+    this.loadRoomObjects(roomId)
+    this.refreshObjectList()
+
+    if (this.editorObjects.length > 0) {
+      this.selectObject(this.editorObjects[0].id)
+    } else {
+      this.updatePropertyPanel()
+    }
+
+    this.updateSaveButton()
+  }
+
+  public selectPreviousRoom(): void {
+    this.selectRoom(getPreviousRoomId(this.currentRoomId))
+  }
+
+  public selectNextRoom(): void {
+    this.selectRoom(getNextRoomId(this.currentRoomId))
+  }
+
+  private updateHeaderAndSelector(): void {
+    if (this.headerText) {
+      this.headerText.setText('LEVEL EDITOR — ' + this.currentRoomId)
+    }
+    const def = getRoomDefinition(this.currentRoomId)
+    if (this.roomGoalText) {
+      const goal = def?.goal ?? ''
+      this.roomGoalText.setText(goal ? 'GOAL: ' + goal : '')
+    }
+    for (const [id, btn] of this.roomSelectorButtons.entries()) {
+      const isSelected = id === this.currentRoomId
+      btn.setBackgroundColor(isSelected ? '#0288d1' : '#263238')
+      btn.setColor(isSelected ? '#ffffff' : '#90a4ae')
+    }
+  }
+
+  private drawRoomGeometry(roomId: string): void {
+    const def = getRoomDefinition(roomId)
+
+    // Divider: visible only in room1 and tutorial4
+    const showDivider = roomId === ROOM_IDS.first || roomId === TUTORIAL_ROOM_IDS.slowTime
+    this.roomDivider?.setVisible(showDivider)
+
+    // Walls
+    if (this.wallGraphics) {
+      this.wallGraphics.clear()
+      if (def?.walls && def.walls.length > 0) {
+        for (const wall of def.walls) {
+          const left = wall.x - wall.width / 2
+          const top = wall.y - wall.height / 2
+          this.wallGraphics.fillStyle(0x1b2529, 1).fillRect(left - 3, top - 3, wall.width + 6, wall.height + 6)
+          this.wallGraphics.fillStyle(0x3a4c53, 1).fillRect(left, top, wall.width, wall.height)
+          this.wallGraphics.fillStyle(0x56707a, 1).fillRect(left, top, wall.width, Math.min(8, wall.height))
+          this.wallGraphics.fillStyle(0x2b3a40, 1)
+          for (let row = top + 24; row < top + wall.height - 4; row += 24) {
+            this.wallGraphics.fillRect(left, row, wall.width, 3)
+            const offset = ((row - top) / 24) % 2 === 0 ? 0 : 24
+            for (let column = left + 24 + offset; column < left + wall.width - 4; column += 48) {
+              this.wallGraphics.fillRect(column, row - 21, 3, 21)
+            }
+          }
+        }
+      }
+    }
+
+    // Door Label
+    const exit = def?.exit
+    const doorLabelText = exit?.label || exit?.targetRoomId || 'exit'
+    this.doorLabel?.setText(doorLabelText)
+  }
+
+  private loadRoomObjects(roomId: string): void {
+    const configs = getRoomObjectConfigs(roomId)
+    const worldObjects = createRoomObjects(configs, roomId)
+    for (const worldObject of worldObjects) {
+      if (worldObject.metadata.hidden || worldObject.metadata.kind === 'arrow') {
+        continue
+      }
+      this.createEditorObject(worldObject)
+    }
+  }
+
+  private updateSaveButton(): void {
+    if (!this.exportButton) return
+    const label = this.exportButton.getAt(1) as Phaser.GameObjects.Text | undefined
+    if (this.currentRoomId === ROOM_IDS.first) {
+      this.section5Desc?.setText('Overwrite room1.ts directly:')
+      label?.setText('SAVE TO ROOM1.TS')
+    } else {
+      this.section5Desc?.setText(`Apply edits to ${this.currentRoomId}:`)
+      label?.setText(`SAVE ${this.currentRoomId.toUpperCase()}`)
+    }
+    const playLabel = this.playButton?.getAt(1) as Phaser.GameObjects.Text | undefined
+    playLabel?.setText(`PLAY ${this.currentRoomId.toUpperCase()} (F2)`)
+  }
+
+  public syncCurrentRoomObjects(): RoomObjectConfig[] {
     const objects: RoomObjectConfig[] = this.editorObjects.map((obj) => {
       let speed: number | PlayerSpeedConfig | undefined = undefined
       if (obj.role === 'player') {
@@ -2396,6 +2740,9 @@ export class LevelEditorScene extends Phaser.Scene {
       return {
         id: obj.id,
         role: obj.role,
+        ...(obj.name ? { name: obj.name } : {}),
+        ...(obj.kind ? { kind: obj.kind } : {}),
+        ...(obj.passive !== undefined ? { passive: obj.passive } : {}),
         x: Math.round(posX),
         y: Math.round(posY),
         displayWidth: Math.round(obj.displayWidth),
@@ -2415,9 +2762,22 @@ export class LevelEditorScene extends Phaser.Scene {
       }
     })
 
-    ROOM1_OBJECTS.length = 0
-    ROOM1_OBJECTS.push(...objects)
+    setRoomObjectConfigs(this.currentRoomId, objects)
     return objects
+  }
+
+  public syncToRoom1Objects(): RoomObjectConfig[] {
+    return this.syncCurrentRoomObjects()
+  }
+
+  public returnToGame(): void {
+    this.syncCurrentRoomObjects()
+    const sceneManager = SceneManager.get(this.game)
+    if (sceneManager) {
+      sceneManager.exitEditor({ startingRoomId: this.currentRoomId })
+    } else {
+      this.scene.start('game', { startingRoomId: this.currentRoomId })
+    }
   }
 
   public openSpeedEditor(): void {
@@ -2441,56 +2801,69 @@ export class LevelEditorScene extends Phaser.Scene {
   }
 
   public async saveLayout(): Promise<boolean> {
-    const objects = this.syncToRoom1Objects()
-    const source = generateRoom1Source(objects)
-
+    const objects = this.syncCurrentRoomObjects()
+    const roomId = this.currentRoomId
     const bg = this.exportButton?.getAt(0) as Phaser.GameObjects.Rectangle | undefined
     const label = this.exportButton?.getAt(1) as Phaser.GameObjects.Text | undefined
 
-    try {
-      const response = await fetch('/api/save-room1', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: source }),
-      })
+    if (roomId === ROOM_IDS.first) {
+      const source = generateRoom1Source(objects)
+      try {
+        const response = await fetch('/api/save-room1', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: source }),
+        })
 
-      if (!response.ok) {
-        throw new Error(`Server returned ${response.status}: ${response.statusText}`)
+        if (!response.ok) {
+          throw new Error(`Server returned ${response.status}: ${response.statusText}`)
+        }
+
+        const result = await response.json()
+        if (!result.success) {
+          throw new Error(result.error ?? 'Unknown error writing file')
+        }
+
+        console.log(
+          '%c Overwrote room1.ts directly ',
+          'background: #2e7d32; color: #fff; font-size: 14px; padding: 4px 8px; border-radius: 4px',
+        )
+        console.log(source)
+
+        if (bg && label) {
+          bg.setFillStyle(0x66bb6a, 1)
+          label.setText('SAVED TO ROOM1.TS!')
+          this.time.delayedCall(1500, () => {
+            bg.setFillStyle(0x2e7d32, 1)
+            label.setText('SAVE TO ROOM1.TS')
+          })
+        }
+        return true
+      } catch (err) {
+        console.error('Failed to overwrite room1.ts directly:', err)
+        console.log('Generated room1.ts source fallback:\n' + source)
+
+        if (bg && label) {
+          bg.setFillStyle(0xb71c1c, 1)
+          label.setText('SAVE FAILED (CONSOLE)')
+          this.time.delayedCall(2000, () => {
+            bg.setFillStyle(0x2e7d32, 1)
+            label.setText('SAVE TO ROOM1.TS')
+          })
+        }
+        return false
       }
-
-      const result = await response.json()
-      if (!result.success) {
-        throw new Error(result.error ?? 'Unknown error writing file')
-      }
-
-      console.log(
-        '%c Overwrote room1.ts directly ',
-        'background: #2e7d32; color: #fff; font-size: 14px; padding: 4px 8px; border-radius: 4px',
-      )
-      console.log(source)
-
+    } else {
+      console.log(`Saved ${roomId} layout to memory:`, objects)
       if (bg && label) {
         bg.setFillStyle(0x66bb6a, 1)
-        label.setText('SAVED TO ROOM1.TS!')
+        label.setText(`SAVED ${roomId.toUpperCase()}!`)
         this.time.delayedCall(1500, () => {
           bg.setFillStyle(0x2e7d32, 1)
-          label.setText('SAVE TO ROOM1.TS')
+          label.setText(`SAVE ${roomId.toUpperCase()}`)
         })
       }
       return true
-    } catch (err) {
-      console.error('Failed to overwrite room1.ts directly:', err)
-      console.log('Generated room1.ts source fallback:\n' + source)
-
-      if (bg && label) {
-        bg.setFillStyle(0xb71c1c, 1)
-        label.setText('SAVE FAILED (CONSOLE)')
-        this.time.delayedCall(2000, () => {
-          bg.setFillStyle(0x2e7d32, 1)
-          label.setText('SAVE TO ROOM1.TS')
-        })
-      }
-      return false
     }
   }
 
@@ -2503,11 +2876,14 @@ export class LevelEditorScene extends Phaser.Scene {
     config: SpawnObjectConfig = {},
     recordHistory = true,
   ): EditorObject {
-    const id = config.id ?? this.generateNextId(role)
+    const id = config.id ?? this.generateNextId(role, config.kind ?? (role === 'object' && config.colliderShape === 'circle' ? 'boulder' : undefined))
 
     const existingIndex = this.editorObjects.findIndex((o) => o.id === id)
     if (existingIndex !== -1) {
       const existing = this.editorObjects[existingIndex]
+      if (config.name !== undefined) existing.name = config.name
+      if (config.kind !== undefined) existing.kind = config.kind
+      if (config.passive !== undefined) existing.passive = config.passive
       if (config.x !== undefined) existing.x = config.x
       if (config.y !== undefined) existing.y = config.y
       if (config.displayWidth !== undefined) existing.displayWidth = config.displayWidth
@@ -2538,18 +2914,36 @@ export class LevelEditorScene extends Phaser.Scene {
       return existing
     }
 
-    const textureKey = this.textureKeyForRole(role)
+    const isCrate = config.kind === 'crate'
+    const isPlate = config.kind === 'plate'
+    const isBoulder = role === 'object' && !isCrate && !isPlate
+    const textureKey =
+      config.kind && (KIND_TEXTURES as any)[config.kind]
+        ? (KIND_TEXTURES as any)[config.kind]
+        : this.textureKeyForRole(role)
     const isWeapon = role === 'weapon'
     const isCharacter = role === 'player' || role === 'guard' || role === 'enemy'
     const defaultBaseWidth = isWeapon
       ? DAGGER_SIZE.width
-      : (role === 'object' ? BOULDER_BASE_SIZE.width : CHARACTER_BASE_SIZE.width)
+      : isCrate
+        ? 88
+        : isPlate
+          ? 96
+          : isBoulder
+            ? BOULDER_BASE_SIZE.width
+            : CHARACTER_BASE_SIZE.width
     const defaultBaseHeight = isWeapon
       ? DAGGER_SIZE.height
-      : (role === 'object' ? BOULDER_BASE_SIZE.height : CHARACTER_BASE_SIZE.height)
+      : isCrate
+        ? 88
+        : isPlate
+          ? 96
+          : isBoulder
+            ? BOULDER_BASE_SIZE.height
+            : CHARACTER_BASE_SIZE.height
 
-    const displayWidth = config.displayWidth ?? defaultBaseWidth
-    const displayHeight = config.displayHeight ?? defaultBaseHeight
+    const displayWidth = config.displayWidth ?? (isBoulder ? 154 : defaultBaseWidth)
+    const displayHeight = config.displayHeight ?? (isBoulder ? 154 : defaultBaseHeight)
 
     const scaleX = config.scaleX ?? (displayWidth / defaultBaseWidth)
     const scaleY = config.scaleY ?? (displayHeight / defaultBaseHeight)
@@ -2585,8 +2979,9 @@ export class LevelEditorScene extends Phaser.Scene {
     let x = config.x !== undefined ? config.x : defaultX
     let y = config.y !== undefined ? config.y : defaultY
 
-    const colliderWidth = config.colliderWidth
-    const colliderHeight = config.colliderHeight
+    const colliderShape = config.colliderShape ?? (isBoulder ? 'circle' : 'box')
+    const colliderWidth = config.colliderWidth ?? (isCrate ? 80 : isPlate ? 80 : isBoulder ? 128 : undefined)
+    const colliderHeight = config.colliderHeight ?? (isCrate ? 80 : isPlate ? 80 : isBoulder ? 128 : undefined)
 
     {
       let offset = 0
@@ -2601,7 +2996,8 @@ export class LevelEditorScene extends Phaser.Scene {
           this.editorObjects,
           colliderWidth,
           colliderHeight,
-          config.colliderShape,
+          colliderShape,
+          config.kind,
         )
         if (!collides) break
         offset += 60
@@ -2610,7 +3006,7 @@ export class LevelEditorScene extends Phaser.Scene {
       }
     }
 
-    const sprite = this.add.image(x, y, textureKey).setDepth(3)
+    const sprite = this.add.image(x, y, textureKey).setDepth(config.kind === 'plate' ? 2 : 3)
     sprite.setDisplaySize(displayWidth, displayHeight)
     sprite.setAlpha(0.9)
 
@@ -2626,8 +3022,8 @@ export class LevelEditorScene extends Phaser.Scene {
     let collisionBox: ColliderOutline | undefined
     let colliderHandle: Phaser.GameObjects.Rectangle | undefined
     if (role !== 'weapon') {
-      const collSize = computeEditorColliderSize(role, scaleX, scaleY, colliderWidth, colliderHeight, config.colliderShape)
-      collisionBox = this.createColliderOutline(x, y, collSize.width, collSize.height, config.colliderShape)
+      const collSize = computeEditorColliderSize(role, scaleX, scaleY, colliderWidth, colliderHeight, colliderShape)
+      collisionBox = this.createColliderOutline(x, y, collSize.width, collSize.height, colliderShape)
 
       colliderHandle = this.add
         .rectangle(
@@ -2667,6 +3063,9 @@ export class LevelEditorScene extends Phaser.Scene {
 
     const editorObject: EditorObject = {
       id,
+      name: config.name,
+      kind: config.kind,
+      passive: config.passive,
       role,
       sprite,
       outline,
@@ -2682,9 +3081,9 @@ export class LevelEditorScene extends Phaser.Scene {
       baseHeight,
       scaleX,
       scaleY,
-      colliderWidth,
-      colliderHeight,
-      ...(config.colliderShape ? { colliderShape: config.colliderShape } : {}),
+      colliderWidth: role !== 'weapon' ? (colliderWidth ?? computeCollisionSize(role, scaleX, scaleY).width) : undefined,
+      colliderHeight: role !== 'weapon' ? (colliderHeight ?? computeCollisionSize(role, scaleX, scaleY).height) : undefined,
+      ...(colliderShape ? { colliderShape } : {}),
       maxHealth,
       speed,
       maxSpeed,
@@ -2817,6 +3216,9 @@ export class LevelEditorScene extends Phaser.Scene {
     const savedPos = this.savedWeaponPositions.get(obj.id)
     return {
       id: obj.id,
+      name: obj.name,
+      kind: obj.kind,
+      passive: obj.passive,
       x: savedPos ? savedPos.x : obj.x,
       y: savedPos ? savedPos.y : obj.y,
       displayWidth: obj.displayWidth,
@@ -2838,8 +3240,8 @@ export class LevelEditorScene extends Phaser.Scene {
     }
   }
 
-  public generateNextId(role: WorldObjectRole): string {
-    return generateNextObjectId(role, this.editorObjects)
+  public generateNextId(role: WorldObjectRole, customPrefix?: string): string {
+    return generateNextObjectId(role, this.editorObjects, customPrefix)
   }
 
   private textureKeyForRole(role: WorldObjectRole): string {
@@ -2857,7 +3259,11 @@ export class LevelEditorScene extends Phaser.Scene {
   }
 
   private textureKeyFor(worldObject: WorldObject): string | undefined {
-    if (worldObject.id === 'boulder') {
+    const kind = worldObject.metadata.kind
+    if (typeof kind === 'string' && (this.textures.exists(kind) || KIND_TEXTURES[kind])) {
+      return KIND_TEXTURES[kind] ?? kind
+    }
+    if (worldObject.id === WORLD_OBJECT_IDS.boulder || worldObject.id === 'boulder' || worldObject.id.includes('boulder')) {
       return BOULDER_TEXTURE_KEY
     }
     const rawRole = worldObject.metadata.role

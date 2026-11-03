@@ -3,6 +3,7 @@ import { PhaserGameHud } from '../presentation/PhaserGameHud.ts'
 import textboxImageUrl from '../../assets/game/ui/textbox.png'
 import type { GameSession } from '../application/GameSession.ts'
 import { createRoom1Session } from '../content/createRoom1Session.ts'
+import { ROOM1_OBJECTS } from '../content/room1.ts'
 import { createGameWorldState } from '../content/tutorialRooms.ts'
 import { INPUT_BINDINGS, isAlphabetKey } from '../presentation/InputBindings.ts'
 import { PhaserGameOutcomePanel } from '../presentation/PhaserGameOutcomePanel.ts'
@@ -17,6 +18,7 @@ export class GameScene extends Phaser.Scene {
   private hud: PhaserGameHud | undefined
 
   private resumeFromSave = false
+  private startingRoomId?: string
   /** The room the player was in last frame; entering a different one is a Save Point. */
   private lastRoomId: string | null = null
 
@@ -24,8 +26,9 @@ export class GameScene extends Phaser.Scene {
     super({ key: 'game' })
   }
 
-  init(data?: { resumeFromSave?: boolean }): void {
+  init(data?: { resumeFromSave?: boolean; startingRoomId?: string }): void {
     this.resumeFromSave = data?.resumeFromSave === true
+    this.startingRoomId = data?.startingRoomId
   }
 
   preload(): void {
@@ -36,9 +39,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.session = createRoom1Session({ movementBindings: INPUT_BINDINGS.movement, worldState: createGameWorldState() })
+    this.session = createRoom1Session({
+      movementBindings: INPUT_BINDINGS.movement,
+      worldState: createGameWorldState(ROOM1_OBJECTS, this.startingRoomId),
+    })
     if (this.resumeFromSave) {
       this.session.loadSavedState()
+    } else if (this.startingRoomId) {
+      this.session.saveCurrentState()
     }
     const worldState = this.session.getWorldState()
     this.lastRoomId = worldState.currentRoomId
@@ -49,7 +57,11 @@ export class GameScene extends Phaser.Scene {
     this.outcomePanel = new PhaserGameOutcomePanel(
       this,
       () => this.session.hasSavedState(),
-      (choice) => this.scene.restart({ resumeFromSave: choice === 'load-save' }),
+      (choice) =>
+        this.scene.restart({
+          resumeFromSave: choice === 'load-save',
+          startingRoomId: this.startingRoomId,
+        }),
     )
 
     const commandInputView = new PhaserCommandInputView()

@@ -50,16 +50,19 @@ export function wouldOverlapAnyEditorObject(
     colliderWidth?: number
     colliderHeight?: number
     colliderShape?: ColliderShape
+    kind?: string
   }[],
   colliderWidth?: number,
   colliderHeight?: number,
   colliderShape?: ColliderShape,
+  targetKind?: string,
 ): boolean {
+  if (targetKind === 'plate') return false
   const targetSize = computeEditorColliderSize(targetRole, scaleX, scaleY, colliderWidth, colliderHeight, colliderShape)
   const target = { x, y, ...targetSize, shape: colliderShape }
 
   for (const other of allObjects) {
-    if (other.id === objectId || !rolesCollide(targetRole, other.role)) continue
+    if (other.id === objectId || other.kind === 'plate' || !rolesCollide(targetRole, other.role)) continue
     const otherSize = computeEditorColliderSize(
       other.role,
       other.scaleX,
@@ -106,6 +109,9 @@ export function generateNextObjectId(
 
 export interface ScalableMovableObject {
   id: string
+  name?: string
+  kind?: 'crate' | 'plate' | 'archer'
+  passive?: boolean
   x: number
   y: number
   displayWidth: number

@@ -1,0 +1,215 @@
+import type { Box } from '../domain/CollisionWorld.ts'
+import type { RoomExit } from '../domain/Room.ts'
+import { HOME_AREA_IDS, HOME_AREA_ROOMS } from './homeArea.ts'
+import { ROOM1_OBJECTS, type RoomObjectConfig } from './room1.ts'
+import { ROOM_IDS } from './room1Constants.ts'
+import { ROOM_ENTRY, type RoomDefinition } from './roomPieces.ts'
+import { TUTORIAL_ROOMS, TUTORIAL_ROOM_IDS, ROOM1_HINT } from './tutorialRooms.ts'
+
+export const EDITOR_ROOM_IDS = [
+  TUTORIAL_ROOM_IDS.move,
+  TUTORIAL_ROOM_IDS.discover,
+  TUTORIAL_ROOM_IDS.throw,
+  TUTORIAL_ROOM_IDS.slowTime,
+  HOME_AREA_IDS.home,
+  HOME_AREA_IDS.storage,
+  HOME_AREA_IDS.yard,
+  HOME_AREA_IDS.lane,
+  HOME_AREA_IDS.gate,
+  ROOM_IDS.first,
+  ROOM_IDS.second,
+] as const
+
+export type EditorRoomId = (typeof EDITOR_ROOM_IDS)[number]
+
+export interface EditorRoomDefinition {
+  readonly id: string
+  readonly title: string
+  readonly hint?: string
+  readonly goal: string
+  readonly walls?: readonly Box[]
+  readonly exit: Pick<RoomExit, 'targetRoomId' | 'label' | 'requires' | 'endsGame'>
+}
+
+let room2Objects: RoomObjectConfig[] = []
+
+// Deep clone snapshots taken at module evaluation for clean test resets
+const initialTutorialRoomsSnapshot = JSON.stringify(TUTORIAL_ROOMS)
+const initialHomeAreaRoomsSnapshot = JSON.stringify(HOME_AREA_ROOMS)
+const initialRoom1ObjectsSnapshot = JSON.stringify(ROOM1_OBJECTS)
+
+export function getEditorRoomIds(): readonly string[] {
+  return EDITOR_ROOM_IDS
+}
+
+export function getNextRoomId(currentRoomId: string): string {
+  const ids = EDITOR_ROOM_IDS as readonly string[]
+  const idx = ids.indexOf(currentRoomId)
+  if (idx !== -1 && idx < ids.length - 1) {
+    return ids[idx + 1]
+  }
+  return ids[0]
+}
+
+export function getPreviousRoomId(currentRoomId: string): string {
+  const ids = EDITOR_ROOM_IDS as readonly string[]
+  const idx = ids.indexOf(currentRoomId)
+  if (idx > 0) {
+    return ids[idx - 1]
+  }
+  return ids[ids.length - 1]
+}
+
+export function getRoomDefinition(roomId: string): EditorRoomDefinition | undefined {
+  if (roomId === ROOM_IDS.first) {
+    return {
+      id: ROOM_IDS.first,
+      title: 'room1',
+      hint: ROOM1_HINT,
+      goal: 'Reach the exit to room2.',
+      exit: { targetRoomId: ROOM_IDS.second, label: ROOM_IDS.second, endsGame: true },
+    }
+  }
+
+  if (roomId === ROOM_IDS.second) {
+    return {
+      id: ROOM_IDS.second,
+      title: 'room2',
+      goal: 'Victory!',
+      exit: { targetRoomId: ROOM_IDS.first, label: ROOM_IDS.first },
+    }
+  }
+
+  const tutorialMatch = TUTORIAL_ROOMS.find((r) => r.id === roomId)
+  if (tutorialMatch) {
+    return {
+      id: tutorialMatch.id,
+      title: tutorialMatch.id,
+      hint: tutorialMatch.hint,
+      goal: tutorialMatch.goal,
+      walls: tutorialMatch.walls,
+      exit: tutorialMatch.exit,
+    }
+  }
+
+  const homeMatch = HOME_AREA_ROOMS.find((r) => r.id === roomId)
+  if (homeMatch) {
+    return {
+      id: homeMatch.id,
+      title: homeMatch.id,
+      hint: homeMatch.hint,
+      goal: homeMatch.goal,
+      walls: homeMatch.walls,
+      exit: homeMatch.exit,
+    }
+  }
+
+  return undefined
+}
+
+export function getRoomObjectConfigs(roomId: string): RoomObjectConfig[] {
+  if (roomId === ROOM_IDS.first) {
+    return [...ROOM1_OBJECTS]
+  }
+
+  if (roomId === ROOM_IDS.second) {
+    return [...room2Objects]
+  }
+
+  if (roomId === TUTORIAL_ROOM_IDS.move) {
+    const def = TUTORIAL_ROOMS[0]
+    const defObjects = def ? def.objects : []
+    const hasPlayer = defObjects.some((o) => o.role === 'player' || o.id === 'player')
+    if (hasPlayer) {
+      return [...defObjects]
+    }
+    const playerConfig = ROOM1_OBJECTS.find((o) => o.role === 'player')
+    const playerObj: RoomObjectConfig = playerConfig
+      ? { ...playerConfig, ...ROOM_ENTRY }
+      : {
+          id: 'player',
+          role: 'player',
+          ...ROOM_ENTRY,
+          displayWidth: 125,
+          displayHeight: 125,
+          scaleX: 0.71,
+          scaleY: 0.71,
+          maxHealth: 100,
+        }
+    return [playerObj, ...defObjects]
+  }
+
+  const tutorialMatch = TUTORIAL_ROOMS.find((r) => r.id === roomId)
+  if (tutorialMatch) {
+    return [...tutorialMatch.objects]
+  }
+
+  const homeMatch = HOME_AREA_ROOMS.find((r) => r.id === roomId)
+  if (homeMatch) {
+    return [...homeMatch.objects]
+  }
+
+  return []
+}
+
+export function setRoomObjectConfigs(roomId: string, objects: readonly RoomObjectConfig[]): void {
+  if (roomId === ROOM_IDS.first) {
+    ROOM1_OBJECTS.length = 0
+    ROOM1_OBJECTS.push(...objects)
+    return
+  }
+
+  if (roomId === ROOM_IDS.second) {
+    room2Objects = [...objects]
+    return
+  }
+
+  if (roomId === TUTORIAL_ROOM_IDS.move) {
+    const playerObj = objects.find((o) => o.role === 'player' || o.id === 'player')
+    if (playerObj) {
+      const pIdx = ROOM1_OBJECTS.findIndex((o) => o.role === 'player')
+      if (pIdx !== -1) {
+        ROOM1_OBJECTS[pIdx] = { ...ROOM1_OBJECTS[pIdx], ...playerObj }
+      }
+    }
+    const nonPlayerObjs = objects.filter((o) => o.role !== 'player' && o.id !== 'player')
+    if (TUTORIAL_ROOMS[0]) {
+      TUTORIAL_ROOMS[0].objects = nonPlayerObjs
+    }
+    return
+  }
+
+  const tutorialMatch = TUTORIAL_ROOMS.find((r) => r.id === roomId)
+  if (tutorialMatch) {
+    tutorialMatch.objects = [...objects]
+    return
+  }
+
+  const homeMatch = HOME_AREA_ROOMS.find((r) => r.id === roomId)
+  if (homeMatch) {
+    homeMatch.objects = [...objects]
+    return
+  }
+}
+
+export function resetAllRooms(): void {
+  const parsedTutorials: RoomDefinition[] = JSON.parse(initialTutorialRoomsSnapshot)
+  for (let i = 0; i < TUTORIAL_ROOMS.length; i++) {
+    if (parsedTutorials[i]) {
+      TUTORIAL_ROOMS[i].objects = parsedTutorials[i].objects
+    }
+  }
+
+  const parsedHome: RoomDefinition[] = JSON.parse(initialHomeAreaRoomsSnapshot)
+  for (let i = 0; i < HOME_AREA_ROOMS.length; i++) {
+    if (parsedHome[i]) {
+      HOME_AREA_ROOMS[i].objects = parsedHome[i].objects
+    }
+  }
+
+  const parsedRoom1: RoomObjectConfig[] = JSON.parse(initialRoom1ObjectsSnapshot)
+  ROOM1_OBJECTS.length = 0
+  ROOM1_OBJECTS.push(...parsedRoom1)
+
+  room2Objects = []
+}
