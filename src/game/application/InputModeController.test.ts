@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, beforeEach, afterEach } from 'vitest'
 import {
   COMMAND_MODE_TIME_SCALE,
   InputModeController,
@@ -14,6 +14,14 @@ const bindings = {
 }
 
 const controller = () => new InputModeController(bindings)
+
+beforeEach(() => {
+  resetCommandModeTimeScale()
+})
+
+afterEach(() => {
+  resetCommandModeTimeScale()
+})
 
 describe('mode switching', () => {
   it('starts in movement mode at full time scale', () => {

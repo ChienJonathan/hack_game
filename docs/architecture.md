@@ -159,7 +159,7 @@ There are two ways through an open Exit: walking into its zone (`PlayerMovementP
 | `tutorial1` | Arrows, pick-up, Space/click attack | dagger, `dummy` (passive, 60 Health) | the dummy is defeated |
 | `tutorial2` | `ls`, Discovery, Tab | boulder, dagger, passive guard, all `?` | everything is discovered |
 | `tutorial3` | `mv` throws (and pulling the boulder) | dagger, boulder, `sentry` guard (40 Health, does not walk) | the sentry is defeated |
-| `tutorial4` | Command Mode slows time to ×0.25 | dagger, `runner` guard (speed 380 > player 300, 40 Health) | the runner is defeated |
+| `tutorial4` | Command Mode slows time | dagger, `runner` guard (speed 380 > player 300, 40 Health) | the runner is defeated |
 
 Enemies that never walk (`speed` 0) have `mass` 1000 so a bump cannot shove them (a speed of 0 gives no braking). A `passive` enemy (`RoomObjectConfig.passive`, stored in state) never chases or attacks. In the throwing rooms the player picks up the dagger and throws it with `mv dagger guard`; a thrown held Weapon can graze its thrower for a few points of Impact Damage as it leaves the hand. `content/tutorialRooms.test.ts` plays all four rooms through `GameSession` with the taught mechanics into the home area.
 

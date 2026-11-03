@@ -25,6 +25,7 @@ import {
   getTuningConfig,
   applyTuningConfig,
 } from './CommandEditorOverlay.ts'
+import { resetCommandModeTimeScale } from '../application/InputModeController.ts'
 import { GAME_MV_CONFIG, DEFAULT_MV_ACCELERATION } from '../commands/mvConstants.ts'
 import {
   GAME_PHYSICS_CONFIG,
@@ -112,11 +113,13 @@ describe('CommandEditorOverlay & MV Tuning', () => {
   beforeEach(() => {
     Object.assign(GAME_MV_CONFIG, initialMv)
     Object.assign(GAME_PHYSICS_CONFIG, initialPhysics)
+    resetCommandModeTimeScale()
   })
 
   afterEach(() => {
     Object.assign(GAME_MV_CONFIG, initialMv)
     Object.assign(GAME_PHYSICS_CONFIG, initialPhysics)
+    resetCommandModeTimeScale()
   })
 
   describe('getTuningConfig & applyTuningConfig', () => {
