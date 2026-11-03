@@ -1,5 +1,5 @@
 import { collidesPhysically } from '../domain/ColliderTag.ts'
-import { AabbCollisionWorld, type Bounds, type CollisionWorld } from '../domain/CollisionWorld.ts'
+import { ShapeCollisionWorld, boxFromState, contactOf, isCircle, type Bounds, type CollisionWorld } from '../domain/CollisionWorld.ts'
 import { resolveCollision } from '../domain/CollisionResponse.ts'
 import { resolvePhysicsAttr, velocityDecay, type PhysicsAttr } from '../domain/PhysicsAttr.ts'
 import type { WorldObject } from '../domain/WorldObject.ts'
@@ -67,7 +67,7 @@ export function applyForce(worldObject: WorldObject, forceX: number, forceY: num
 const TOUCH_EPSILON = 1e-6
 
 function boxOf(state: BodyState) {
-  return { x: state.x, y: state.y, width: state.width, height: state.height }
+  return boxFromState(state)
 }
 
 /**
@@ -82,7 +82,7 @@ export class PhysicsWorld {
 
   constructor(
     config: () => PhysicsConfig = () => GAME_PHYSICS_CONFIG,
-    collision: CollisionWorld = new AabbCollisionWorld(),
+    collision: CollisionWorld = new ShapeCollisionWorld(),
   ) {
     this.config = config
     this.collision = collision
@@ -177,8 +177,7 @@ export class PhysicsWorld {
     config: PhysicsConfig,
   ): void {
     const { state } = body
-    const size = { width: state.width, height: state.height }
-    const next = { x: state.x + (state.vx ?? 0) * dt, y: state.y + (state.vy ?? 0) * dt, ...size }
+    const next = { ...boxOf(state), x: state.x + (state.vx ?? 0) * dt, y: state.y + (state.vy ?? 0) * dt }
     const obstacles = bodies.filter((other) => other !== body && collidesPhysically(body.object, other.object))
 
     const resolved = this.collision.resolveMovement(
@@ -209,17 +208,8 @@ export class PhysicsWorld {
 
   /** Exchanges motion between two touching bodies and tells the listeners, unless they are not approaching. */
   private collide(a: Body, b: Body, config: PhysicsConfig): void {
-    let normalX = b.state.x - a.state.x
-    let normalY = b.state.y - a.state.y
-    const length = Math.hypot(normalX, normalY)
-    if (length === 0) {
-      normalX = 1
-      normalY = 0
-    } else {
-      normalX /= length
-      normalY /= length
-    }
-    const normal = { x: normalX, y: normalY }
+    // Boxes push along the line between centres; a circle pushes along its surface normal.
+    const normal = this.collision.contactNormal(boxOf(a.state), boxOf(b.state))
 
     const result = resolveCollision(
       { mass: a.attr.mass, restitution: a.attr.restitution, vx: a.state.vx ?? 0, vy: a.state.vy ?? 0 },
@@ -257,6 +247,16 @@ export class PhysicsWorld {
 
         const mover = this.bodyToDisplace(first, second)
         const fixed = mover === first ? second : first
+        if (isCircle(boxOf(first.state)) || isCircle(boxOf(second.state))) {
+          // Push the mover straight out along the contact normal by the overlap depth.
+          const contact = contactOf(boxOf(mover.state), boxOf(fixed.state))
+          mover.state.x += contact.normal.x * contact.distance
+          mover.state.y += contact.normal.y * contact.distance
+          if (bounds) {
+            Object.assign(mover.state, this.collision.clampToBounds(boxOf(mover.state), bounds))
+          }
+          continue
+        }
         const penetrationX = (first.state.width + second.state.width) / 2 - Math.abs(second.state.x - first.state.x)
         const penetrationY = (first.state.height + second.state.height) / 2 - Math.abs(second.state.y - first.state.y)
         if (penetrationX <= penetrationY) {

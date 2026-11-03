@@ -33,6 +33,11 @@ function throwTo(body: Body, targetX: number, targetY: number, targetObjectId: s
   body.thrown = { targetX, targetY, targetObjectId, hitIds: [] }
 }
 
+/** x at which `blocker` sits 5 px in front of the boulder's leading edge, whatever the boulder's size. */
+function blockerFiveAhead(boulder: Body, blocker: Body): number {
+  return boulder.x + (boulder.width as number) / 2 + 5 + (blocker.width as number) / 2
+}
+
 /** Boulder at (500, 500) with only `guard2` left alive as an obstacle at (700, 500). */
 function boulderSetup(targetId: string) {
   const ctx = setup({ mv_acceleration: 1000 })
@@ -198,7 +203,7 @@ describe('MvDrive', () => {
 describe('MvDrive collisions', () => {
   it('ends the Throw at the first Collision and keeps the speed for the physics step', () => {
     const { tick, boulder, blocker } = boulderSetup('guard2')
-    blocker.x = 612
+    blocker.x = blockerFiveAhead(boulder, blocker)
 
     tick()
     expect(boulder.thrown).toBeNull()
@@ -208,7 +213,7 @@ describe('MvDrive collisions', () => {
 
   it('marks the target discovered when the Collision is with the target itself', () => {
     const { tick, boulder, blocker } = boulderSetup('guard2')
-    blocker.x = 612
+    blocker.x = blockerFiveAhead(boulder, blocker)
 
     tick()
     expect(boulder.thrown).toBeNull()
@@ -222,7 +227,7 @@ describe('MvDrive collisions', () => {
     target.y = 500
     target.discovered = false
     boulder.thrown = { targetX: 1200, targetY: 500, targetObjectId: 'guard', hitIds: [] }
-    blocker.x = 612
+    blocker.x = blockerFiveAhead(boulder, blocker)
 
     tick()
     expect(boulder.thrown).toBeNull()

@@ -2,6 +2,22 @@ import type { PhysicsAttrConfig, PlayerSpeedConfig, WorldObjectRole } from '../c
 import { GAME_WEAPON_CONFIG } from '../content/weaponConstants.ts'
 import { computeCollisionSize } from '../content/room1WorldState.ts'
 import { rolesCollide } from '../domain/ColliderTag.ts'
+import { ShapeCollisionWorld, type ColliderShape } from '../domain/CollisionWorld.ts'
+
+const editorCollision = new ShapeCollisionWorld()
+
+/** Collider size as the editor draws and checks it: a circle is a square whose side is its diameter (the width). */
+export function computeEditorColliderSize(
+  role: WorldObjectRole,
+  scaleX: number,
+  scaleY: number,
+  colliderWidth?: number,
+  colliderHeight?: number,
+  colliderShape?: ColliderShape,
+): { width: number; height: number } {
+  const size = computeCollisionSize(role, scaleX, scaleY, colliderWidth, colliderHeight)
+  return colliderShape === 'circle' ? { width: size.width, height: size.width } : size
+}
 
 export function computeEditorCollisionBox(
   role: WorldObjectRole,
@@ -33,25 +49,26 @@ export function wouldOverlapAnyEditorObject(
     scaleY: number
     colliderWidth?: number
     colliderHeight?: number
+    colliderShape?: ColliderShape
   }[],
   colliderWidth?: number,
   colliderHeight?: number,
+  colliderShape?: ColliderShape,
 ): boolean {
-  const targetSize = computeCollisionSize(targetRole, scaleX, scaleY, colliderWidth, colliderHeight)
+  const targetSize = computeEditorColliderSize(targetRole, scaleX, scaleY, colliderWidth, colliderHeight, colliderShape)
+  const target = { x, y, ...targetSize, shape: colliderShape }
 
   for (const other of allObjects) {
     if (other.id === objectId || !rolesCollide(targetRole, other.role)) continue
-    const otherSize = computeCollisionSize(
+    const otherSize = computeEditorColliderSize(
       other.role,
       other.scaleX,
       other.scaleY,
       other.colliderWidth,
       other.colliderHeight,
+      other.colliderShape,
     )
-    if (
-      Math.abs(x - other.x) < (targetSize.width + otherSize.width) / 2 &&
-      Math.abs(y - other.y) < (targetSize.height + otherSize.height) / 2
-    ) {
+    if (editorCollision.overlaps(target, { x: other.x, y: other.y, ...otherSize, shape: other.colliderShape })) {
       return true
     }
   }
@@ -99,6 +116,7 @@ export interface ScalableMovableObject {
   scaleY: number
   colliderWidth?: number
   colliderHeight?: number
+  colliderShape?: ColliderShape
   maxHealth?: number
   speed?: number | PlayerSpeedConfig
   maxSpeed?: number

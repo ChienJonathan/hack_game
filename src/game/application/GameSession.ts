@@ -12,7 +12,7 @@ import type { WorldState } from '../domain/WorldState.ts'
 import { startDaggerAttackAnimation } from '../content/weaponConstants.ts'
 import type { InputMode, InputModeController } from './InputModeController.ts'
 
-const SAVE_SCHEMA_VERSION = 2
+const SAVE_SCHEMA_VERSION = 3
 
 export interface GameSessionDependencies {
   worldState: WorldState

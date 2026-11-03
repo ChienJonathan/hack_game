@@ -55,6 +55,9 @@ export function generateRoom1Source(objects: RoomObjectConfig[]): string {
     if (obj.colliderHeight !== undefined) {
       lines.push(`    colliderHeight: ${Math.round(obj.colliderHeight)},`)
     }
+    if (obj.colliderShape !== undefined && obj.colliderShape !== 'box') {
+      lines.push(`    colliderShape: ${JSON.stringify(obj.colliderShape)},`)
+    }
     for (const key of PHYSICS_ATTR_KEYS) {
       if (obj[key] !== undefined) {
         lines.push(`    ${key}: ${obj[key]},`)
@@ -99,6 +102,8 @@ export interface RoomObjectConfig extends PhysicsAttrConfig {
   holdOffsetY?: number
   colliderWidth?: number
   colliderHeight?: number
+  /** Outline of the collider; a \`circle\` uses \`colliderWidth\` as its diameter. Defaults to \`box\`. */
+  colliderShape?: 'box' | 'circle'
 }
 
 export const ROOM1_OBJECTS: RoomObjectConfig[] = [

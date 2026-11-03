@@ -4,11 +4,11 @@ import { WORLD_OBJECT_IDS, ROOM_LAYOUT } from '../../content/room1Constants.ts'
 import { TickSimulationEngine } from '../TickSimulationEngine.ts'
 import { ROOM1_PROCESSES } from './Room1Processes.ts'
 import { getMutableWorldObjectState, type MutableWorldObjectState } from '../../domain/WorldObjectState.ts'
-import { AabbCollisionWorld } from '../../domain/CollisionWorld.ts'
+import { ShapeCollisionWorld } from '../../domain/CollisionWorld.ts'
 import { DEFAULT_DRAG, DEFAULT_FRICTION } from '../physicsConstants.ts'
 
 describe('Room1Processes collisionbox overlap prevention', () => {
-  const collisionWorld = new AabbCollisionWorld()
+  const collisionWorld = new ShapeCollisionWorld()
 
   it('prevents player from walking into or through a boulder', () => {
     const state = createInitialWorldState()
