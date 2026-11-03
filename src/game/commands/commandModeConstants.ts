@@ -3,7 +3,7 @@
  * Constant across all rooms in the game world.
  */
 
-export const DEFAULT_COMMAND_MODE_TIME_SCALE = 0.01
+export const DEFAULT_COMMAND_MODE_TIME_SCALE = 0.25
 
 export interface CommandModeConfig {
   commandTimeScale: number

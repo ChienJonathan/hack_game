@@ -151,7 +151,7 @@ describe('tutorial rooms', () => {
     walk(session, { x: 1000, y: 420 })
     runFor(session, 200)
     expect(Math.abs((body(session, 'runner') as unknown as { vx: number }).vx)).toBeGreaterThan(0) // it charges
-    session.enterCommandMode() // what typing a letter does in the game: time slows to x0.25
+    session.enterCommandMode() // what typing a letter does in the game: time slows
     expect(session.inputMode).toBe('command')
     runFor(session, 400)
     expect(body(session, 'player').alive).not.toBe(false)

@@ -70,7 +70,7 @@ export const TUTORIAL_ROOMS: RoomDefinition[] = [
   {
     id: TUTORIAL_ROOM_IDS.slowTime,
     hint:
-      'Typing a command slows time to x0.25, but it never stops. This guard is faster than you and charges once ' +
+      'Typing a command slows time, but it never stops. This guard is faster than you and charges once ' +
       'you cross the middle of the room. Grab the dagger, and when the guard comes, type mv dagger guard.',
     goal: 'Defeat the fast guard.',
     objects: [
