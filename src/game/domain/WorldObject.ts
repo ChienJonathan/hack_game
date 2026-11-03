@@ -6,7 +6,8 @@ export type WorldObjectMetadata = Record<string, JsonValue>
 
 export abstract class WorldObject {
   readonly id: WorldObjectId
-  readonly roomId: RoomId
+  /** The Room the object is in. Only room travel changes it (see `RoomTravel.ts`). */
+  roomId: RoomId
   metadata: WorldObjectMetadata
   readonly behaviorRules: readonly BehaviorRule[]
   public state: MutableJsonValue

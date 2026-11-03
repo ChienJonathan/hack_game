@@ -36,6 +36,12 @@ export interface RoomObjectConfig extends PhysicsAttrConfig {
   colliderHeight?: number
   /** Outline of the collider; a `circle` uses `colliderWidth` as its diameter. Defaults to `box`. */
   colliderShape?: 'box' | 'circle'
+  /** Shown and typed name when it differs from `id` (ids are unique across all rooms). */
+  name?: string
+  /** An enemy that never moves or attacks, such as a training dummy. */
+  passive?: boolean
+  /** A special object: a pushable `crate`, a pressure `plate`, or an `archer` enemy. */
+  kind?: 'crate' | 'plate' | 'archer'
 }
 
 export const ROOM1_OBJECTS: RoomObjectConfig[] = [
@@ -55,8 +61,8 @@ export const ROOM1_OBJECTS: RoomObjectConfig[] = [
       maxSpeed: 300,
     },
     maxHealth: 100,
-    colliderWidth: 58,
-    colliderHeight: 117,
+    colliderWidth: 62,
+    colliderHeight: 94,
   },
   {
     id: "boulder",

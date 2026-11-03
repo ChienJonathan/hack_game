@@ -3,7 +3,7 @@ import { PhaserGameHud } from '../presentation/PhaserGameHud.ts'
 import textboxImageUrl from '../../assets/game/ui/textbox.png'
 import type { GameSession } from '../application/GameSession.ts'
 import { createRoom1Session } from '../content/createRoom1Session.ts'
-import { ROOM_IDS, ROOM_NAMES } from '../content/room1Constants.ts'
+import { createGameWorldState } from '../content/tutorialRooms.ts'
 import { INPUT_BINDINGS, isAlphabetKey } from '../presentation/InputBindings.ts'
 import { PhaserGameOutcomePanel } from '../presentation/PhaserGameOutcomePanel.ts'
 import { PhaserRoomView, WORLD_OBJECT_TEXTURE_URLS } from '../presentation/PhaserRoomView.ts'
@@ -17,6 +17,8 @@ export class GameScene extends Phaser.Scene {
   private hud: PhaserGameHud | undefined
 
   private resumeFromSave = false
+  /** The room the player was in last frame; entering a different one is a Save Point. */
+  private lastRoomId: string | null = null
 
   constructor() {
     super({ key: 'game' })
@@ -34,11 +36,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.session = createRoom1Session({ movementBindings: INPUT_BINDINGS.movement })
+    this.session = createRoom1Session({ movementBindings: INPUT_BINDINGS.movement, worldState: createGameWorldState() })
     if (this.resumeFromSave) {
       this.session.loadSavedState()
     }
     const worldState = this.session.getWorldState()
+    this.lastRoomId = worldState.currentRoomId
     this.cameras.main.setBackgroundColor('#0b141d')
     this.roomView.mount(this, worldState, false)
     this.hud = new PhaserGameHud(this)
@@ -100,6 +103,13 @@ export class GameScene extends Phaser.Scene {
   update(_time: number, delta: number): void {
     this.session.update(delta)
     const worldState = this.session.getWorldState()
+    if (worldState.currentRoomId !== this.lastRoomId) {
+      this.lastRoomId = worldState.currentRoomId
+      // Entering a room is a Save Point, so a defeat there offers LOAD SAVE from the room's start.
+      if (worldState.outcome === 'playing') {
+        this.session.saveCurrentState()
+      }
+    }
     this.commandInputView?.setPrompt(this.promptForRoom(worldState.currentRoomId))
     this.roomView.update(worldState, (objectId) => this.session.getRenderPosition(objectId), delta)
     this.outcomePanel?.update(worldState)
@@ -183,16 +193,6 @@ export class GameScene extends Phaser.Scene {
   }
 
   private promptForRoom(roomId: string | null): string {
-    if (!roomId) {
-      return '~$ '
-    }
-
-    const rootRoomName = ROOM_NAMES[ROOM_IDS.first]
-    const roomName = ROOM_NAMES[roomId] ?? roomId
-    const path = roomId === ROOM_IDS.first
-      ? `~/${rootRoomName}`
-      : `~/${rootRoomName}/${roomName}`
-
-    return `${path}$ `
+    return roomId ? `~/${roomId}$ ` : '~$ '
   }
 }

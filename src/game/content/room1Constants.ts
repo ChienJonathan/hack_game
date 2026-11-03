@@ -20,6 +20,8 @@ export const PROCESS_IDS = {
   dagger: 'dagger-pickup',
   guard: 'guard-response',
   boulder: 'boulder-behavior',
+  archer: 'archer-shoot',
+  arrow: 'arrow-flight',
 } as const
 
 export const ROOM_LAYOUT = {

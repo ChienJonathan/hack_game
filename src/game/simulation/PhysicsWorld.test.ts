@@ -188,7 +188,7 @@ describe('PhysicsWorld motion', () => {
   it('does not move bodies outside the current room, dead bodies or held weapons', () => {
     const { add, step, state } = createWorld({ drag: 0 })
     const elsewhere = add('elsewhere', 'enemy', { vx: 100 })
-    ;(elsewhere.object as unknown as { roomId: string }).roomId = 'room2'
+      ; (elsewhere.object as unknown as { roomId: string }).roomId = 'room2'
     const dead = add('dead', 'enemy', { vx: 100, alive: false })
     const held = add('dagger', 'weapon', { vx: 100, equippedBy: 'player' })
 
@@ -364,5 +364,62 @@ describe('PhysicsWorld with a circle collider', () => {
     // Moved diagonally, not just along one axis.
     expect(crate.body.x).toBeGreaterThan(545)
     expect(crate.body.y).toBeGreaterThan(545)
+  })
+})
+
+describe('PhysicsWorld walls', () => {
+  function walledWorld() {
+    const world = createWorld({ drag: 0 })
+    // A wall from x 600 to 640, top to bottom of the open space.
+    world.state.rooms[0] = { ...world.state.rooms[0], walls: [{ x: 620, y: 500, width: 40, height: 2000 }] }
+    return world
+  }
+
+  it('stops a body at a wall and takes away its speed into the wall, with no bounce', () => {
+    const { add, step } = walledWorld()
+    const { body } = add('walker', 'enemy', { x: 500, width: 100, height: 100, vx: 600, vy: 0 })
+    step(30)
+    expect(body.x).toBeCloseTo(550, 6) // flush against the wall's left face
+    expect(body.vx).toBe(0)
+  })
+
+  it('lets a body slide along a wall it hits at an angle', () => {
+    const { add, step } = walledWorld()
+    const { body } = add('walker', 'enemy', { x: 540, y: 500, width: 100, height: 100, vx: 300, vy: 300 })
+    step(10)
+    expect(body.x).toBeCloseTo(550, 6)
+    expect(body.vy).toBeGreaterThan(0)
+    expect(body.y).toBeGreaterThan(500)
+  })
+
+  it('pushes a body that overlaps a wall straight out', () => {
+    const { add, step } = walledWorld()
+    const { body } = add('walker', 'enemy', { x: 590, width: 100, height: 100 })
+    step()
+    expect(body.x).toBeCloseTo(550, 6)
+  })
+
+  it('ends a Throw that runs into a wall', () => {
+    const { add, step, physics } = walledWorld()
+    const { body } = add('boulder', 'object', { x: 500, width: 100, height: 100, vx: 400, thrown: { targetX: 900, targetY: 500, hitIds: [] } })
+    physics.onWallHit((worldObject) => {
+      ; (worldObject.state as { thrown?: unknown }).thrown = null
+    })
+    step(20)
+    expect(body.thrown).toBeNull()
+    expect(body.x).toBeCloseTo(550, 6)
+  })
+
+  it('lets floor objects ignore walls', () => {
+    const { state, step } = walledWorld()
+    const plate = new BasicWorldObject('plate', 'room1', { name: 'plate', role: 'object', colliderTags: [{ class: 'floor' }] }, [], {
+      x: 610,
+      y: 500,
+      width: 80,
+      height: 80,
+    })
+    state.worldObjects.push(plate)
+    step()
+    expect((plate.state as { x: number }).x).toBe(610)
   })
 })

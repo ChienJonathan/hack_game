@@ -12,7 +12,7 @@ export function getRoomDirectoryEntries(
 
   for (const objectId of room.objectIds) {
     const worldObject = state.worldObjects.find((candidate) => candidate.id === objectId)
-    if (!worldObject || (!includePlayer && (worldObject.metadata.role === 'player' || worldObject.id === 'player'))) {
+    if (!worldObject || worldObject.metadata.hidden === true || (!includePlayer && (worldObject.metadata.role === 'player' || worldObject.id === 'player'))) {
       continue
     }
 

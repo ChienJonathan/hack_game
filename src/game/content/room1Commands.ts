@@ -4,6 +4,7 @@ import { RegisteredCommandRegistry } from '../commands/RegisteredCommandRegistry
 import type { RegisteredCommand } from '../commands/CommandRegistry.ts'
 import { HelpCommandExecutor } from '../commands/executors/help.ts'
 import { LsCommandExecutor } from '../commands/executors/ls.ts'
+import { CdCommandExecutor } from '../commands/executors/cd.ts'
 import { MvCommandExecutor } from '../commands/executors/mv.ts'
 import { VirtualCommandParser } from '../commands/VirtualCommandParser.ts'
 
@@ -11,6 +12,7 @@ export function createRoom1CommandSubmissionService(): CommandSubmissionService 
   const commands: RegisteredCommand[] = [
     { name: 'ls', requirements: [], executor: new LsCommandExecutor() },
     { name: 'mv', requirements: [], executor: new MvCommandExecutor() },
+    { name: 'cd', requirements: [], executor: new CdCommandExecutor() },
   ]
   const helpCommandName = 'help'
 

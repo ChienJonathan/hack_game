@@ -19,6 +19,7 @@ import {
   GAME_WEAPON_CONFIG,
 } from './room1Constants.ts'
 import { ROOM1_OBJECTS, type RoomObjectConfig, type WorldObjectRole } from './room1.ts'
+import { ARCHER_CONFIG, arrowIdsFor } from './archerConstants.ts'
 
 const ROOM_BOUNDS = {
   left: ROOM_LAYOUT.left,
@@ -33,12 +34,13 @@ const alwaysActiveRule = (processDefinitionId: string) => ({
 })
 
 function createRoomWorldObject(
+  roomId: string,
   id: string,
   metadata: WorldObject['metadata'],
   behaviorRules: WorldObject['behaviorRules'],
   state: WorldObject['state'],
 ): WorldObject {
-  return new BasicWorldObject(id, ROOM_IDS.first, metadata, behaviorRules, state)
+  return new BasicWorldObject(id, roomId, metadata, behaviorRules, state)
 }
 
 function physicsAttrState(obj: RoomObjectConfig): PhysicsAttrOverride {
@@ -126,121 +128,49 @@ function colliderState(obj: RoomObjectConfig, width: number, height: number) {
   }
 }
 
-export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJECTS): WorldState {
-  const worldObjects: WorldObject[] = objects.map((obj) => {
-    if (obj.role === 'player') {
-      const { scaleX, scaleY } = resolveScale(obj, CHARACTER_BASE_SIZE.width, CHARACTER_BASE_SIZE.height)
-      const { width, height } = computeColliderSize('player', scaleX, scaleY, obj)
-      return createRoomWorldObject(
-        obj.id,
-        { name: 'hacker', role: 'player', discoverable: false, colliderTags: defaultColliderTags('player') },
-        [alwaysActiveRule(PROCESS_IDS.player)],
-        {
-          x: obj.x,
-          y: obj.y,
-          ...physicsAttrState(obj),
-          ...colliderState(obj, width, height),
-          displayWidth: obj.displayWidth,
-          displayHeight: obj.displayHeight,
-          scaleX,
-          scaleY,
-          speed: typeof obj.speed === 'object' && obj.speed !== null
-            ? {
-                acceleration: obj.speed.acceleration,
-                frictionAcceleration: obj.speed.frictionAcceleration ?? 1200,
-                turnaroundAcceleration: obj.speed.turnaroundAcceleration,
-                maxSpeed: obj.speed.maxSpeed,
-              }
-            : obj.speed !== undefined
-              ? obj.speed
-              : {
-                  acceleration: 800,
-                  frictionAcceleration: 1200,
-                  turnaroundAcceleration: 1600,
-                  maxSpeed: 240,
-                },
-          maxSpeed: typeof obj.speed === 'object' && obj.speed !== null
-            ? obj.speed.maxSpeed
-            : (typeof obj.speed === 'number' ? obj.speed : 240),
-          acceleration: typeof obj.speed === 'object' && obj.speed !== null ? obj.speed.acceleration : 800,
-          frictionAcceleration: typeof obj.speed === 'object' && obj.speed !== null
-            ? (obj.speed.frictionAcceleration ?? 1200)
-            : 1200,
-          turnaroundAcceleration: typeof obj.speed === 'object' && obj.speed !== null ? obj.speed.turnaroundAcceleration : 1600,
-          vx: 0,
-          vy: 0,
-          health: obj.maxHealth ?? MAX_HEALTH,
-          maxHealth: obj.maxHealth ?? MAX_HEALTH,
-          alive: true,
-          discovered: true,
-          weaponId: null,
-          attackCooldownMs: 0,
-          moveX: 0,
-          moveY: 0,
-          facing: 'right',
-        },
-      )
-    }
+/** Builds the World Objects described by `objects`, all placed in `roomId`. */
+/** The arrows an archer shoots, kept out of sight (not alive) until fired. */
+function createArrows(archer: RoomObjectConfig, roomId: string): WorldObject[] {
+  const { width, height } = ARCHER_CONFIG.arrowSize
+  return arrowIdsFor(archer.id).map((id) =>
+    createRoomWorldObject(
+      roomId,
+      id,
+      // No collider tags: an arrow takes no part in the physics, `ArrowFlightProcess` moves it.
+      { name: id, role: 'object', kind: 'arrow', hidden: true, discoverable: false, colliderTags: [] },
+      [alwaysActiveRule(PROCESS_IDS.arrow)],
+      {
+        x: archer.x,
+        y: archer.y,
+        width,
+        height,
+        displayWidth: 64,
+        displayHeight: 64,
+        alive: false,
+        flightVx: 0,
+        flightVy: 0,
+        angle: 0,
+        travelled: 0,
+        shooterId: archer.id,
+      },
+    ),
+  )
+}
 
-    if (obj.role === 'weapon') {
-      const { scaleX, scaleY } = resolveScale(obj, DAGGER_SIZE.width, DAGGER_SIZE.height)
-      const { width, height } = computeCollisionSize('weapon', scaleX, scaleY, obj.colliderWidth, obj.colliderHeight)
-      return createRoomWorldObject(
-        obj.id,
-        { name: obj.id, role: 'weapon', weaponId: 'dagger', discoverable: true, colliderTags: defaultColliderTags('weapon') },
-        [alwaysActiveRule(PROCESS_IDS.dagger)],
-        {
-          x: obj.x,
-          y: obj.y,
-          ...physicsAttrState(obj),
-          ...colliderState(obj, width, height),
-          displayWidth: obj.displayWidth,
-          displayHeight: obj.displayHeight,
-          scaleX,
-          scaleY,
-          discovered: false,
-          equippedBy: null,
-          attackDurationMs: 0,
-          attackElapsedMs: 0,
-          attackOffsetX: 0,
-          weaponAttackDistance: obj.attackDistance ?? GAME_WEAPON_CONFIG.attackDistance,
-          weaponAttackDurationMs: obj.attackDurationMs ?? GAME_WEAPON_CONFIG.attackDurationMs,
-          holdOffsetX: obj.holdOffsetX ?? GAME_WEAPON_CONFIG.holdOffsetX,
-          holdOffsetY: obj.holdOffsetY ?? GAME_WEAPON_CONFIG.holdOffsetY,
-        },
-      )
-    }
+/** Builds the World Objects described by `objects`, all placed in `roomId`; archers bring their arrows. */
+export function createRoomObjects(objects: readonly RoomObjectConfig[], roomId: string): WorldObject[] {
+  return objects.flatMap((obj) => (obj.kind === 'archer' ? [createRoomObject(obj, roomId), ...createArrows(obj, roomId)] : [createRoomObject(obj, roomId)]))
+}
 
-    if (obj.role === 'object') {
-      const { scaleX, scaleY } = resolveScale(obj, BOULDER_BASE_SIZE.width, BOULDER_BASE_SIZE.height)
-      const { width, height } = computeColliderSize('object', scaleX, scaleY, obj)
-      return createRoomWorldObject(
-        obj.id,
-        { name: obj.id, role: 'object', discoverable: true, colliderTags: defaultColliderTags('object') },
-        [alwaysActiveRule(PROCESS_IDS.boulder)],
-        {
-          x: obj.x,
-          y: obj.y,
-          ...physicsAttrState(obj),
-          ...colliderState(obj, width, height),
-          displayWidth: obj.displayWidth,
-          displayHeight: obj.displayHeight,
-          scaleX,
-          scaleY,
-          discovered: false,
-          alive: true,
-        },
-      )
-    }
-
-    // Default to enemy/guard
+function createRoomObject(obj: RoomObjectConfig, roomId: string): WorldObject {
+  if (obj.role === 'player') {
     const { scaleX, scaleY } = resolveScale(obj, CHARACTER_BASE_SIZE.width, CHARACTER_BASE_SIZE.height)
-    const resolvedRole = obj.role === 'guard' ? 'enemy' : (obj.role ?? 'enemy')
-    const { width, height } = computeColliderSize(resolvedRole, scaleX, scaleY, obj)
+    const { width, height } = computeColliderSize('player', scaleX, scaleY, obj)
     return createRoomWorldObject(
+      roomId,
       obj.id,
-      { name: obj.id, role: resolvedRole, discoverable: true, colliderTags: defaultColliderTags('enemy') },
-      [alwaysActiveRule(PROCESS_IDS.guard)],
+      { name: 'hacker', role: 'player', discoverable: false, colliderTags: defaultColliderTags('player') },
+      [alwaysActiveRule(PROCESS_IDS.player)],
       {
         x: obj.x,
         y: obj.y,
@@ -250,25 +180,152 @@ export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJE
         displayHeight: obj.displayHeight,
         scaleX,
         scaleY,
-        speed: obj.speed ?? 210,
+        speed: typeof obj.speed === 'object' && obj.speed !== null
+          ? {
+            acceleration: obj.speed.acceleration,
+            frictionAcceleration: obj.speed.frictionAcceleration ?? 1200,
+            turnaroundAcceleration: obj.speed.turnaroundAcceleration,
+            maxSpeed: obj.speed.maxSpeed,
+          }
+          : obj.speed !== undefined
+            ? obj.speed
+            : {
+              acceleration: 800,
+              frictionAcceleration: 1200,
+              turnaroundAcceleration: 1600,
+              maxSpeed: 240,
+            },
+        maxSpeed: typeof obj.speed === 'object' && obj.speed !== null
+          ? obj.speed.maxSpeed
+          : (typeof obj.speed === 'number' ? obj.speed : 240),
+        acceleration: typeof obj.speed === 'object' && obj.speed !== null ? obj.speed.acceleration : 800,
+        frictionAcceleration: typeof obj.speed === 'object' && obj.speed !== null
+          ? (obj.speed.frictionAcceleration ?? 1200)
+          : 1200,
+        turnaroundAcceleration: typeof obj.speed === 'object' && obj.speed !== null ? obj.speed.turnaroundAcceleration : 1600,
+        vx: 0,
+        vy: 0,
         health: obj.maxHealth ?? MAX_HEALTH,
         maxHealth: obj.maxHealth ?? MAX_HEALTH,
         alive: true,
-        discovered: false,
-        weaponId: 'guard-strike',
+        discovered: true,
+        weaponId: null,
         attackCooldownMs: 0,
-        alerted: false,
-        chasing: false,
-        attacking: false,
+        moveX: 0,
+        moveY: 0,
         facing: 'right',
       },
     )
-  })
+  }
+
+  if (obj.role === 'weapon') {
+    const { scaleX, scaleY } = resolveScale(obj, DAGGER_SIZE.width, DAGGER_SIZE.height)
+    const { width, height } = computeCollisionSize('weapon', scaleX, scaleY, obj.colliderWidth, obj.colliderHeight)
+    return createRoomWorldObject(
+      roomId,
+      obj.id,
+      { name: obj.name ?? obj.id, role: 'weapon', weaponId: 'dagger', discoverable: true, colliderTags: defaultColliderTags('weapon') },
+      [alwaysActiveRule(PROCESS_IDS.dagger)],
+      {
+        x: obj.x,
+        y: obj.y,
+        ...physicsAttrState(obj),
+        ...colliderState(obj, width, height),
+        displayWidth: obj.displayWidth,
+        displayHeight: obj.displayHeight,
+        scaleX,
+        scaleY,
+        discovered: false,
+        equippedBy: null,
+        attackDurationMs: 0,
+        attackElapsedMs: 0,
+        attackOffsetX: 0,
+        weaponAttackDistance: obj.attackDistance ?? GAME_WEAPON_CONFIG.attackDistance,
+        weaponAttackDurationMs: obj.attackDurationMs ?? GAME_WEAPON_CONFIG.attackDurationMs,
+        holdOffsetX: obj.holdOffsetX ?? GAME_WEAPON_CONFIG.holdOffsetX,
+        holdOffsetY: obj.holdOffsetY ?? GAME_WEAPON_CONFIG.holdOffsetY,
+      },
+    )
+  }
+
+  if (obj.role === 'object') {
+    const { scaleX, scaleY } = resolveScale(obj, BOULDER_BASE_SIZE.width, BOULDER_BASE_SIZE.height)
+    const { width, height } = computeColliderSize('object', scaleX, scaleY, obj)
+    return createRoomWorldObject(
+      roomId,
+      obj.id,
+      {
+        name: obj.name ?? obj.id,
+        role: 'object',
+        discoverable: true,
+        ...(obj.kind ? { kind: obj.kind } : {}),
+        // A pressure plate lies flat: everything passes over it.
+        colliderTags: obj.kind === 'plate' ? [{ class: 'floor' }] : defaultColliderTags('object'),
+      },
+      obj.kind === 'plate' ? [] : [alwaysActiveRule(PROCESS_IDS.boulder)],
+      {
+        x: obj.x,
+        y: obj.y,
+        ...physicsAttrState(obj),
+        ...colliderState(obj, width, height),
+        displayWidth: obj.displayWidth,
+        displayHeight: obj.displayHeight,
+        scaleX,
+        scaleY,
+        discovered: false,
+        alive: true,
+      },
+    )
+  }
+
+  // Default to enemy/guard
+  const { scaleX, scaleY } = resolveScale(obj, CHARACTER_BASE_SIZE.width, CHARACTER_BASE_SIZE.height)
+  const resolvedRole = obj.role === 'guard' ? 'enemy' : (obj.role ?? 'enemy')
+  const { width, height } = computeColliderSize(resolvedRole, scaleX, scaleY, obj)
+  return createRoomWorldObject(
+    roomId,
+    obj.id,
+    {
+      name: obj.name ?? obj.id,
+      role: resolvedRole,
+      discoverable: true,
+      ...(obj.kind ? { kind: obj.kind } : {}),
+      colliderTags: defaultColliderTags('enemy'),
+    },
+    [alwaysActiveRule(obj.kind === 'archer' ? PROCESS_IDS.archer : PROCESS_IDS.guard)],
+    {
+      x: obj.x,
+      y: obj.y,
+      ...physicsAttrState(obj),
+      ...colliderState(obj, width, height),
+      displayWidth: obj.displayWidth,
+      displayHeight: obj.displayHeight,
+      scaleX,
+      scaleY,
+      speed: obj.speed ?? 210,
+      health: obj.maxHealth ?? MAX_HEALTH,
+      maxHealth: obj.maxHealth ?? MAX_HEALTH,
+      alive: true,
+      discovered: false,
+      weaponId: 'guard-strike',
+      attackCooldownMs: 0,
+      alerted: false,
+      chasing: false,
+      attacking: false,
+      facing: 'right',
+      ...(obj.passive ? { passive: true } : {}),
+      ...(obj.kind === 'archer' ? { arrowIds: arrowIdsFor(obj.id) } : {}),
+    },
+  )
+}
+
+export function createInitialWorldState(objects: RoomObjectConfig[] = ROOM1_OBJECTS): WorldState {
+  const worldObjects = createRoomObjects(objects, ROOM_IDS.first)
 
   const firstRoom: Room = {
     id: ROOM_IDS.first,
     objectIds: worldObjects.map((o) => o.id),
-    exits: [{ targetRoomId: ROOM_IDS.second, label: ROOM_NAMES[ROOM_IDS.second], ...ROOM_LAYOUT.exit }],
+    exits: [{ targetRoomId: ROOM_IDS.second, label: ROOM_NAMES[ROOM_IDS.second], ...ROOM_LAYOUT.exit, endsGame: true }],
     state: { name: ROOM_NAMES[ROOM_IDS.first], width: ROOM_LAYOUT.width, height: ROOM_LAYOUT.height },
     bounds: ROOM_BOUNDS,
   }

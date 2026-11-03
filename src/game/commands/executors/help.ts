@@ -10,14 +10,16 @@ export class HelpCommandExecutor implements CommandExecutor {
     this.commandNames = [...commandNames].sort((left, right) => left.localeCompare(right))
   }
 
-  execute(command: ParsedCommand, _state: WorldState): CommandResult {
+  execute(command: ParsedCommand, state: WorldState): CommandResult {
     if (command.arguments.length > 0 || command.options.length > 0) {
       return { status: 'rejected', feedback: { kind: 'popup', text: 'Usage: help' } }
     }
 
+    const room = state.rooms.find((candidate) => candidate.id === state.currentRoomId)
+    const tip = room?.hint ? `\n\nTip for ${room.id}:\n${room.hint}` : ''
     return {
       status: 'success',
-      feedback: [{ kind: 'popup', text: `Available commands:\n${this.commandNames.join('\n')}` }],
+      feedback: [{ kind: 'popup', text: `Available commands:\n${this.commandNames.join('\n')}${tip}` }],
       // feedback: [{ kind: 'popup', text: `Available commands:\n${this.commandNames.join('\n')}\nPro tips:\nTyping autocomplete: Tab\nDelete a whole word: Ctrl+Backspace\nNavigate history: Arrow Up/Down` }],
     }
   }

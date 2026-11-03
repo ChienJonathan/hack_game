@@ -6,7 +6,6 @@ export {
   GAME_WEAPON_CONFIG,
 } from '../../content/weaponConstants.ts'
 import {
-  ROOM_IDS,
   ROOM_LAYOUT,
   WORLD_OBJECT_IDS,
   PROCESS_IDS,
@@ -19,6 +18,8 @@ import {
 import type { PlayerSpeedConfig } from '../../content/room1.ts'
 import type { CharacterState } from '../../domain/CharacterState.ts'
 import { ShapeCollisionWorld, boxFromState } from '../../domain/CollisionWorld.ts'
+import { ArcherProcess, ArrowFlightProcess } from './RangedProcesses.ts'
+import { currentRoomOf, isExitOpen, isPlayerAtExit, travelThroughExit } from '../../domain/RoomTravel.ts'
 import { CombatService } from '../../domain/CombatService.ts'
 import { PICKUP_REACH, PickUpService } from '../../domain/PickUpService.ts'
 import { applyPlayerDefeat } from '../../domain/PlayerDefeat.ts'
@@ -130,7 +131,7 @@ export class PlayerMovementProcess implements WorldObjectProcess {
   readonly definitionId = PROCESS_IDS.player
 
   tick(context: ProcessTickContext): void {
-    if (context.state.currentRoomId !== ROOM_IDS.first || context.state.outcome !== 'playing') {
+    if (context.worldObject.roomId !== context.state.currentRoomId || context.state.outcome !== 'playing') {
       return
     }
 
@@ -166,7 +167,7 @@ export class PlayerMovementProcess implements WorldObjectProcess {
   }
 
   afterPhysics(context: ProcessTickContext): void {
-    if (context.state.currentRoomId !== ROOM_IDS.first || context.state.outcome !== 'playing') {
+    if (context.worldObject.roomId !== context.state.currentRoomId || context.state.outcome !== 'playing') {
       return
     }
 
@@ -179,12 +180,11 @@ export class PlayerMovementProcess implements WorldObjectProcess {
       pickUp.pickUp(context.state, context.worldObject.id)
     }
 
-    const exit = context.state.rooms
-      .find((room) => room.id === ROOM_IDS.first)
-      ?.exits.find((candidate) => candidate.x === ROOM_LAYOUT.exit.x && candidate.y === ROOM_LAYOUT.exit.y)
-    if (exit && collision.gap(boxOf(player), ROOM_LAYOUT.exitZone) === 0) {
-      context.state.currentRoomId = exit.targetRoomId
-      context.state.outcome = 'congratulations'
+    // Walking into an open Exit takes the player through it; a locked one is just a doorway.
+    const room = currentRoomOf(context.state)
+    const exit = room?.exits.find((candidate) => isPlayerAtExit(context.state, candidate, 0, context.worldObject.id))
+    if (room && exit && isExitOpen(context.state, room, exit)) {
+      travelThroughExit(context.state, exit, context.worldObject.id)
     }
   }
 }
@@ -194,7 +194,7 @@ export class DaggerPickupProcess implements WorldObjectProcess {
   readonly definitionId = PROCESS_IDS.dagger
 
   tick(context: ProcessTickContext): void {
-    if (context.state.currentRoomId !== ROOM_IDS.first || context.state.outcome !== 'playing') {
+    if (context.worldObject.roomId !== context.state.currentRoomId || context.state.outcome !== 'playing') {
       return
     }
 
@@ -257,7 +257,7 @@ export class DaggerPickupProcess implements WorldObjectProcess {
   }
 
   afterPhysics(context: ProcessTickContext): void {
-    if (context.state.currentRoomId !== ROOM_IDS.first || context.state.outcome !== 'playing') {
+    if (context.worldObject.roomId !== context.state.currentRoomId || context.state.outcome !== 'playing') {
       return
     }
 
@@ -281,13 +281,21 @@ export class GuardResponseProcess implements WorldObjectProcess {
   readonly definitionId = PROCESS_IDS.guard
 
   tick(context: ProcessTickContext): void {
-    if (context.state.currentRoomId !== ROOM_IDS.first || context.state.outcome !== 'playing') {
+    if (context.worldObject.roomId !== context.state.currentRoomId || context.state.outcome !== 'playing') {
       return
     }
 
     const guard = stateOf<GuardState>(context)
     const player = objectState<PlayerState>(context, WORLD_OBJECT_IDS.player)
     if (!guard.alive || !player || !player.alive) {
+      return
+    }
+
+    // A passive guard (a training dummy) stands still and never fights back.
+    if ((guard as unknown as { passive?: unknown }).passive === true) {
+      guard.chasing = false
+      guard.attacking = false
+      brake(context.worldObject, guard.speed, GUARD_ACCELERATION, context.tickDurationMs)
       return
     }
 
@@ -337,7 +345,7 @@ export class BoulderProcess implements WorldObjectProcess {
     return context.worldObject.roomId === context.state.currentRoomId
   }
 
-  tick(): void {}
+  tick(): void { }
 }
 
 export const ROOM1_PROCESSES: readonly WorldObjectProcess[] = [
@@ -345,4 +353,6 @@ export const ROOM1_PROCESSES: readonly WorldObjectProcess[] = [
   new DaggerPickupProcess(),
   new GuardResponseProcess(),
   new BoulderProcess(),
+  new ArcherProcess(),
+  new ArrowFlightProcess(),
 ]

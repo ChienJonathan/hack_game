@@ -65,6 +65,9 @@ function positionOf(worldObject: WorldObject): RenderPosition | undefined {
   return typeof x === 'number' && typeof y === 'number' ? { x, y } : undefined
 }
 
+/** Distance between two ticks beyond which a body is drawn at its new position without interpolating. */
+const TELEPORT_DISTANCE = 300
+
 export class TickSimulationEngine implements SimulationEngine {
   private readonly processByDefinitionId: ReadonlyMap<ProcessDefinitionId, WorldObjectProcess>
   private readonly tickDurationMs: number
@@ -125,6 +128,10 @@ export class TickSimulationEngine implements SimulationEngine {
     const current = worldObject ? positionOf(worldObject) : undefined
     const previous = this.previousPositions.get(objectId)
     if (!current || !previous || state.outcome !== 'playing') {
+      return current
+    }
+    // A jump no body can make in one tick (entering another room) is drawn at once, not slid across the screen.
+    if (Math.hypot(current.x - previous.x, current.y - previous.y) > TELEPORT_DISTANCE) {
       return current
     }
 

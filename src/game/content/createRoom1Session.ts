@@ -11,15 +11,18 @@ import { ROOM1_PROCESSES } from '../simulation/room1/Room1Processes.ts'
 import { createRoom1CommandSubmissionService } from './room1Commands.ts'
 import { createInitialWorldState } from './room1WorldState.ts'
 import { WORLD_OBJECT_IDS } from './room1Constants.ts'
+import type { WorldState } from '../domain/WorldState.ts'
 
 export interface Room1SessionOptions {
   readonly movementBindings: MovementBindings
   readonly storage?: Storage
+  /** The world to play; defaults to room1 on its own. */
+  readonly worldState?: WorldState
 }
 
 export function createRoom1Session(options: Room1SessionOptions): GameSession {
   return new GameSession({
-    worldState: createInitialWorldState(),
+    worldState: options.worldState ?? createInitialWorldState(),
     commandSubmission: createRoom1CommandSubmissionService(),
     simulationClock: new RealtimeSimulationClock(),
     simulationEngine: new TickSimulationEngine(ROOM1_PROCESSES),

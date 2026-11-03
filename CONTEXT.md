@@ -12,6 +12,34 @@ _Avoid_: Folder, level (when referring to the loaded area)
 A route from one Room to another Room.
 _Avoid_: Door (when referring to the room-to-room connection)
 
+**Locked Exit**:
+An Exit that cannot be used until its Room's goal is met, such as defeating a Guard or discovering everything in the Room.
+_Avoid_: Closed door
+
+**Wall**:
+A solid, immovable part of a Room that blocks movement, thrown objects and arrows. It is not a World Object.
+_Avoid_: Obstacle (when referring to room geometry)
+
+**Crate**:
+A light World Object that can be pushed by walking into it or thrown with `mv`, heavy enough to hold a Pressure Plate down.
+_Avoid_: Box
+
+**Pressure Plate**:
+A World Object on the floor that is pressed while a Character or an Obstacle stands on it; it can hold an Exit shut.
+_Avoid_: Switch, button
+
+**Archer**:
+A hostile Character that stands still and shoots arrows at the Player Character.
+_Avoid_: Ranged guard
+
+**Arrow**:
+A projectile shot by an Archer that stops at the first Wall, Obstacle or Character it reaches and hurts a Character it hits. The player cannot list or name arrows.
+_Avoid_: Bullet
+
+**Tutorial Room**:
+One of the Rooms played before room1 that each teach one mechanic and have a Locked Exit until the player has used it.
+_Avoid_: Level, demo (when referring to these rooms in the game)
+
 **World Object**:
 An entity that exists in a room and has metadata and runtime state. It is not a literal file, and some of its metadata is not exposed through player commands.
 _Avoid_: File
@@ -137,7 +165,7 @@ The single place where the game keeps one saved record of the world. Saving agai
 _Avoid_: Save file, checkpoint (when referring to the place the record is kept)
 
 **Save Point**:
-A moment in play at which the game writes the Save Slot. No Save Point exists yet.
+A moment in play at which the game writes the Save Slot. Entering a Room is a Save Point.
 _Avoid_: Autosave (when referring to the moment itself)
 
 **Game Over Choice**:
