@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { COMMAND_MODE_TIME_SCALE, InputModeController } from './InputModeController.ts'
+import {
+  COMMAND_MODE_TIME_SCALE,
+  InputModeController,
+  setCommandModeTimeScale,
+  resetCommandModeTimeScale,
+} from './InputModeController.ts'
 
 const bindings = {
   up: ['w', 'arrowup'],
@@ -191,5 +196,63 @@ describe('isBoundTo', () => {
     expect(input.isBoundTo('arrowright', 'right')).toBe(true)
     expect(input.isBoundTo('arrowup', 'up')).toBe(true)
     expect(input.isBoundTo('arrowdown', 'down')).toBe(true)
+  })
+})
+
+describe('command mode time scale tuning', () => {
+  it('allows customizing command time scale dynamically', () => {
+    const input = controller()
+    expect(input.commandTimeScale).toBe(0.25)
+
+    input.setCommandTimeScale(0.1)
+    expect(input.commandTimeScale).toBe(0.1)
+
+    // While in movement mode, timeScale is 1
+    expect(input.mode).toBe('movement')
+    expect(input.timeScale).toBe(1)
+
+    // When entering command mode, timeScale is updated to custom scale
+    input.enterCommandMode()
+    expect(input.mode).toBe('command')
+    expect(input.timeScale).toBe(0.1)
+
+    input.setCommandTimeScale(0.5)
+    expect(input.timeScale).toBe(0.5)
+
+    // Clamps to at least 0.01
+    input.setCommandTimeScale(-1)
+    expect(input.commandTimeScale).toBe(0.01)
+
+    // Resetting global command mode time scale
+    resetCommandModeTimeScale()
+    expect(COMMAND_MODE_TIME_SCALE).toBe(0.25)
+  })
+
+  it('saves and clears localStorage when window.localStorage is available', () => {
+    const store = new Map<string, string>()
+    const storageMock = {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, val: string) => {
+        store.set(key, val)
+      },
+      removeItem: (key: string) => {
+        store.delete(key)
+      },
+      clear: () => store.clear(),
+    }
+    const origWindow = (globalThis as any).window
+    ;(globalThis as any).window = { localStorage: storageMock }
+
+    setCommandModeTimeScale(0.35)
+    expect(store.get('hack-game.command-time-scale')).toBe('0.35')
+
+    resetCommandModeTimeScale()
+    expect(store.has('hack-game.command-time-scale')).toBe(false)
+
+    if (origWindow !== undefined) {
+      ;(globalThis as any).window = origWindow
+    } else {
+      delete (globalThis as any).window
+    }
   })
 })

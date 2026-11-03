@@ -216,7 +216,18 @@ export class GameSession {
     state.facing = facing
   }
 
-  private syncTimeScale(): void {
+  public syncTimeScale(): void {
     this.dependencies.simulationClock.setTimeScale(this.dependencies.inputMode.timeScale)
+  }
+
+  public setCommandTimeScale(scale: number): void {
+    if (typeof (this.dependencies.inputMode as any).setCommandTimeScale === 'function') {
+      (this.dependencies.inputMode as any).setCommandTimeScale(scale)
+    }
+    this.syncTimeScale()
+  }
+
+  public getCommandTimeScale(): number {
+    return (this.dependencies.inputMode as any).commandTimeScale ?? this.dependencies.inputMode.timeScale
   }
 }

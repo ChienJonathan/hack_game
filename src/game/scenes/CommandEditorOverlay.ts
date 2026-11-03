@@ -12,16 +12,28 @@ import {
   MIN_MASS,
   type PhysicsConfig,
 } from '../simulation/physicsConstants.ts'
+import {
+  COMMAND_MODE_TIME_SCALE,
+  DEFAULT_COMMAND_MODE_TIME_SCALE,
+  setCommandModeTimeScale,
+  resetCommandModeTimeScale,
+} from '../application/InputModeController.ts'
+import { GAME_COMMAND_MODE_CONFIG } from '../commands/commandModeConstants.ts'
+import { generateCommandModeConstantsSource } from '../commands/commandModeSerializer.ts'
 import { generateMvConstantsSource } from '../commands/mvSerializer.ts'
 import { generatePhysicsConstantsSource } from '../simulation/physicsSerializer.ts'
 import { WORLD_OBJECT_IDS } from '../content/room1Constants.ts'
 import type { GameSession } from '../application/GameSession.ts'
 import type { CommandResult } from '../commands/CommandResult.ts'
 
-export type TuningConfig = MvConfig & PhysicsConfig
+export type TuningConfig = MvConfig &
+  PhysicsConfig & {
+    commandTimeScale: number
+  }
 
 export function getTuningConfig(config?: Partial<TuningConfig>): TuningConfig {
   return {
+    commandTimeScale: config?.commandTimeScale ?? COMMAND_MODE_TIME_SCALE,
     mv_acceleration: config?.mv_acceleration ?? GAME_MV_CONFIG.mv_acceleration,
     drag: config?.drag ?? GAME_PHYSICS_CONFIG.drag,
     mass: config?.mass ?? GAME_PHYSICS_CONFIG.mass,
@@ -39,6 +51,8 @@ export function applyTuningConfig(config: TuningConfig): void {
   for (const key of Object.keys(GAME_PHYSICS_CONFIG) as (keyof PhysicsConfig)[]) {
     GAME_PHYSICS_CONFIG[key] = config[key]
   }
+  GAME_COMMAND_MODE_CONFIG.commandTimeScale = config.commandTimeScale
+  setCommandModeTimeScale(config.commandTimeScale)
 }
 
 const FONT_FAMILY = '"Press Start 2P", monospace'
@@ -75,6 +89,9 @@ export class CommandEditorOverlay {
   private telemetryVelocityText: Phaser.GameObjects.Text | undefined
   private telemetryTargetText: Phaser.GameObjects.Text | undefined
 
+  private commandTimeScaleText: Phaser.GameObjects.Text | undefined
+  private commandModeRatioText: Phaser.GameObjects.Text | undefined
+
   private saveButton: Phaser.GameObjects.Container | undefined
 
   constructor(scene: Phaser.Scene, session: GameSession, options?: CommandEditorOverlayOptions) {
@@ -101,11 +118,12 @@ export class CommandEditorOverlay {
     dividers.lineStyle(2, 0x334454, 1)
     dividers.lineBetween(920, 16, 920, PANEL_HEIGHT - 16)
     dividers.lineBetween(1380, 16, 1380, PANEL_HEIGHT - 16)
+    dividers.lineBetween(930, 186, 1370, 186)
     items.push(dividers)
 
     // Header: Title & Active Room
     const headerTitle = this.scene.add
-      .text(24, 14, 'COMMAND EDITOR — MV & PHYSICS TUNING', {
+      .text(24, 14, 'COMMAND EDITOR — MV & COMMAND MODE TUNING', {
         fontFamily: FONT_FAMILY,
         fontSize: 14,
         color: ACCENT_COLOR,
@@ -200,7 +218,7 @@ export class CommandEditorOverlay {
       items,
     )
 
-    // ─── Column 2: Live MV Telemetry ───
+    // ─── Column 2 Upper: Live MV Telemetry ───
     const col2Title = this.scene.add
       .text(1150, 14, 'LIVE MV TELEMETRY', {
         fontFamily: FONT_FAMILY,
@@ -211,7 +229,7 @@ export class CommandEditorOverlay {
     items.push(col2Title)
 
     this.telemetryStatusText = this.scene.add
-      .text(945, 52, 'Active: None (idle)', {
+      .text(945, 44, 'Active: None (idle)', {
         fontFamily: FONT_FAMILY,
         fontSize: 12,
         color: VALUE_COLOR,
@@ -219,7 +237,7 @@ export class CommandEditorOverlay {
       .setOrigin(0, 0)
 
     this.telemetrySpeedText = this.scene.add
-      .text(945, 90, `Accel: ${this.mvConfig.mv_acceleration} px/s²`, {
+      .text(945, 72, `Accel: ${this.mvConfig.mv_acceleration} px/s²`, {
         fontFamily: FONT_FAMILY,
         fontSize: 12,
         color: TEXT_COLOR,
@@ -227,7 +245,7 @@ export class CommandEditorOverlay {
       .setOrigin(0, 0)
 
     this.telemetryVelocityText = this.scene.add
-      .text(945, 128, 'Vx: +0.0  Vy: +0.0', {
+      .text(945, 100, 'Vx: +0.0  Vy: +0.0', {
         fontFamily: FONT_FAMILY,
         fontSize: 11,
         color: DIM_COLOR,
@@ -235,25 +253,19 @@ export class CommandEditorOverlay {
       .setOrigin(0, 0)
 
     this.telemetryTargetText = this.scene.add
-      .text(945, 166, 'Target: -', {
+      .text(945, 128, 'Target: -', {
         fontFamily: FONT_FAMILY,
         fontSize: 11,
         color: '#80cbc4',
       })
       .setOrigin(0, 0)
 
-    const tipText = this.scene.add
-      .text(
-        945,
-        220,
-        'TEST IN GAMEPLAY TERMINAL:\n$ mv <source> <target>\n\nLive physics and telemetry\nupdate automatically.',
-        {
-          fontFamily: FONT_FAMILY,
-          fontSize: 11,
-          color: DIM_COLOR,
-          lineSpacing: 8,
-        },
-      )
+    const telemetryTip = this.scene.add
+      .text(945, 156, 'Terminal test: $ mv <source> <target>', {
+        fontFamily: FONT_FAMILY,
+        fontSize: 10,
+        color: DIM_COLOR,
+      })
       .setOrigin(0, 0)
 
     items.push(
@@ -261,7 +273,124 @@ export class CommandEditorOverlay {
       this.telemetrySpeedText,
       this.telemetryVelocityText,
       this.telemetryTargetText,
-      tipText,
+      telemetryTip,
+    )
+
+    // ─── Column 2 Lower: Command Mode Slow Down Speed Edit Section ───
+    const cmdModeTitle = this.scene.add
+      .text(1150, 196, 'COMMAND MODE SLOW DOWN SPEED', {
+        fontFamily: FONT_FAMILY,
+        fontSize: 12,
+        color: ACCENT_COLOR,
+      })
+      .setOrigin(0.5, 0)
+
+    const cmdModeDesc = this.scene.add
+      .text(945, 220, 'Time scale during command mode (default 0.25)', {
+        fontFamily: FONT_FAMILY,
+        fontSize: 9,
+        color: DIM_COLOR,
+      })
+      .setOrigin(0, 0)
+
+    const cmdLabel = this.scene.add
+      .text(945, 246, 'SLOW DOWN (×)', {
+        fontFamily: FONT_FAMILY,
+        fontSize: 10,
+        color: TEXT_COLOR,
+      })
+      .setOrigin(0, 0)
+
+    const cmdSub = this.scene.add
+      .text(945, 262, 'Command time scale', {
+        fontFamily: FONT_FAMILY,
+        fontSize: 8,
+        color: DIM_COLOR,
+      })
+      .setOrigin(0, 0)
+
+    this.commandTimeScaleText = this.scene.add
+      .text(1135, 254, this.mvConfig.commandTimeScale.toFixed(2), {
+        fontFamily: FONT_FAMILY,
+        fontSize: 11,
+        color: VALUE_COLOR,
+        backgroundColor: '#262626',
+        padding: { x: 5, y: 3 },
+      })
+      .setOrigin(0.5, 0.5)
+      .setInteractive({ useHandCursor: true })
+
+    this.commandTimeScaleText.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      pointer.event?.stopPropagation?.()
+      this.promptCommandTimeScale()
+    })
+
+    const scaleButtonOffsets = [1195, 1245, 1295, 1345]
+    const scaleSteps = [-0.1, -0.05, 0.05, 0.1]
+    const scaleButtons: Phaser.GameObjects.Text[] = []
+
+    for (let i = 0; i < scaleSteps.length; i++) {
+      const step = scaleSteps[i]
+      const stepLabel = step > 0 ? `+${step}` : `${step}`
+      const btnX = scaleButtonOffsets[i]
+      const isPositive = step > 0
+
+      const btn = this.scene.add
+        .text(btnX, 254, stepLabel, {
+          fontFamily: FONT_FAMILY,
+          fontSize: 8,
+          color: isPositive ? '#a5d6a7' : '#ef9a9a',
+          backgroundColor: '#333333',
+          padding: { x: 3, y: 3 },
+        })
+        .setOrigin(0.5, 0.5)
+        .setInteractive({ useHandCursor: true })
+
+      btn.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+        pointer.event?.stopPropagation?.()
+        const multiplier = pointer.event?.shiftKey ? 5 : 1
+        this.adjustCommandTimeScale(step * multiplier)
+      })
+
+      scaleButtons.push(btn)
+    }
+
+    this.commandModeRatioText = this.scene.add
+      .text(
+        945,
+        286,
+        `Moving: ×1.00  ·  Command: ×${this.mvConfig.commandTimeScale.toFixed(2)} (${Math.round(this.mvConfig.commandTimeScale * 100)}% speed)`,
+        {
+          fontFamily: FONT_FAMILY,
+          fontSize: 9,
+          color: '#8fd6c5',
+        },
+      )
+      .setOrigin(0, 0)
+
+    const cmdTip = this.scene.add
+      .text(
+        945,
+        314,
+        'Enter / a-z switches to command mode with this time scale.\nEscape returns to full speed (×1.00).',
+        {
+          fontFamily: FONT_FAMILY,
+          fontSize: 8,
+          color: DIM_COLOR,
+          lineSpacing: 4,
+        },
+      )
+      .setOrigin(0, 0)
+
+    items.push(
+      cmdModeTitle,
+      cmdModeDesc,
+      cmdLabel,
+      cmdSub,
+      this.commandTimeScaleText,
+      ...scaleButtons,
+      this.commandModeRatioText,
+      cmdTip,
     )
 
     // ─── Column 3: Actions ───
@@ -411,11 +540,19 @@ export class CommandEditorOverlay {
   public setMvConfig(next: Partial<TuningConfig>): void {
     Object.assign(this.mvConfig, next)
     this.mvConfig.mass = Math.max(MIN_MASS, this.mvConfig.mass)
+    if (next.commandTimeScale !== undefined) {
+      this.mvConfig.commandTimeScale = Math.max(0.01, Math.min(2.0, Math.round(next.commandTimeScale * 1000) / 1000))
+    }
     applyTuningConfig(this.mvConfig)
+    this.session.setCommandTimeScale?.(this.mvConfig.commandTimeScale)
     this.refreshFields()
   }
 
   public adjustMv(delta: number, property: keyof TuningConfig): void {
+    if (property === 'commandTimeScale') {
+      this.adjustCommandTimeScale(delta)
+      return
+    }
     const current = this.mvConfig[property]
     const next = Math.round((current + delta) * 1000) / 1000
     if (next !== current) {
@@ -424,10 +561,15 @@ export class CommandEditorOverlay {
   }
 
   public promptMv(property: keyof TuningConfig): void {
+    if (property === 'commandTimeScale') {
+      this.promptCommandTimeScale()
+      return
+    }
     this.isPromptOpen = true
     this.session.releaseAllKeys()
     const current = this.mvConfig[property]
-    const input = window.prompt(`Enter new ${String(property)}:`, current.toString())
+    const promptFn = typeof window !== 'undefined' && typeof window.prompt === 'function' ? window.prompt : undefined
+    const input = promptFn ? promptFn(`Enter new ${String(property)}:`, current.toString()) : null
     this.session.releaseAllKeys()
     this.isPromptOpen = false
 
@@ -436,6 +578,37 @@ export class CommandEditorOverlay {
     if (Number.isFinite(parsed) && parsed !== current) {
       this.setMvConfig({ [property]: parsed })
     }
+  }
+
+  public adjustCommandTimeScale(delta: number): void {
+    const next = Math.max(0.01, Math.min(2.0, Math.round((this.mvConfig.commandTimeScale + delta) * 1000) / 1000))
+    if (next !== this.mvConfig.commandTimeScale) {
+      this.setCommandTimeScale(next)
+    }
+  }
+
+  public promptCommandTimeScale(): void {
+    this.isPromptOpen = true
+    this.session.releaseAllKeys()
+    const current = this.mvConfig.commandTimeScale
+    const promptFn = typeof window !== 'undefined' && typeof window.prompt === 'function' ? window.prompt : undefined
+    const input = promptFn ? promptFn('Enter new command mode time scale (e.g. 0.25):', current.toString()) : null
+    this.session.releaseAllKeys()
+    this.isPromptOpen = false
+
+    if (input === null) return
+    const parsed = parseFloat(input.trim())
+    if (Number.isFinite(parsed) && parsed !== current) {
+      this.setCommandTimeScale(parsed)
+    }
+  }
+
+  public setCommandTimeScale(scale: number): void {
+    const clamped = Math.max(0.01, Math.min(2.0, Math.round(scale * 1000) / 1000))
+    this.mvConfig.commandTimeScale = clamped
+    applyTuningConfig(this.mvConfig)
+    this.session.setCommandTimeScale?.(clamped)
+    this.refreshFields()
   }
 
   public testMvThrow(): void {
@@ -475,6 +648,7 @@ export class CommandEditorOverlay {
   }
 
   public resetDefaults(): void {
+    resetCommandModeTimeScale()
     this.setMvConfig({
       mv_acceleration: DEFAULT_MV_ACCELERATION,
       drag: DEFAULT_DRAG,
@@ -484,6 +658,7 @@ export class CommandEditorOverlay {
       restitution: DEFAULT_RESTITUTION,
       min_velocity: DEFAULT_MIN_VELOCITY,
       min_collide_move_velocity: DEFAULT_MIN_COLLIDE_MOVE_VELOCITY,
+      commandTimeScale: DEFAULT_COMMAND_MODE_TIME_SCALE,
     })
   }
 
@@ -492,12 +667,15 @@ export class CommandEditorOverlay {
 
     const mvSource = generateMvConstantsSource(this.mvConfig)
     const physicsSource = generatePhysicsConstantsSource(this.mvConfig)
+    const commandModeSource = generateCommandModeConstantsSource({
+      commandTimeScale: this.mvConfig.commandTimeScale,
+    })
 
     const bg = this.saveButton?.getAt(0) as Phaser.GameObjects.Rectangle | undefined
     const label = this.saveButton?.getAt(1) as Phaser.GameObjects.Text | undefined
 
     try {
-      const [mvResponse, physicsResponse] = await Promise.all([
+      const [mvResponse, physicsResponse, commandModeResponse] = await Promise.all([
         fetch('/api/save-mv', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -507,6 +685,11 @@ export class CommandEditorOverlay {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ content: physicsSource }),
+        }),
+        fetch('/api/save-command-mode', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: commandModeSource }),
         }),
       ])
 
@@ -518,15 +701,24 @@ export class CommandEditorOverlay {
           `Server returned ${physicsResponse.status} on save-physics: ${physicsResponse.statusText}`,
         )
       }
+      if (!commandModeResponse.ok) {
+        throw new Error(
+          `Server returned ${commandModeResponse.status} on save-command-mode: ${commandModeResponse.statusText}`,
+        )
+      }
 
       const mvResult = await mvResponse.json()
       const physicsResult = await physicsResponse.json()
+      const commandModeResult = await commandModeResponse.json()
 
       if (!mvResult.success) {
         throw new Error(mvResult.error ?? 'Unknown save-mv error')
       }
       if (!physicsResult.success) {
         throw new Error(physicsResult.error ?? 'Unknown save-physics error')
+      }
+      if (!commandModeResult.success) {
+        throw new Error(commandModeResult.error ?? 'Unknown save-command-mode error')
       }
 
       bg?.setFillStyle(0x1b5e20, 1)
@@ -557,6 +749,8 @@ export class CommandEditorOverlay {
     this.telemetrySpeedText = undefined
     this.telemetryVelocityText = undefined
     this.telemetryTargetText = undefined
+    this.commandTimeScaleText = undefined
+    this.commandModeRatioText = undefined
     this.saveButton = undefined
   }
 
@@ -673,5 +867,9 @@ export class CommandEditorOverlay {
     for (const [key, field] of this.mvFields.entries()) {
       field.setText(String(this.mvConfig[key]))
     }
+    this.commandTimeScaleText?.setText(this.mvConfig.commandTimeScale.toFixed(2))
+    this.commandModeRatioText?.setText(
+      `Moving: ×1.00  ·  Command: ×${this.mvConfig.commandTimeScale.toFixed(2)} (${Math.round(this.mvConfig.commandTimeScale * 100)}% speed)`,
+    )
   }
 }

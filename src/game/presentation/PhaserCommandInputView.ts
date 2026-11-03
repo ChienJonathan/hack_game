@@ -4,6 +4,7 @@ import type {
   CommandHistoryProvider,
   CommandInputView,
 } from './CommandInputView.ts'
+import { COMMAND_MODE_TIME_SCALE } from '../application/InputModeController.ts'
 
 export const COMMAND_INPUT_TEXTURE_KEY = 'command-input-textbox'
 
@@ -624,7 +625,7 @@ export class PhaserCommandInputView implements CommandInputView {
     this.activeCursorVisible = cursorVisible
     const fieldAlpha = this.inputEnabled ? 1 : DISABLED_ALPHA
     this.background?.setAlpha(fieldAlpha)
-    this.heading?.setText(this.inputEnabled ? 'COMMAND  /  TIME ×0.25' : 'COMMAND  /  Type letters to cast')
+    this.heading?.setText(this.inputEnabled ? `COMMAND  /  TIME ×${COMMAND_MODE_TIME_SCALE.toFixed(2)}` : 'COMMAND  /  Type letters to cast')
     this.commandText.setAlpha(fieldAlpha)
 
     this.commandText.setFontSize(fontSize)

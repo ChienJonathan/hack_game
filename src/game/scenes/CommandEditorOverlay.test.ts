@@ -218,6 +218,71 @@ describe('CommandEditorOverlay & MV Tuning', () => {
       expect(cfg.mass).toBe(DEFAULT_MASS)
       expect(cfg.max_velocity).toBe(DEFAULT_MAX_VELOCITY)
       expect(cfg.restitution).toBe(DEFAULT_RESTITUTION)
+      expect(cfg.commandTimeScale).toBe(0.25)
+    })
+  })
+
+  describe('command mode slow down speed tuning', () => {
+    it('adjusts command time scale and clamps within [0.01, 2.0]', () => {
+      const scene = createMockPhaserScene()
+      const session = createTestSession()
+      const overlay = new CommandEditorOverlay(scene, session)
+      overlay.open()
+
+      expect(overlay.getMvConfig().commandTimeScale).toBe(0.25)
+
+      // Step up +0.05
+      overlay.adjustCommandTimeScale(0.05)
+      expect(overlay.getMvConfig().commandTimeScale).toBeCloseTo(0.3, 3)
+
+      // Step down -0.10
+      overlay.adjustCommandTimeScale(-0.1)
+      expect(overlay.getMvConfig().commandTimeScale).toBeCloseTo(0.2, 3)
+
+      // Clamping lower bound
+      overlay.adjustCommandTimeScale(-5.0)
+      expect(overlay.getMvConfig().commandTimeScale).toBe(0.01)
+
+      // Clamping upper bound
+      overlay.adjustCommandTimeScale(10.0)
+      expect(overlay.getMvConfig().commandTimeScale).toBe(2.0)
+    })
+
+    it('syncs command time scale with session when updated', () => {
+      const scene = createMockPhaserScene()
+      const session = createTestSession()
+      const overlay = new CommandEditorOverlay(scene, session)
+      overlay.open()
+
+      overlay.setCommandTimeScale(0.15)
+      expect(overlay.getMvConfig().commandTimeScale).toBe(0.15)
+      expect(session.getCommandTimeScale()).toBe(0.15)
+    })
+
+    it('prompts user for direct numeric input', () => {
+      const scene = createMockPhaserScene()
+      const session = createTestSession()
+      const overlay = new CommandEditorOverlay(scene, session)
+      overlay.open()
+
+      const promptMock = vi.fn().mockReturnValueOnce('0.40')
+      const originalWindow = (globalThis as any).window
+      ;(globalThis as any).window = { prompt: promptMock }
+
+      overlay.promptCommandTimeScale()
+      expect(promptMock).toHaveBeenCalled()
+      expect(overlay.getMvConfig().commandTimeScale).toBe(0.4)
+
+      // Ignores cancel (null)
+      promptMock.mockReturnValueOnce(null as unknown as string)
+      overlay.promptCommandTimeScale()
+      expect(overlay.getMvConfig().commandTimeScale).toBe(0.4)
+
+      if (originalWindow !== undefined) {
+        ;(globalThis as any).window = originalWindow
+      } else {
+        delete (globalThis as any).window
+      }
     })
   })
 
@@ -267,7 +332,12 @@ describe('CommandEditorOverlay & MV Tuning', () => {
       overlay.open()
 
       const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
-        if (typeof url === 'string' && (url.includes('save-mv') || url.includes('save-physics'))) {
+        if (
+          typeof url === 'string' &&
+          (url.includes('save-mv') ||
+            url.includes('save-physics') ||
+            url.includes('save-command-mode'))
+        ) {
           return {
             ok: true,
             status: 200,
@@ -285,6 +355,10 @@ describe('CommandEditorOverlay & MV Tuning', () => {
       )
       expect(fetchSpy).toHaveBeenCalledWith(
         '/api/save-physics',
+        expect.objectContaining({ method: 'POST' }),
+      )
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/save-command-mode',
         expect.objectContaining({ method: 'POST' }),
       )
       fetchSpy.mockRestore()

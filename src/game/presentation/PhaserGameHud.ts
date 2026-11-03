@@ -1,6 +1,7 @@
 import type Phaser from 'phaser'
 import type { WorldState } from '../domain/WorldState.ts'
 import type { InputMode } from '../application/InputModeController.ts'
+import { COMMAND_MODE_TIME_SCALE } from '../application/InputModeController.ts'
 import { isExitOpen } from '../domain/RoomTravel.ts'
 
 /** Main-game chrome. World coordinates and editor layouts remain independent. */
@@ -48,7 +49,7 @@ export class PhaserGameHud {
     const maximum = data?.maxHealth ?? 100
     this.health.width = 360 * Math.max(0, Math.min(1, maximum > 0 ? current / maximum : 0))
     this.healthText.setText(`HEALTH  ${Math.ceil(current)} / ${maximum}`)
-    this.modeText.setText(mode === 'command' ? 'CASTING  /  ×0.25' : 'MOVEMENT  /  ×1.00')
+    this.modeText.setText(mode === 'command' ? `CASTING  /  ×${COMMAND_MODE_TIME_SCALE.toFixed(2)}` : 'MOVEMENT  /  ×1.00')
     this.roomText.setText(`ROOM  /  ${state.currentRoomId ?? 'unknown'}`)
 
     const room = state.rooms.find((candidate) => candidate.id === state.currentRoomId)

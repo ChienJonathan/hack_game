@@ -368,15 +368,17 @@ The Command Editor directly overlays the active gameplay level and reuses its li
 | `restitution` | 0.5 | - | Default bounce; a Collision uses the product of both objects' values |
 | `min_velocity` | 5 | px/s | Below this, an unpushed body rests |
 | `min_collide_move_velocity` | 50 | px/s | A resting body gaining less in a Collision stays put |
+| `commandTimeScale` | 0.25 | × | Simulation time scale during Command Mode (range 0.01 – 2.0; 25% speed by default) |
 
 ### Features & Runtime Behavior
 
 - **Gameplay Level Overlay**: Mounts directly on `GameScene` at `y = 670..1040` (depth 100), keeping the active room chamber visible above so players can observe Throws in real time.
 - **Direct Code & Session Reuse**: Calls `session.submitCommand` directly on the active room's `GameSession`, updating the live world state and streaming feedback into `PhaserCommandInputView`.
+- **Command Mode Slow Down Speed Section**: Column 2 provides a dedicated tuning section for `commandTimeScale` (default `0.25`, range `[0.01, 2.0]`). Features incremental step buttons (`-0.10`, `-0.05`, `+0.05`, `+0.10`, Shift: 5x multiplier) and click-to-prompt direct numeric entry. Dynamically synchronizes `InputModeController`, `GameSession`, and `SimulationClock`, updating HUD mode status (`CASTING / ×<scale>`), terminal heading (`COMMAND / TIME ×<scale>`), and ratio indicator (`Moving: ×1.00 · Command: ×<scale> (<percent>%)`).
 - **Live MV Telemetry**: Tracks active thrown entity state (object ID, real-time speed in `px/s`, velocity vectors, target) directly from the room's live simulation ticks as commands are entered in the terminal.
 - **Step & Direct Input**: `+` / `−` step buttons (Shift for 5x multiplier) or click parameter values for prompt number input. Clamped to safe thresholds.
-- **Save Changes**: `SAVE CHANGES` button writes `mv_acceleration` to `src/game/commands/mvConstants.ts` via `/api/save-mv` and global physics defaults to `src/game/simulation/physicsConstants.ts` via `/api/save-physics`, immediately syncing runtime `GAME_MV_CONFIG` and `GAME_PHYSICS_CONFIG`.
-- **Reset Defaults**: Restores default values for `mv_acceleration` and the seven global physics parameters.
+- **Save Changes**: `SAVE CHANGES` button writes `mv_acceleration` to `src/game/commands/mvConstants.ts` via `/api/save-mv`, global physics defaults to `src/game/simulation/physicsConstants.ts` via `/api/save-physics`, and Command Mode Slow Down Speed to `src/game/commands/commandModeConstants.ts` via `/api/save-command-mode` (alongside `localStorage` caching), immediately syncing runtime `GAME_MV_CONFIG`, `GAME_PHYSICS_CONFIG`, and `GAME_COMMAND_MODE_CONFIG`.
+- **Reset Defaults**: Restores default values for `mv_acceleration`, the seven global physics parameters, and `commandTimeScale` (`0.25`).
 - **Navigation & Hotkeys**: **F1** toggles the Command Editor from `GameScene` or returns to the active game scene with the overlay open from any other editor. **Escape** closes the overlay.
 
 ## Speed Editor
